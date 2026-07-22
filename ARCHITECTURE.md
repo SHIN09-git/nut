@@ -19,6 +19,7 @@
 | 引擎 | `4.7.1.stable.official.a13da4feb` |
 | 脚本 | 强类型 GDScript |
 | 模拟频率 | 固定 0.1 秒／Tick，即每模拟秒 10 Tick |
+| 帧安全上限 | 默认每帧 16 Tick，可配置；积压保留而非丢弃 |
 | 显示更新 | 每帧插值；显示帧率不影响模拟结果 |
 | 随机性 | 单一项目 RNG 服务，显式种子，可复现 |
 | 路径模型 | 巢室、连接管、觅食区组成的图；目标变化时才重算 |
@@ -60,7 +61,7 @@ ViewAdapter
 
 ## 4. 计划目录
 
-目录在创建第一个 Godot 场景时逐步落地；当前文档不声称这些文件已经存在。
+`project.godot`、`scenes/main/`、`scripts/core/` 和 `tests/test_runner.gd` 已落地；其余目录在对应功能开始时再创建。
 
 ```text
 /
@@ -200,15 +201,15 @@ ViewAdapter
 
 ```powershell
 & '.\Godot_v4.7.1-stable_win64_console.exe' --version
+& '.\Godot_v4.7.1-stable_win64_console.exe' --headless --editor --path . --quit
+& '.\Godot_v4.7.1-stable_win64_console.exe' --headless --path . --script 'res://tests/test_runner.gd'
+& '.\Godot_v4.7.1-stable_win64_console.exe' --headless --path . --quit-after 30
 ```
 
-待创建 `project.godot` 和相应入口后验证：
+打开编辑器：
 
 ```powershell
 & '.\Godot_v4.7.1-stable_win64_console.exe' --editor --path .
-& '.\Godot_v4.7.1-stable_win64_console.exe' --headless --editor --path . --quit
-& '.\Godot_v4.7.1-stable_win64_console.exe' --headless --path . --script 'res://tests/test_runner.gd'
-& '.\Godot_v4.7.1-stable_win64_console.exe' --headless --path . --script 'res://tests/test_runner.gd' -- --suite=soak --ticks=10000 --seed=12345
 ```
 
 Windows 导出命令只有在安装同版本 Export Templates 并创建 `export_presets.cfg` 后才能加入“已验证”列表。
@@ -219,4 +220,4 @@ Windows 导出命令只有在安装同版本 Export Templates 并创建 `export_
 - 15 分钟内同时呈现生命周期、觅食和湿度因果链，可能节奏过密，需要试玩调参。
 - 行为是否足够清晰，不能由单元测试替代，必须进行无讲解试玩。
 - `sucai/` 图片授权未知，只能内部参考。
-- Export Templates 尚未确认，Windows 导出能力仍待验证。
+- Export Templates 尚未安装，Windows 导出能力仍待验证。

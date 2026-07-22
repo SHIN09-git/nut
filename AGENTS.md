@@ -120,10 +120,13 @@
 
 ## 12. 当前可用命令
 
-在仓库根目录中，引擎版本命令已验证：
+在仓库根目录中，以下命令已验证：
 
 ```powershell
 & '.\Godot_v4.7.1-stable_win64_console.exe' --version
+& '.\Godot_v4.7.1-stable_win64_console.exe' --headless --editor --path . --quit
+& '.\Godot_v4.7.1-stable_win64_console.exe' --headless --path . --script 'res://tests/test_runner.gd'
+& '.\Godot_v4.7.1-stable_win64_console.exe' --headless --path . --quit-after 30
 ```
 
-其余启动、headless 测试和导出命令只有在相应项目文件、测试入口和 Export Templates 存在后才能加入本节。不得提前写成已经可运行。
+测试入口当前包含固定时钟单元测试、10,000 Tick soak 和主场景控制器冒烟测试。Windows 导出命令仍需等待同版本 Export Templates 和 `export_presets.cfg`，不得提前写成已经可运行。
