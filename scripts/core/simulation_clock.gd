@@ -42,6 +42,8 @@ func advance(real_delta_seconds: float) -> int:
 
 	var processed_ticks: int = 0
 	while processed_ticks < ticks_to_process:
+		if _paused:
+			break
 		_accumulator_seconds -= FIXED_STEP_SECONDS
 		if absf(_accumulator_seconds) < ACCUMULATOR_EPSILON:
 			_accumulator_seconds = 0.0

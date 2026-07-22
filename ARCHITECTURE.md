@@ -1,6 +1,6 @@
 # 《玻璃蚁国》技术架构
 
-> 文档版本：0.1｜更新日期：2026-07-22
+> 文档版本：0.2｜更新日期：2026-07-22
 >
 > 适用范围：七个开发时段的 Godot 灰盒及其后续演进
 
@@ -51,6 +51,26 @@ ViewAdapter
     └── UI
 ```
 
+当前已经落地的最小数据通路是：
+
+```text
+MainController
+    ├── 推进 SimulationClock
+    └── 接收 UI 输入：pause / 1× / 4× / 16×
+             ↓ sequential tick_requested
+       ColonySimulation
+             ↓ 修改私有 ColonyState
+       QueenModel + AntModel
+             ↓ create_snapshot() 复制值
+       ColonySnapshot + AntSnapshot
+             ↓ 仅供读取
+       主场景灰盒标签
+
+SpeciesData（species_a.tres） ──复制并验证→ LifecycleConfig ──→ ColonySimulation
+```
+
+环境、资源、行为、移动和事件系统仍是后续目标，不应从上方总体架构图推断为已经实现。
+
 关键规则：
 
 - 模拟层是唯一真实状态来源。
@@ -58,10 +78,11 @@ ViewAdapter
 - View 只显示、插值和播放动画；不得反写模拟状态。
 - 模拟模型不得保存 `Node`、`NodePath`、动画或输入对象的引用。
 - 不允许每只蚂蚁在 `_process()` 中独立决策；由 `ColonySimulation` 统一调度。
+- 当前 UI 只取得新建的快照对象；快照字段并非语言级不可变，但其中只包含复制后的值和新的数组，不暴露内部模型引用。
 
 ## 4. 计划目录
 
-`project.godot`、`scenes/main/`、`scripts/core/` 和 `tests/test_runner.gd` 已落地；其余目录在对应功能开始时再创建。
+`project.godot`、`scenes/main/`、`scripts/core/`、`scripts/simulation/`、`data/species/`、`tests/test_runner.gd` 和 `tests/simulation/` 已落地；其余目录在对应功能开始时再创建。
 
 ```text
 /
@@ -113,20 +134,49 @@ ViewAdapter
 - 暂停时不推进模拟时间。
 - 倍速只改变单位现实时间内执行的 Tick 数，不改变单 Tick 步长。
 - 不使用系统时间决定生命周期或事件结果。
+- 每个已处理 Tick 发出连续递增的 `tick_requested(tick_index, 0.1)`；`ColonySimulation` 拒绝跳号或重复 Tick。
+- 默认单帧最多处理 16 Tick，超过上限的积压保留到后续帧，不丢弃模拟时间。
+- 暂停会保留尚未凑满一个 Tick 的累加量，继续后从该累加量恢复。
 
 ### `ColonyState`
 
-持有蚁后、幼体、工蚁、环境、资源、事件和当前模拟 Tick。所有实体拥有稳定且唯一的 ID。
+当前持有模拟 Tick、1 个 `QueenModel`、首代幼体／工蚁数组和下一个实体 ID。蚁后固定使用实体 ID 0，首代个体从 ID 1 起递增；同一个个体跨越卵、幼虫、蛹和工蚁阶段时保持 ID 不变。环境、资源和事件状态尚未实现，后续仍由该层或其组合状态统一持有。
 
-### `AntModel` 与 `BroodModel`
+### `QueenModel` 与 `AntModel`
 
-- 只保存数据，例如实体 ID、生命周期阶段、位置、能量、当前任务和目标 ID。
+- `QueenModel` 当前只保存实体 ID 和已产卵数。
+- `AntModel` 当前只保存实体 ID、生命周期阶段、总年龄 Tick 和当前阶段年龄 Tick。
+- 卵、幼虫、蛹和工蚁是同一个 `AntModel` 的连续状态，不在阶段转换时替换实体。
 - 不保存 Sprite、Tween、AnimationPlayer 或其他场景节点。
 - 实体遍历顺序必须稳定；需要时按 ID 排序，避免容器顺序改变结果。
+- 独立的 `BroodModel` 尚未实现；位置、能量、任务和目标也仍是后续字段。
 
 ### `SpeciesData`
 
-集中保存生命周期时间、舒适湿度、资源影响、移动速度和行为阈值。首轮只存在 `Species_A`，但代码不得把其数值写死成唯一物种规则。
+当前以强类型 Resource 集中保存产卵计划、卵／幼虫／蛹阶段时长和首代数量上限。首轮只存在 `Species_A`，但代码不得把其数值写死成唯一物种规则。舒适湿度、资源影响、移动速度和行为阈值尚未加入该资源。
+
+创建 `ColonySimulation` 时，字段会被验证并复制到仅由模拟持有的 `LifecycleConfig`；运行中修改原始 `.tres` 不会改变已有游戏的时间边界。无效资源产生显式错误状态，`advance_tick()` 始终拒绝推进。若主控制器收到任何非连续 Tick 拒绝，会立即暂停时钟、停止当前批次并禁用继续按钮，避免时钟 UI 与真实模拟状态永久分叉。
+
+`data/species/species_a.tres` 当前实际参数如下：
+
+| 字段 | Tick 值 |
+| --- | ---: |
+| `first_egg_delay_ticks` | 1200 |
+| `egg_laying_interval_ticks` | 300 |
+| `egg_duration_ticks` | 800 |
+| `larva_duration_ticks` | 1000 |
+| `pupa_duration_ticks` | 1000 |
+| `max_first_generation_brood` | 3 |
+
+这些值是**原型节奏夹具／非真实生物数据**。`species_a.tres` 是唯一参数事实来源；文档中的秒数或阶段节点都只能由这些 Tick 值推导。
+资源通过 `data_status = prototype_pacing_fixture` 与 `scientifically_validated = false` 显式携带这一数据状态。
+
+### 快照边界
+
+- `ColonySimulation.create_snapshot()` 每次创建新的 `ColonySnapshot`，并为每个内部 `AntModel` 创建新的 `AntSnapshot`。
+- 快照只复制模拟 Tick、蚁后状态、下一次产卵 Tick、个体 ID、阶段和年龄等显示所需数据，不携带内部模型引用。
+- `MainController` 只通过快照刷新标签，不能取得私有 `_state`。快照对象按约定只读，但当前并未依靠语言机制冻结其字段。
+- 修改 UI 或快照对象不得成为模拟命令；未来玩家操作仍需通过命令边界进入模拟层。
 
 ### `EnvironmentState`
 
@@ -138,7 +188,16 @@ ViewAdapter
 
 ## 6. 每 Tick 更新顺序
 
-固定顺序暂定为：
+当前生命周期灰盒的固定顺序为：
+
+1. `MainController` 把现实帧 `delta` 交给 `SimulationClock`。
+2. 时钟按 0.1 秒固定步长发出一个或多个连续 Tick。
+3. `ColonySimulation` 验证 Tick 必须等于当前模拟 Tick 加一；否则拒绝且不修改状态。
+4. 更新既有个体的总年龄、阶段年龄和阶段转换。
+5. 检查当前 Tick 是否达到下一次产卵点，必要时创建新卵并分配稳定 ID。
+6. 一个现实帧处理完至少一个 Tick 后，主场景创建新快照并刷新灰盒标签。
+
+因此，新卵在产下 Tick 的阶段年龄为 0，不会在出生的同一个 Tick 被提前计龄。未来系统扩展后的目标顺序仍为：
 
 1. 应用上一帧收集的玩家命令。
 2. 更新环境与资源状态。
@@ -179,7 +238,15 @@ ViewAdapter
 
 ## 10. 测试策略
 
-首轮不引入 GUT 或 GdUnit4。项目创建 `tests/test_runner.gd`，以 headless `SceneTree` 方式运行。
+首轮不引入 GUT 或 GdUnit4。`tests/test_runner.gd` 是顶层 headless `SceneTree` 测试入口，并聚合 `tests/simulation/lifecycle_test_suite.gd`。
+
+当前已覆盖：
+
+- 固定步长累加、暂停、倍速、非法 delta、帧切分一致性、Tick 信号、积压保留、重置和 10,000 Tick 时钟 soak。
+- 主场景时钟控件冒烟测试。
+- 生命周期精确边界与信号、首代数量上限、稳定实体 ID、同 Tick 稳定更新顺序、`Species_A` 三只工蚁的实际羽化 Tick、非连续 Tick 拒绝、相同输入确定性和 10,000 Tick 生命周期 soak。
+- 快照隔离由对象复制边界实现，并有“修改快照字段、子对象和数组均不影响内部模型”的专门回归断言。
+- 配置校验、运行时配置冻结、1×／4×／16×生命周期一致性、积压排空一致性、主场景 Tick 1199／1200 精确产卵边界，以及失步后立即停止当前 Tick 批次。
 
 最低测试集：
 
@@ -205,6 +272,8 @@ ViewAdapter
 & '.\Godot_v4.7.1-stable_win64_console.exe' --headless --path . --script 'res://tests/test_runner.gd'
 & '.\Godot_v4.7.1-stable_win64_console.exe' --headless --path . --quit-after 30
 ```
+
+2026-07-22 最近一次运行顶层测试入口通过 134 项断言。
 
 打开编辑器：
 

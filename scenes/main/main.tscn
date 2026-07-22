@@ -47,7 +47,7 @@ text = "玻璃蚁国 · 固定模拟时钟"
 layout_mode = 2
 theme_override_colors/font_color = Color(0.61, 0.68, 0.65, 1)
 theme_override_font_sizes/font_size = 16
-text = "当前里程碑：0.1 秒固定 Tick，不让倍速改变模拟步长"
+text = "当前里程碑：蚁后与第一代卵—幼虫—蛹—工蚁生命周期"
 
 [node name="ClockPanel" type="PanelContainer" parent="SafeArea/Content"]
 layout_mode = 2
@@ -138,22 +138,42 @@ theme_override_font_sizes/font_size = 18
 text = "试管观察区（灰盒占位）"
 horizontal_alignment = 1
 
-[node name="SpecimenRow" type="Label" parent="SafeArea/Content/TubePanel/TubeMargin/TubeContent"]
+[node name="QueenStatusLabel" type="Label" parent="SafeArea/Content/TubePanel/TubeMargin/TubeContent"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.89, 0.72, 0.43, 1)
-theme_override_font_sizes/font_size = 34
-text = "●  蚁后        ○ ○ ○  卵团        · · ·  幼体"
+theme_override_font_sizes/font_size = 28
+text = "● 蚁后  ·  已产卵 0／3"
 horizontal_alignment = 1
 
+[node name="StageCountsLabel" type="Label" parent="SafeArea/Content/TubePanel/TubeMargin/TubeContent"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.76, 0.79, 0.73, 1)
+theme_override_font_sizes/font_size = 20
+text = "卵 0    幼虫 0    蛹 0    工蚁 0"
+horizontal_alignment = 1
+
+[node name="IndividualsLabel" type="Label" parent="SafeArea/Content/TubePanel/TubeMargin/TubeContent"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 86)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.69, 0.73, 0.68, 1)
+theme_override_font_sizes/font_size = 16
+text = "尚无幼体。"
+horizontal_alignment = 1
+vertical_alignment = 1
+
 [node name="MilestoneNote" type="Label" parent="SafeArea/Content/TubePanel/TubeMargin/TubeContent"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.55, 0.62, 0.59, 1)
 theme_override_font_sizes/font_size = 15
-text = "下一步：把生命周期模型接到每一次固定 Tick 上"
+text = "观察：蚁后正在适应试管环境。"
 horizontal_alignment = 1
 
 [node name="Footer" type="Label" parent="SafeArea/Content"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.46, 0.52, 0.5, 1)
-text = "速度只改变每秒处理的 Tick 数；每个 Tick 永远代表 0.1 模拟秒。"
+text = "延时观察已压缩；当前阶段时长是原型节奏参数，并非真实生物周期。"
 horizontal_alignment = 1

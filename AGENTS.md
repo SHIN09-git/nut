@@ -29,6 +29,14 @@
 
 ## 3. 当前范围
 
+当前已实现基线：
+
+- `SimulationClock` 以 0.1 模拟秒固定 Tick 运行，支持暂停、1×、4×、16×，单帧积压保留而不丢 Tick。
+- `ColonySimulation` 驱动 1 只蚁后和最多 3 个首代个体完成卵 → 幼虫 → 蛹 → 工蚁转换，并拒绝非连续 Tick。
+- `ColonySimulation` 启动时把已验证的 `SpeciesData` 数值复制进私有 `LifecycleConfig`；运行中不得继续读取外部可变 Resource。无效配置不能推进 Tick。
+- `ColonyState` 为私有真实状态；UI 只读取每次新建、与内部模型解除引用关系的 `ColonySnapshot`／`AntSnapshot`。
+- `tests/test_runner.gd` 是顶层测试入口，并聚合 `tests/simulation/lifecycle_test_suite.gd`。
+
 允许实现：
 
 - 单一 `Species_A`、1 只蚁后、卵／幼虫／蛹、最多 3 只体验场景工蚁。
@@ -65,8 +73,10 @@
 ## 6. 架构不可破坏项
 
 - 模拟层是唯一真实状态来源；View 不得反写模拟结果。
+- View 和 UI 不得取得 `ColonyState`、`QueenModel` 或 `AntModel` 引用，只能读取复制值组成的快照；快照对象也不得被当作输入命令使用。
 - 模拟数据不得依赖 `Node`、场景树、动画、输入、渲染帧率或系统墙钟时间。
 - 模拟以 0.1 秒固定 Tick 运行；倍速不得改变单 Tick 步长。
+- 时钟与模拟若拒绝或丢失一个 Tick，必须进入可见的暂停错误状态；不得让时钟 UI 在模拟停滞后继续前进。
 - 不得让每只蚂蚁在 `_process()` 中独立思考；统一由模拟调度器更新。
 - 所有实体使用稳定唯一 ID，确定性路径中保持稳定遍历顺序。
 - 随机行为只能使用项目统一、带种子的 RNG 服务。
@@ -76,6 +86,9 @@
 ## 7. 数据与存档
 
 - 设计参数优先使用强类型 `.tres` Resource。
+- 当前 `Species_A` 生命周期参数事实来源只能是 `data/species/species_a.tres`：首卵延迟 1200 Tick、产卵间隔 300 Tick、卵 800 Tick、幼虫 1000 Tick、蛹 1000 Tick、首代上限 3。
+- 上述数值全部是**原型节奏夹具／非真实生物数据**。代码、UI、注释和文档不得把它们称为真实孵化期、真实天数或经过验证的物种参数。
+- 调整这些 Tick 值时必须同时更新精确边界测试和引用这些数值的文档；不得在代码中复制一套平行常量。
 - 运行时存档使用带 `schema_version` 的 JSON。
 - 存档字段变更必须增加迁移逻辑和旧档测试。
 - 不在存档中保存 NodePath、对象地址或不可序列化的运行时引用。
@@ -129,4 +142,4 @@
 & '.\Godot_v4.7.1-stable_win64_console.exe' --headless --path . --quit-after 30
 ```
 
-测试入口当前包含固定时钟单元测试、10,000 Tick soak 和主场景控制器冒烟测试。Windows 导出命令仍需等待同版本 Export Templates 和 `export_presets.cfg`，不得提前写成已经可运行。
+测试入口当前包含固定时钟单元测试、主场景控制器冒烟测试、生命周期精确边界与实际 `Species_A` 排期测试，以及时钟和生命周期各自的 10,000 Tick soak。Windows 导出命令仍需等待同版本 Export Templates 和 `export_presets.cfg`，不得提前写成已经可运行。

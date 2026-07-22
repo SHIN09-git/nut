@@ -1,6 +1,9 @@
 extends SceneTree
 
 const SimulationClockScript: Script = preload("res://scripts/core/simulation_clock.gd")
+const LifecycleTestSuiteScript: Script = preload(
+	"res://tests/simulation/lifecycle_test_suite.gd"
+)
 const MainScene: PackedScene = preload("res://scenes/main/main.tscn")
 
 var _assertion_count: int = 0
@@ -24,17 +27,27 @@ func _run_all_tests() -> void:
 	_test_ten_thousand_ticks_without_drift()
 	_test_reset_restores_defaults()
 	_test_main_scene_clock_controls()
+	_test_main_scene_lifecycle_boundary()
+	_test_main_scene_stops_on_tick_desync()
+	_run_lifecycle_test_suite()
 
 	if _failure_count == 0:
-		print("PASS: %d simulation clock assertions" % _assertion_count)
+		print("PASS: %d project assertions" % _assertion_count)
 		quit(0)
 		return
 
 	printerr(
-		"FAIL: %d of %d simulation clock assertions failed"
+		"FAIL: %d of %d project assertions failed"
 		% [_failure_count, _assertion_count]
 	)
 	quit(1)
+
+
+func _run_lifecycle_test_suite() -> void:
+	var suite: LifecycleTestSuite = LifecycleTestSuiteScript.new()
+	suite.run()
+	_assertion_count += suite.get_assertion_count()
+	_failure_count += suite.get_failure_count()
 
 
 func _test_fixed_step_accumulation() -> void:
@@ -200,6 +213,74 @@ func _test_main_scene_clock_controls() -> void:
 	pause_button.pressed.emit()
 	main_controller._process(0.25)
 	_expect_string(tick_label.text, "固定 Tick：11", "resumed main scene uses selected 4x speed")
+
+	root.remove_child(main_controller)
+	main_controller.free()
+
+
+func _test_main_scene_lifecycle_boundary() -> void:
+	var main_controller: MainController = MainScene.instantiate() as MainController
+	root.add_child(main_controller)
+	var tick_label: Label = main_controller.get_node("%TickLabel") as Label
+	var stage_counts_label: Label = main_controller.get_node("%StageCountsLabel") as Label
+	var individuals_label: Label = main_controller.get_node("%IndividualsLabel") as Label
+
+	var tick_iteration: int = 0
+	while tick_iteration < 1199:
+		main_controller._process(SimulationClock.FIXED_STEP_SECONDS)
+		tick_iteration += 1
+	_expect_string(tick_label.text, "固定 Tick：1199", "main scene reaches the pre-laying boundary")
+	_expect_string(
+		stage_counts_label.text,
+		"卵 0    幼虫 0    蛹 0    工蚁 0",
+		"main scene has no egg at Tick 1199"
+	)
+	_expect_int(
+		main_controller._colony_simulation.create_snapshot().simulation_tick,
+		1199,
+		"main scene clock and colony match before laying"
+	)
+
+	main_controller._process(SimulationClock.FIXED_STEP_SECONDS)
+	_expect_string(tick_label.text, "固定 Tick：1200", "main scene reaches the exact laying Tick")
+	_expect_string(
+		stage_counts_label.text,
+		"卵 1    幼虫 0    蛹 0    工蚁 0",
+		"main scene displays the first egg exactly at Tick 1200"
+	)
+	_expect_true(individuals_label.text.contains("#001  卵"), "main scene lists the stable brood ID")
+	_expect_int(
+		main_controller._colony_simulation.create_snapshot().simulation_tick,
+		1200,
+		"main scene clock and colony match after laying"
+	)
+
+	root.remove_child(main_controller)
+	main_controller.free()
+
+
+func _test_main_scene_stops_on_tick_desync() -> void:
+	var main_controller: MainController = MainScene.instantiate() as MainController
+	root.add_child(main_controller)
+	var status_label: Label = main_controller.get_node("%StatusLabel") as Label
+	var pause_button: Button = main_controller.get_node("%PauseButton") as Button
+	var tick_label: Label = main_controller.get_node("%TickLabel") as Label
+
+	_expect_true(
+		main_controller._colony_simulation.advance_tick(1),
+		"fault injection advances colony ahead of its clock"
+	)
+	main_controller._process(10.0)
+	_expect_string(status_label.text, "模拟错误 · 已暂停", "Tick desync enters a visible fatal state")
+	_expect_true(pause_button.disabled, "fatal Tick desync disables resume")
+	_expect_string(tick_label.text, "固定 Tick：1", "fatal desync stops the current multi-Tick batch")
+	var stopped_tick_text: String = tick_label.text
+	main_controller._process(10.0)
+	_expect_string(
+		tick_label.text,
+		stopped_tick_text,
+		"fatal Tick desync stops further clock progress"
+	)
 
 	root.remove_child(main_controller)
 	main_controller.free()

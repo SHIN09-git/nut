@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="SpeciesData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/species_data.gd" id="1_species"]
+
+[resource]
+script = ExtResource("1_species")
+species_id = &"species_a"
+display_name = "Species A（临时规则）"
+data_status = &"prototype_pacing_fixture"
+scientifically_validated = false
+first_egg_delay_ticks = 1200
+egg_laying_interval_ticks = 300
+egg_duration_ticks = 800
+larva_duration_ticks = 1000
+pupa_duration_ticks = 1000
+max_first_generation_brood = 3
