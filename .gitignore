@@ -1,0 +1,28 @@
+# Godot editor-generated data
+.godot/
+
+# Local Godot engine binaries
+/Godot_v*.exe
+
+# Local reference images pending provenance/license review
+/sucai/
+
+# Build and export output
+/build/
+/builds/
+/exports/
+*.pck
+
+# Test/runtime output
+/test-results/
+/logs/
+/saves/
+*.log
+*.tmp
+
+# Local editor and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
