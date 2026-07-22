@@ -1,0 +1,25 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/view/test_tube_habitat.gd" id="1_habitat"]
+[ext_resource type="Script" path="res://scripts/view/colony_view_adapter.gd" id="2_adapter"]
+[ext_resource type="Script" path="res://scripts/view/queen_view.gd" id="3_queen"]
+
+[node name="TestTubeHabitat" type="Control"]
+custom_minimum_size = Vector2(0, 320)
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+clip_contents = true
+script = ExtResource("1_habitat")
+
+[node name="ColonyViewAdapter" type="Node2D" parent="."]
+unique_name_in_owner = true
+script = ExtResource("2_adapter")
+
+[node name="QueenView" type="Node2D" parent="ColonyViewAdapter"]
+unique_name_in_owner = true
+script = ExtResource("3_queen")

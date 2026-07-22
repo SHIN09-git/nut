@@ -1,0 +1,23 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/view/habitat_view.gd" id="1_habitat"]
+[ext_resource type="Script" path="res://scripts/view/queen_view.gd" id="2_queen"]
+
+[node name="HumidityHabitat" type="Control"]
+custom_minimum_size = Vector2(720, 360)
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+clip_contents = true
+script = ExtResource("1_habitat")
+
+[node name="EntityLayer" type="Node2D" parent="."]
+unique_name_in_owner = true
+
+[node name="QueenView" type="Node2D" parent="EntityLayer"]
+unique_name_in_owner = true
+script = ExtResource("2_queen")

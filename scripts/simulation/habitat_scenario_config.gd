@@ -1,0 +1,40 @@
+class_name HabitatScenarioConfig
+extends RefCounted
+
+var scenario_id: StringName
+var zones: Array[HabitatZoneState] = []
+var initial_worker_count: int
+var initial_brood_count: int
+var initial_brood_stage: AntModel.LifeStage
+var initial_worker_zone_id: StringName
+var initial_brood_zone_id: StringName
+var humidity_adjustment_zone_id: StringName
+var humidity_adjustment_amount: float
+var observation_stable_ticks: int
+
+
+static func from_data(
+	scenario_data: HabitatScenarioData
+) -> HabitatScenarioConfig:
+	if scenario_data == null or not scenario_data.is_valid():
+		return null
+
+	var config: HabitatScenarioConfig = HabitatScenarioConfig.new()
+	config.scenario_id = scenario_data.scenario_id
+	for zone_data: HabitatZoneData in [
+		scenario_data.left_zone,
+		scenario_data.right_zone,
+	]:
+		var zone_state: HabitatZoneState = HabitatZoneState.from_data(zone_data)
+		if zone_state == null:
+			return null
+		config.zones.append(zone_state)
+	config.initial_worker_count = scenario_data.initial_worker_count
+	config.initial_brood_count = scenario_data.initial_brood_count
+	config.initial_brood_stage = scenario_data.initial_brood_stage
+	config.initial_worker_zone_id = scenario_data.initial_worker_zone_id
+	config.initial_brood_zone_id = scenario_data.initial_brood_zone_id
+	config.humidity_adjustment_zone_id = scenario_data.humidity_adjustment_zone_id
+	config.humidity_adjustment_amount = scenario_data.humidity_adjustment_amount
+	config.observation_stable_ticks = scenario_data.observation_stable_ticks
+	return config

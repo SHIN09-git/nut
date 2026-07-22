@@ -1,6 +1,55 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=7 format=3]
 
-[ext_resource type="Script" path="res://scripts/core/main_controller.gd" id="1_main"]
+[ext_resource type="Script" path="res://scripts/core/main_controller.gd" id="1_controller"]
+[ext_resource type="PackedScene" path="res://scenes/habitat/humidity_habitat.tscn" id="2_habitat"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_header"]
+bg_color = Color(0.075, 0.095, 0.088, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.25, 0.31, 0.27, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_habitat"]
+bg_color = Color(0.055, 0.067, 0.063, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.20, 0.24, 0.21, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_side"]
+bg_color = Color(0.075, 0.087, 0.075, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.26, 0.28, 0.22, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_debug"]
+bg_color = Color(0.075, 0.095, 0.082, 0.98)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.45, 0.55, 0.45, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
 
 [node name="Main" type="Control"]
 layout_mode = 3
@@ -9,7 +58,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("1_main")
+script = ExtResource("1_controller")
 
 [node name="Background" type="ColorRect" parent="."]
 layout_mode = 1
@@ -19,7 +68,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0.035, 0.045, 0.055, 1)
+color = Color(0.027, 0.035, 0.034, 1)
 
 [node name="SafeArea" type="MarginContainer" parent="."]
 layout_mode = 1
@@ -28,152 +77,235 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/margin_left = 40
-theme_override_constants/margin_top = 32
-theme_override_constants/margin_right = 40
-theme_override_constants/margin_bottom = 32
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 18
 
 [node name="Content" type="VBoxContainer" parent="SafeArea"]
 layout_mode = 2
-theme_override_constants/separation = 16
-
-[node name="Title" type="Label" parent="SafeArea/Content"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.88, 0.91, 0.86, 1)
-theme_override_font_sizes/font_size = 30
-text = "玻璃蚁国 · 固定模拟时钟"
-
-[node name="Subtitle" type="Label" parent="SafeArea/Content"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.61, 0.68, 0.65, 1)
-theme_override_font_sizes/font_size = 16
-text = "当前里程碑：蚁后与第一代卵—幼虫—蛹—工蚁生命周期"
-
-[node name="ClockPanel" type="PanelContainer" parent="SafeArea/Content"]
-layout_mode = 2
-
-[node name="ClockMargin" type="MarginContainer" parent="SafeArea/Content/ClockPanel"]
-layout_mode = 2
-theme_override_constants/margin_left = 20
-theme_override_constants/margin_top = 16
-theme_override_constants/margin_right = 20
-theme_override_constants/margin_bottom = 16
-
-[node name="ClockContent" type="VBoxContainer" parent="SafeArea/Content/ClockPanel/ClockMargin"]
-layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="Readout" type="HBoxContainer" parent="SafeArea/Content/ClockPanel/ClockMargin/ClockContent"]
+[node name="Header" type="PanelContainer" parent="SafeArea/Content"]
+custom_minimum_size = Vector2(0, 72)
 layout_mode = 2
-theme_override_constants/separation = 24
+theme_override_styles/panel = SubResource("StyleBox_header")
 
-[node name="StatusLabel" type="Label" parent="SafeArea/Content/ClockPanel/ClockMargin/ClockContent/Readout"]
-unique_name_in_owner = true
+[node name="Margin" type="MarginContainer" parent="SafeArea/Content/Header"]
+layout_mode = 2
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 9
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 9
+
+[node name="Row" type="HBoxContainer" parent="SafeArea/Content/Header/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TitleBlock" type="VBoxContainer" parent="SafeArea/Content/Header/Margin/Row"]
+custom_minimum_size = Vector2(360, 0)
+layout_mode = 2
+theme_override_constants/separation = 1
+
+[node name="Title" type="Label" parent="SafeArea/Content/Header/Margin/Row/TitleBlock"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
+theme_override_font_sizes/font_size = 24
+text = "玻璃蚁国 · 双室观察"
+
+[node name="Subtitle" type="Label" parent="SafeArea/Content/Header/Margin/Row/TitleBlock"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.61, 0.69, 0.66, 1)
+theme_override_font_sizes/font_size = 13
+text = "观察幼体安置，谨慎改变巢室环境"
+
+[node name="Spacer" type="Control" parent="SafeArea/Content/Header/Margin/Row"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 18
-text = "运行中 · 1×"
 
-[node name="TickLabel" type="Label" parent="SafeArea/Content/ClockPanel/ClockMargin/ClockContent/Readout"]
+[node name="StatusLabel" type="Label" parent="SafeArea/Content/Header/Margin/Row"]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(110, 0)
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
-text = "固定 Tick：0"
-
-[node name="SimulationTimeLabel" type="Label" parent="SafeArea/Content/ClockPanel/ClockMargin/ClockContent/Readout"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_font_sizes/font_size = 18
-text = "模拟时间：0.0 秒"
-
-[node name="Controls" type="HBoxContainer" parent="SafeArea/Content/ClockPanel/ClockMargin/ClockContent"]
-layout_mode = 2
-theme_override_constants/separation = 10
-
-[node name="PauseButton" type="Button" parent="SafeArea/Content/ClockPanel/ClockMargin/ClockContent/Controls"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(96, 42)
-layout_mode = 2
-text = "暂停"
-
-[node name="Speed1xButton" type="Button" parent="SafeArea/Content/ClockPanel/ClockMargin/ClockContent/Controls"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(72, 42)
-layout_mode = 2
-text = "1×"
-
-[node name="Speed4xButton" type="Button" parent="SafeArea/Content/ClockPanel/ClockMargin/ClockContent/Controls"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(72, 42)
-layout_mode = 2
-text = "4×"
-
-[node name="Speed16xButton" type="Button" parent="SafeArea/Content/ClockPanel/ClockMargin/ClockContent/Controls"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(72, 42)
-layout_mode = 2
-text = "16×"
-
-[node name="TubePanel" type="PanelContainer" parent="SafeArea/Content"]
-custom_minimum_size = Vector2(0, 360)
-layout_mode = 2
-size_flags_vertical = 3
-
-[node name="TubeMargin" type="MarginContainer" parent="SafeArea/Content/TubePanel"]
-layout_mode = 2
-theme_override_constants/margin_left = 30
-theme_override_constants/margin_top = 30
-theme_override_constants/margin_right = 30
-theme_override_constants/margin_bottom = 30
-
-[node name="TubeContent" type="VBoxContainer" parent="SafeArea/Content/TubePanel/TubeMargin"]
-layout_mode = 2
-alignment = 1
-theme_override_constants/separation = 20
-
-[node name="TubeTitle" type="Label" parent="SafeArea/Content/TubePanel/TubeMargin/TubeContent"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.72, 0.78, 0.75, 1)
-theme_override_font_sizes/font_size = 18
-text = "试管观察区（灰盒占位）"
-horizontal_alignment = 1
-
-[node name="QueenStatusLabel" type="Label" parent="SafeArea/Content/TubePanel/TubeMargin/TubeContent"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_colors/font_color = Color(0.89, 0.72, 0.43, 1)
-theme_override_font_sizes/font_size = 28
-text = "● 蚁后  ·  已产卵 0／3"
-horizontal_alignment = 1
-
-[node name="StageCountsLabel" type="Label" parent="SafeArea/Content/TubePanel/TubeMargin/TubeContent"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_colors/font_color = Color(0.76, 0.79, 0.73, 1)
-theme_override_font_sizes/font_size = 20
-text = "卵 0    幼虫 0    蛹 0    工蚁 0"
-horizontal_alignment = 1
-
-[node name="IndividualsLabel" type="Label" parent="SafeArea/Content/TubePanel/TubeMargin/TubeContent"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 86)
-layout_mode = 2
-theme_override_colors/font_color = Color(0.69, 0.73, 0.68, 1)
-theme_override_font_sizes/font_size = 16
-text = "尚无幼体。"
+theme_override_colors/font_color = Color(0.68, 0.82, 0.73, 1)
+text = "观察中 · 1×"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="MilestoneNote" type="Label" parent="SafeArea/Content/TubePanel/TubeMargin/TubeContent"]
+[node name="PauseButton" type="Button" parent="SafeArea/Content/Header/Margin/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(66, 44)
+layout_mode = 2
+text = "暂停"
+
+[node name="Speed1xButton" type="Button" parent="SafeArea/Content/Header/Margin/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(48, 44)
+layout_mode = 2
+text = "1×"
+
+[node name="Speed4xButton" type="Button" parent="SafeArea/Content/Header/Margin/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(48, 44)
+layout_mode = 2
+text = "4×"
+
+[node name="Speed16xButton" type="Button" parent="SafeArea/Content/Header/Margin/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(54, 44)
+layout_mode = 2
+text = "16×"
+
+[node name="DebugToggleButton" type="Button" parent="SafeArea/Content/Header/Margin/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(82, 44)
+layout_mode = 2
+text = "F3 调试"
+
+[node name="Body" type="HBoxContainer" parent="SafeArea/Content"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="HabitatFrame" type="PanelContainer" parent="SafeArea/Content/Body"]
+custom_minimum_size = Vector2(760, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("StyleBox_habitat")
+
+[node name="HabitatMargin" type="MarginContainer" parent="SafeArea/Content/Body/HabitatFrame"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="HabitatView" parent="SafeArea/Content/Body/HabitatFrame/HabitatMargin" instance=ExtResource("2_habitat")]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.55, 0.62, 0.59, 1)
-theme_override_font_sizes/font_size = 15
-text = "观察：蚁后正在适应试管环境。"
-horizontal_alignment = 1
+
+[node name="SidePanel" type="PanelContainer" parent="SafeArea/Content/Body"]
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBox_side")
+
+[node name="SideMargin" type="MarginContainer" parent="SafeArea/Content/Body/SidePanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 16
+
+[node name="SideContent" type="VBoxContainer" parent="SafeArea/Content/Body/SidePanel/SideMargin"]
+layout_mode = 2
+theme_override_constants/separation = 13
+
+[node name="ObservationHeading" type="Label" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
+theme_override_font_sizes/font_size = 18
+text = "观察记录"
+
+[node name="ObservationLabel" type="Label" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 82)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.73, 0.77, 0.69, 1)
+text = "观察记录尚未解锁\n先看工蚁如何选择幼体的位置。"
+autowrap_mode = 2
+
+[node name="Rule" type="HSeparator" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
+layout_mode = 2
+
+[node name="InstructionHeading" type="Label" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
+theme_override_font_sizes/font_size = 18
+text = "本次观察"
+
+[node name="InstructionLabel" type="Label" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 76)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.73, 0.77, 0.69, 1)
+text = "先观察，不要急着操作。注意工蚁从哪个巢室带走幼体。"
+autowrap_mode = 2
+
+[node name="ToolSpacer" type="Control" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="WaterHeading" type="Label" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
+theme_override_font_sizes/font_size = 18
+text = "补水工具"
+
+[node name="WaterFeedbackLabel" type="Label" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 54)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.73, 0.77, 0.69, 1)
+text = "补水工具会在第一次搬运完成后开放。"
+autowrap_mode = 2
+
+[node name="WaterButton" type="Button" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+disabled = true
+text = "给左室补水"
 
 [node name="Footer" type="Label" parent="SafeArea/Content"]
+custom_minimum_size = Vector2(0, 26)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.46, 0.52, 0.5, 1)
-text = "延时观察已压缩；当前阶段时长是原型节奏参数，并非真实生物周期。"
+theme_override_colors/font_color = Color(0.61, 0.69, 0.66, 1)
+theme_override_font_sizes/font_size = 12
+text = "F3 显示诊断层  ·  原型节奏参数不代表真实物种数据"
 horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="DebugPanel" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+z_index = 30
+custom_minimum_size = Vector2(470, 0)
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -494.0
+offset_top = 104.0
+offset_right = -24.0
+offset_bottom = 688.0
+grow_horizontal = 0
+theme_override_styles/panel = SubResource("StyleBox_debug")
+
+[node name="Margin" type="MarginContainer" parent="DebugPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 14
+
+[node name="Content" type="VBoxContainer" parent="DebugPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 9
+
+[node name="Title" type="Label" parent="DebugPanel/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
+theme_override_font_sizes/font_size = 20
+text = "湿度搬运诊断"
+
+[node name="Rule" type="HSeparator" parent="DebugPanel/Margin/Content"]
+layout_mode = 2
+
+[node name="DebugLabel" type="Label" parent="DebugPanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.75, 0.81, 0.75, 1)
+theme_override_font_sizes/font_size = 13
+text = "等待第一份模拟快照……"
+autowrap_mode = 2

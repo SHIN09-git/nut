@@ -136,39 +136,40 @@ func _test_same_tick_transitions_follow_stable_id_order() -> void:
 
 func _test_species_a_worker_schedule() -> void:
 	var simulation: ColonySimulation = ColonySimulation.new(SpeciesAData)
-	_advance_to_tick(simulation, 1199)
-	_expect_int(simulation.create_snapshot().ants.size(), 0, "Species_A has no egg before Tick 1200")
-	_advance_to_tick(simulation, 1200)
+	var first_egg_tick: int = SpeciesAData.first_egg_delay_ticks
+	var first_worker_tick: int = _get_species_a_first_worker_tick()
+	_advance_to_tick(simulation, first_egg_tick - 1)
+	_expect_int(
+		simulation.create_snapshot().ants.size(),
+		0,
+		"Species_A has no egg before its configured first-laying Tick"
+	)
+	_advance_to_tick(simulation, first_egg_tick)
 	_expect_int(
 		simulation.create_snapshot().ants.size(),
 		1,
-		"Species_A lays its first egg at Tick 1200"
+		"Species_A lays its first egg at the Resource-derived Tick"
 	)
-	_advance_to_tick(simulation, 3999)
+	_advance_to_tick(simulation, first_worker_tick - 1)
 	_expect_int(
 		simulation.create_snapshot().count_stage(AntModel.LifeStage.WORKER),
 		0,
-		"Species_A has no worker before Tick 4000"
+		"Species_A has no worker before its configured first-worker Tick"
 	)
 
-	_advance_to_tick(simulation, 4000)
-	_expect_int(
-		simulation.create_snapshot().count_stage(AntModel.LifeStage.WORKER),
-		1,
-		"first worker emerges at Tick 4000"
-	)
-	_advance_to_tick(simulation, 4300)
-	_expect_int(
-		simulation.create_snapshot().count_stage(AntModel.LifeStage.WORKER),
-		2,
-		"second worker emerges at Tick 4300"
-	)
-	_advance_to_tick(simulation, 4600)
-	_expect_int(
-		simulation.create_snapshot().count_stage(AntModel.LifeStage.WORKER),
-		3,
-		"third worker emerges at Tick 4600"
-	)
+	var brood_index: int = 0
+	while brood_index < SpeciesAData.max_first_generation_brood:
+		var worker_tick: int = (
+			first_worker_tick
+			+ brood_index * SpeciesAData.egg_laying_interval_ticks
+		)
+		_advance_to_tick(simulation, worker_tick)
+		_expect_int(
+			simulation.create_snapshot().count_stage(AntModel.LifeStage.WORKER),
+			brood_index + 1,
+			"each Species_A worker emerges on its Resource-derived Tick"
+		)
+		brood_index += 1
 
 
 func _test_non_sequential_tick_is_rejected() -> void:
@@ -325,9 +326,15 @@ func _test_clock_backlog_matches_direct_ticks() -> void:
 
 func _test_species_data_validation() -> void:
 	var species_data: SpeciesData = _make_species_data(1, 1, 1, 1, 1, 1)
-	_expect_true(species_data.is_valid(), "positive lifecycle Tick values are accepted")
+	_expect_true(
+		species_data.is_lifecycle_valid(),
+		"positive lifecycle Tick values are accepted"
+	)
 	species_data.pupa_duration_ticks = 0
-	_expect_true(not species_data.is_valid(), "zero-duration lifecycle stages are rejected")
+	_expect_true(
+		not species_data.is_lifecycle_valid(),
+		"zero-duration lifecycle stages are rejected"
+	)
 	var invalid_simulation: ColonySimulation = ColonySimulation.new(species_data)
 	_expect_true(
 		not invalid_simulation.is_ready(),
@@ -348,18 +355,69 @@ func _test_species_data_validation() -> void:
 
 
 func _test_ten_thousand_tick_lifecycle_soak() -> void:
+	const SOAK_TICK_COUNT: int = 10_000
 	var simulation: ColonySimulation = ColonySimulation.new(SpeciesAData)
-	_advance_to_tick(simulation, 10_000)
+	_advance_to_tick(simulation, SOAK_TICK_COUNT)
 	var snapshot: ColonySnapshot = simulation.create_snapshot()
+	var expected_brood_count: int = _get_species_a_laid_count_at_tick(
+		SOAK_TICK_COUNT
+	)
+	var expected_worker_count: int = _get_species_a_worker_count_at_tick(
+		SOAK_TICK_COUNT
+	)
 
-	_expect_int(snapshot.simulation_tick, 10_000, "lifecycle soak reaches Tick 10,000")
-	_expect_int(snapshot.ants.size(), 3, "lifecycle soak does not create extra brood")
+	_expect_int(snapshot.simulation_tick, SOAK_TICK_COUNT, "lifecycle soak reaches Tick 10,000")
+	_expect_int(
+		snapshot.ants.size(),
+		expected_brood_count,
+		"lifecycle soak creates only brood scheduled by Species_A data"
+	)
 	_expect_int(
 		snapshot.count_stage(AntModel.LifeStage.WORKER),
-		3,
-		"all first-generation brood remain workers"
+		expected_worker_count,
+		"lifecycle soak worker count follows Species_A data"
 	)
-	_expect_true(snapshot.ants[0].total_age_ticks > 0, "worker total age continues after emergence")
+	if expected_worker_count > 0:
+		_expect_true(
+			snapshot.ants[0].total_age_ticks > 0,
+			"worker total age continues after emergence"
+		)
+
+
+func _get_species_a_first_worker_tick() -> int:
+	return (
+		SpeciesAData.first_egg_delay_ticks
+		+ SpeciesAData.egg_duration_ticks
+		+ SpeciesAData.larva_duration_ticks
+		+ SpeciesAData.pupa_duration_ticks
+	)
+
+
+func _get_species_a_laid_count_at_tick(tick: int) -> int:
+	if tick < SpeciesAData.first_egg_delay_ticks:
+		return 0
+	return mini(
+		SpeciesAData.max_first_generation_brood,
+		1
+		+ floori(
+			float(tick - SpeciesAData.first_egg_delay_ticks)
+			/ float(SpeciesAData.egg_laying_interval_ticks)
+		)
+	)
+
+
+func _get_species_a_worker_count_at_tick(tick: int) -> int:
+	var first_worker_tick: int = _get_species_a_first_worker_tick()
+	if tick < first_worker_tick:
+		return 0
+	return mini(
+		SpeciesAData.max_first_generation_brood,
+		1
+		+ floori(
+			float(tick - first_worker_tick)
+			/ float(SpeciesAData.egg_laying_interval_ticks)
+		)
+	)
 
 
 func _make_species_data(

@@ -12,6 +12,9 @@ var entity_id: int
 var life_stage: LifeStage
 var total_age_ticks: int = 0
 var stage_age_ticks: int = 0
+var zone_id: StringName = &""
+var zone_entered_tick: int = 0
+var worker_task: WorkerTaskModel
 
 
 func _init(
@@ -27,15 +30,21 @@ func transition_to(next_stage: LifeStage) -> void:
 	stage_age_ticks = 0
 
 
-static func get_stage_display_name(stage: LifeStage) -> String:
-	match stage:
-		LifeStage.EGG:
-			return "卵"
-		LifeStage.LARVA:
-			return "幼虫"
-		LifeStage.PUPA:
-			return "蛹"
-		LifeStage.WORKER:
-			return "工蚁"
-		_:
-			return "未知阶段"
+func configure_brood(
+	new_zone_id: StringName,
+	new_zone_entered_tick: int
+) -> void:
+	zone_id = new_zone_id
+	zone_entered_tick = new_zone_entered_tick
+	worker_task = null
+
+
+func configure_worker(
+	new_zone_id: StringName,
+	next_decision_tick: int
+) -> void:
+	life_stage = LifeStage.WORKER
+	zone_id = new_zone_id
+	zone_entered_tick = 0
+	worker_task = WorkerTaskModel.new()
+	worker_task.next_decision_tick = next_decision_tick

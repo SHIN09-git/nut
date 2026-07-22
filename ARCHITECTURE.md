@@ -1,292 +1,240 @@
 # 《玻璃蚁国》技术架构
 
-> 文档版本：0.2｜更新日期：2026-07-22
+> 文档版本：0.4｜更新日期：2026-07-22
 >
-> 适用范围：七个开发时段的 Godot 灰盒及其后续演进
+> 本文描述当前已经实现的湿度与幼体搬运切片。
 
-## 1. 架构目标
-
-- 在 Godot 4.7.1-stable 中实现可复现、可批量测试的蚁群模拟。
-- 严格分离模拟数据、场景显示和玩家输入。
-- 首轮支持 Windows、鼠标操作、暂停、1×、4×、16×速度。
-- 优先保证 3 只工蚁的行为可读性，同时用独立场景验证 100 只蚂蚁的稳定性。
-- 保留数据化扩展空间，但不为多物种、联网或数千只 AI 预先设计复杂框架。
-
-## 2. 固定技术决定
+## 1. 固定技术决定
 
 | 项目 | 决定 |
 | --- | --- |
-| 引擎 | `4.7.1.stable.official.a13da4feb` |
+| 引擎 | `Godot 4.7.1.stable.official.a13da4feb` |
 | 脚本 | 强类型 GDScript |
-| 模拟频率 | 固定 0.1 秒／Tick，即每模拟秒 10 Tick |
-| 帧安全上限 | 默认每帧 16 Tick，可配置；积压保留而非丢弃 |
-| 显示更新 | 每帧插值；显示帧率不影响模拟结果 |
-| 随机性 | 单一项目 RNG 服务，显式种子，可复现 |
-| 路径模型 | 巢室、连接管、觅食区组成的图；目标变化时才重算 |
-| 数据配置 | 强类型 Godot `Resource`／`.tres`，运行时模型不读取散落常量 |
-| 存档方向 | 带 `schema_version` 的 JSON；原型可先只保存最小状态 |
-| 第三方插件 | 首轮禁止；测试使用项目自建的 headless 入口 |
+| 模拟步长 | 固定 0.1 秒／Tick |
+| 时间控制 | 暂停、1×、4×、16×；默认单帧最多处理 16 Tick，积压保留 |
+| 权威状态 | 纯模拟对象，不引用场景树 |
+| 配置 | 强类型 Resource，启动时验证并复制 |
+| 随机性 | 当前切片不使用随机性 |
+| 显示 | Godot 内置节点和程序化占位图形 |
+| 测试 | 项目自建 headless runner，无第三方插件 |
 
-## 3. 分层与数据流
+## 2. 数据流与命令边界
 
 ```text
-PlayerInput
-    ↓ 生成命令，不直接改模型
-MainController
+WaterButton
+    ↓ submit_humidity_adjustment(zone_id, amount)
+ColonySimulation._pending_humidity_commands
+    ↓ 下一固定 Tick 开始时按 FIFO 应用
+HabitatZoneState.humidity
     ↓
-SimulationClock ── pause / 1× / 4× / 16×
-    ↓ 固定 Tick
-ColonySimulation
-    ├── EnvironmentSystem
-    ├── LifecycleSystem
-    ├── BehaviorSystem
-    ├── MovementSystem
-    ├── ResourceSystem
-    └── EventSystem
-    ↓ 只读快照／信号
-ViewAdapter
-    ├── AntView
-    ├── BroodView
+校验现有任务 → 推进状态机 → 为到期空闲工蚁决策
+    ↓
+更新观察稳定状态 → 校验所有权
+    ↓ create_snapshot() 深复制
+ColonySnapshot / AntSnapshot / HabitatZoneSnapshot
     ├── HabitatView
-    └── UI
+    └── F3 DebugPanel
 ```
 
-当前已经落地的最小数据通路是：
+提交命令时不会改变 `HabitatZoneState`。`ColonySimulation` 先验证 Tick 连续，再消费队列；错误 Tick 不会丢失待处理命令。
+
+`MainController` 只负责：
+
+- 推进 `SimulationClock`。
+- 把 UI 操作转换成模拟命令。
+- 在现实帧处理完 Tick 后创建快照。
+- 把快照交给 `HabitatView` 和调试 UI。
+- 在模拟拒绝 Tick 时暂停并显示错误。
+
+控制器不创建或逐只管理蚂蚁视觉节点，也不能访问私有 `ColonyState`。
+
+## 3. 配置冻结
 
 ```text
-MainController
-    ├── 推进 SimulationClock
-    └── 接收 UI 输入：pause / 1× / 4× / 16×
-             ↓ sequential tick_requested
-       ColonySimulation
-             ↓ 修改私有 ColonyState
-       QueenModel + AntModel
-             ↓ create_snapshot() 复制值
-       ColonySnapshot + AntSnapshot
-             ↓ 仅供读取
-       主场景灰盒标签
+data/species/species_a.tres
+    ├── LifecycleConfig
+    └── BroodCareConfig
 
-SpeciesData（species_a.tres） ──复制并验证→ LifecycleConfig ──→ ColonySimulation
+data/habitats/humidity_relocation_slice.tres
+    └── HabitatScenarioConfig
+         └── HabitatZoneState 副本
 ```
 
-环境、资源、行为、移动和事件系统仍是后续目标，不应从上方总体架构图推断为已经实现。
+- `LifecycleConfig` 只保存产卵和阶段转换配置。
+- `BroodCareConfig` 保存幼体舒适湿度、最小改善、决策间隔、拾取／移动／放下时长和区域停留冷却。
+- `HabitatScenarioConfig` 保存切片初始实体、区域、连接、湿度、单次补水量和观察稳定窗口。
+- Resource 通过验证后复制到私有运行时对象；修改源 `.tres` 不会改变已经开始的模拟。
+- 两份数据都标记为 `prototype_pacing_fixture` 且 `scientifically_validated = false`。它们是游戏节奏夹具，不是真实物种数据。
 
-关键规则：
-
-- 模拟层是唯一真实状态来源。
-- 输入层只能提交命令；不得直接移动 `AntView` 或修改资源数值。
-- View 只显示、插值和播放动画；不得反写模拟状态。
-- 模拟模型不得保存 `Node`、`NodePath`、动画或输入对象的引用。
-- 不允许每只蚂蚁在 `_process()` 中独立决策；由 `ColonySimulation` 统一调度。
-- 当前 UI 只取得新建的快照对象；快照字段并非语言级不可变，但其中只包含复制后的值和新的数组，不暴露内部模型引用。
-
-## 4. 计划目录
-
-`project.godot`、`scenes/main/`、`scripts/core/`、`scripts/simulation/`、`data/species/`、`tests/test_runner.gd` 和 `tests/simulation/` 已落地；其余目录在对应功能开始时再创建。
-
-```text
-/
-  project.godot
-  GDD.md
-  ARCHITECTURE.md
-  AGENTS.md
-  README.md
-  /scenes
-    /main
-    /habitat
-    /ui
-    /tests
-  /scripts
-    /core
-    /simulation
-    /behavior
-    /environment
-    /events
-    /view
-    /ui
-    /save
-  /data
-    /species
-    /foods
-    /habitats
-    /events
-  /tests
-    test_runner.gd
-    /unit
-    /simulation
-    /save
-  /assets
-    /placeholders
-    /sprites
-    /audio
-    /fonts
-  /sucai
-  /build
-```
-
-文件和目录使用小写 `snake_case`；GDD、架构和根代理说明保留现有大写文件名。
-
-## 5. 核心模型
-
-### `SimulationClock`
-
-- 使用累加器按 0.1 秒固定 Tick 推进模拟。
-- 暂停时不推进模拟时间。
-- 倍速只改变单位现实时间内执行的 Tick 数，不改变单 Tick 步长。
-- 不使用系统时间决定生命周期或事件结果。
-- 每个已处理 Tick 发出连续递增的 `tick_requested(tick_index, 0.1)`；`ColonySimulation` 拒绝跳号或重复 Tick。
-- 默认单帧最多处理 16 Tick，超过上限的积压保留到后续帧，不丢弃模拟时间。
-- 暂停会保留尚未凑满一个 Tick 的累加量，继续后从该累加量恢复。
+## 4. 权威模型
 
 ### `ColonyState`
 
-当前持有模拟 Tick、1 个 `QueenModel`、首代幼体／工蚁数组和下一个实体 ID。蚁后固定使用实体 ID 0，首代个体从 ID 1 起递增；同一个个体跨越卵、幼虫、蛹和工蚁阶段时保持 ID 不变。环境、资源和事件状态尚未实现，后续仍由该层或其组合状态统一持有。
+保存：
 
-### `QueenModel` 与 `AntModel`
+- 当前模拟 Tick。
+- 蚁后与稳定 ID 实体数组。
+- 两个 `HabitatZoneState`。
+- 已应用湿度调整次数。
+- 观察稳定 Tick 和观察记录解锁状态。
 
-- `QueenModel` 当前只保存实体 ID 和已产卵数。
-- `AntModel` 当前只保存实体 ID、生命周期阶段、总年龄 Tick 和当前阶段年龄 Tick。
-- 卵、幼虫、蛹和工蚁是同一个 `AntModel` 的连续状态，不在阶段转换时替换实体。
-- 不保存 Sprite、Tween、AnimationPlayer 或其他场景节点。
-- 实体遍历顺序必须稳定；需要时按 ID 排序，避免容器顺序改变结果。
-- 独立的 `BroodModel` 尚未实现；位置、能量、任务和目标也仍是后续字段。
+### `HabitatZoneState`
 
-### `SpeciesData`
+每个区域保存稳定 `StringName zone_id`、限制在 0.0～1.0 的湿度、可达连接 ID 和可用状态。模拟只使用区域 ID 与逻辑连接，不包含坐标、尺寸或颜色。
 
-当前以强类型 Resource 集中保存产卵计划、卵／幼虫／蛹阶段时长和首代数量上限。首轮只存在 `Species_A`，但代码不得把其数值写死成唯一物种规则。舒适湿度、资源影响、移动速度和行为阈值尚未加入该资源。
+### `AntModel`
 
-创建 `ColonySimulation` 时，字段会被验证并复制到仅由模拟持有的 `LifecycleConfig`；运行中修改原始 `.tres` 不会改变已有游戏的时间边界。无效资源产生显式错误状态，`advance_tick()` 始终拒绝推进。若主控制器收到任何非连续 Tick 拒绝，会立即暂停时钟、停止当前批次并禁用继续按钮，避免时钟 UI 与真实模拟状态永久分叉。
+所有非蚁后实体保持原有稳定 ID，保存生命周期字段、`zone_id` 和 `zone_entered_tick`。工蚁额外持有一个 `WorkerTaskModel`；幼体不保存反向预订或携带引用。
 
-`data/species/species_a.tres` 当前实际参数如下：
+### `WorkerTaskModel`
 
-| 字段 | Tick 值 |
-| --- | ---: |
-| `first_egg_delay_ticks` | 1200 |
-| `egg_laying_interval_ticks` | 300 |
-| `egg_duration_ticks` | 800 |
-| `larva_duration_ticks` | 1000 |
-| `pupa_duration_ticks` | 1000 |
-| `max_first_generation_brood` | 3 |
+使用五个显式状态：
 
-这些值是**原型节奏夹具／非真实生物数据**。`species_a.tres` 是唯一参数事实来源；文档中的秒数或阶段节点都只能由这些 Tick 值推导。
-资源通过 `data_status = prototype_pacing_fixture` 与 `scientifically_validated = false` 显式携带这一数据状态。
+```text
+IDLE
+MOVING_TO_BROOD
+PICKING_UP
+CARRYING_TO_ZONE
+DROPPING
+```
 
-### 快照边界
+任务是预订与携带关系的唯一事实来源，保存来源区域、目标幼体、目标区域、当前携带幼体、阶段已用 Tick、阶段总 Tick 和下一次决策 Tick。
 
-- `ColonySimulation.create_snapshot()` 每次创建新的 `ColonySnapshot`，并为每个内部 `AntModel` 创建新的 `AntSnapshot`。
-- 快照只复制模拟 Tick、蚁后状态、下一次产卵 Tick、个体 ID、阶段和年龄等显示所需数据，不携带内部模型引用。
-- `MainController` 只通过快照刷新标签，不能取得私有 `_state`。快照对象按约定只读，但当前并未依靠语言机制冻结其字段。
-- 修改 UI 或快照对象不得成为模拟命令；未来玩家操作仍需通过命令边界进入模拟层。
+## 5. 搬运决策
 
-### `EnvironmentState`
+湿度适宜度使用到舒适区间的距离：
 
-保存各区域的湿度、可达性和补给状态。湿度使用明确单位或标准化区间；在确定真实物种前，不将临时数值描述为科学数据。
+```text
+penalty(h) =
+    min - h    当 h < min
+    0          当 min ≤ h ≤ max
+    h - max    当 h > max
+```
 
-### `BehaviorSystem`
+- 只考虑非工蚁实体。
+- 工蚁和幼体按稳定实体 ID 遍历，区域平局按区域 ID 字符串处理。
+- 只有 `source_penalty - target_penalty` 达到 `relocation_min_improvement` 才创建任务。
+- 一个幼体被某个活跃任务选中后，后续工蚁不能再次预订。
+- 工蚁只在空闲、决策间隔到期或当前目标失效时重新评估。
+- `minimum_zone_dwell_ticks` 从放下 Tick 开始计算，防止幼体在区域间反复振荡。
+- 当前只有两个直接连接区域，不存在通用寻路系统。
 
-根据模型状态选择护理、觅食、返回、搬运幼体、休息等任务。行为选择顺序和随机打破平局的方式必须可复现。
+## 6. 状态机与失效处理
 
-## 6. 每 Tick 更新顺序
+```text
+IDLE
+  └─ 选择幼体与更优区域
+      → MOVING_TO_BROOD
+          → PICKING_UP
+              ├─ 幼体 zone_id 清空
+              └─ CARRYING_TO_ZONE
+                    → DROPPING
+                        ├─ 幼体进入目标区域
+                        ├─ 更新 zone_entered_tick
+                        └─ 清空任务 → IDLE
+```
 
-当前生命周期灰盒的固定顺序为：
+- `MOVING_TO_BROOD` 或 `PICKING_UP` 的目标失效时，可以清空任务并释放预订。
+- `CARRYING_TO_ZONE` 或 `DROPPING` 中的目标失效时，不能直接回到空闲；必须重新选择可达区域并完成放下。
+- 玩家补水可能让原目标不再具有足够改善，此时工蚁按上述规则取消或重定向。
+- 每个 Tick 单次推进现有阶段，位置进度由 `elapsed_ticks / duration_ticks` 复制进快照。
 
-1. `MainController` 把现实帧 `delta` 交给 `SimulationClock`。
-2. 时钟按 0.1 秒固定步长发出一个或多个连续 Tick。
-3. `ColonySimulation` 验证 Tick 必须等于当前模拟 Tick 加一；否则拒绝且不修改状态。
-4. 更新既有个体的总年龄、阶段年龄和阶段转换。
-5. 检查当前 Tick 是否达到下一次产卵点，必要时创建新卵并分配稳定 ID。
-6. 一个现实帧处理完至少一个 Tick 后，主场景创建新快照并刷新灰盒标签。
+## 7. 所有权不变量
 
-因此，新卵在产下 Tick 的阶段年龄为 0，不会在出生的同一个 Tick 被提前计龄。未来系统扩展后的目标顺序仍为：
+每个模拟 Tick 结束时必须满足：
 
-1. 应用上一帧收集的玩家命令。
-2. 更新环境与资源状态。
-3. 更新卵、幼虫、蛹和工蚁生命周期。
-4. 评估事件进入／退出条件。
-5. 为需要重新决策的个体选择任务。
-6. 更新图路径上的移动。
-7. 结算觅食、护理、搬运和资源交互。
-8. 生成供 View 使用的只读快照和事件信号。
+- 未被携带的幼体恰好属于一个现存区域。
+- 被携带的幼体 `zone_id` 为空，且恰好属于一只工蚁。
+- 一个幼体最多被一个活跃任务预订。
+- 一只工蚁最多携带一个幼体。
+- `IDLE` 不残留来源、目标幼体、目标区域或携带 ID。
+- 搬运前状态有目标但没有携带物；搬运后状态的携带 ID 与目标幼体 ID 一致。
+- 放下后区域、预订、携带者和任务字段全部一致清理。
+- 工蚁始终属于一个现存区域。
 
-系统之间不得依赖场景树的处理顺序。任何顺序调整都必须附带确定性测试。
+预订者和携带者只在创建快照时从工蚁任务派生，避免双向权威字段漂移。所有权检查失败会让模拟进入错误状态并拒绝继续推进。
 
-## 7. 随机性与复现
+## 8. 每 Tick 更新顺序
 
-- 新游戏由一个显式种子创建项目 RNG。
-- 其他系统不得自行创建未登记的随机源。
-- 测试固定种子并验证关键阶段 Tick、事件和资源结果。
-- 若存档发生在随机序列中间，需保存足以继续复现的 RNG 状态。
-- Bug 报告应包含引擎版本、种子、模拟 Tick 和玩家命令序列。
+`ColonySimulation.advance_tick()` 的实际顺序：
 
-## 8. 路径与性能
+1. 验证 Tick 必须连续；失败时不消费命令。
+2. 写入当前 Tick。
+3. 应用并清空本 Tick 的湿度命令批次，湿度夹紧到有限的 0.0～1.0。
+4. 栖息地切片不推进生命周期；无栖息地的独立调试入口保持原生命周期流程。
+5. 按稳定工蚁 ID 校验、取消或重定向现有任务。
+6. 推进现有搬运状态机。
+7. 按稳定工蚁与幼体 ID 为到期的空闲工蚁分配任务。
+8. 更新观察记录稳定计数与解锁状态。
+9. 校验所有权不变量。
+10. 现实帧的 Tick 批次结束后，由控制器创建一份新快照。
 
-- 栖息地使用节点图表示：试管／巢室为区域，连接管为边。
-- 只在目标变化、连接断开或新资源出现时重新寻路。
-- View 使用对象池；个体显示数量上限在压力测试后确定。
-- 原型体验场景只需要 3 只工蚁；另建 100 只蚂蚁压力场景，避免用正式流程等待扩群。
-- 最低测试硬件尚未确定，因此暂不声称达到特定 GPU 或帧率指标。
+系统结果不依赖场景树处理顺序、渲染帧率或墙钟时间。
 
-## 9. 存档边界
+## 9. 快照边界
 
-存档不是验证核心乐趣的阻塞项，但从第一次实现起遵守以下格式：
+`ColonySimulation.create_snapshot()` 每次新建：
 
-- 顶层包含 `schema_version`、引擎版本、游戏版本、种子和模拟 Tick。
-- 只保存数字、字符串、布尔、数组和字典；向量显式拆成数值字段。
-- 保存稳定实体 ID，不保存运行时 NodePath。
-- 字段变更需要迁移函数和旧档测试。
-- 写入临时文件成功后再替换正式文件，并保留最近一个备份。
+- 一个 `ColonySnapshot`。
+- 每个区域对应的 `HabitatZoneSnapshot`，包括新的连接 ID 数组。
+- 每个实体对应的 `AntSnapshot`。
 
-## 10. 测试策略
+快照包含显示和诊断所需的区域、任务进度、派生预订／携带关系、湿度调整计数和观察状态，但不携带任何内部模型引用。修改快照字段、子对象或数组不会改变模拟。
 
-首轮不引入 GUT 或 GdUnit4。`tests/test_runner.gd` 是顶层 headless `SceneTree` 测试入口，并聚合 `tests/simulation/lifecycle_test_suite.gd`。
+## 10. 显示层
 
-当前已覆盖：
+`HabitatView`：
 
-- 固定步长累加、暂停、倍速、非法 delta、帧切分一致性、Tick 信号、积压保留、重置和 10,000 Tick 时钟 soak。
-- 主场景时钟控件冒烟测试。
-- 生命周期精确边界与信号、首代数量上限、稳定实体 ID、同 Tick 稳定更新顺序、`Species_A` 三只工蚁的实际羽化 Tick、非连续 Tick 拒绝、相同输入确定性和 10,000 Tick 生命周期 soak。
-- 快照隔离由对象复制边界实现，并有“修改快照字段、子对象和数组均不影响内部模型”的专门回归断言。
-- 配置校验、运行时配置冻结、1×／4×／16×生命周期一致性、积压排空一致性、主场景 Tick 1199／1200 精确产卵边界，以及失步后立即停止当前 Tick 批次。
+- 只读取快照。
+- 维护稳定的 `entity_id -> AntView` 映射。
+- 单独持有 `QueenView`。
+- 绘制两个巢室、连接通道和非数字湿度线索。
+- 根据工蚁任务状态与进度计算屏幕位置。
+- 携带中的幼体使用工蚁的快照驱动位置，不运行独立搬运动画。
+- 重复快照不创建重复节点，完整快照中缺失的节点按明确规则移除。
 
-最低测试集：
+普通 UI 不显示精确湿度、任务枚举、目标 ID 或生命周期倒计时。F3 诊断层读取相同快照并显示精确内部状态。
 
-- 相同种子与相同命令得到相同结果。
-- 卵 → 幼虫 → 蛹 → 工蚁的转换 Tick 正确。
-- 资源不出现负数、无穷或 NaN。
-- 湿度事件具有明确进入和退出条件。
-- 幼体只被搬到可达区域。
-- 断开连接后个体不会穿越不可达边。
-- 保存再读取后关键状态一致；实现存档后启用。
-- 连续 10,000 Tick 不崩溃、不永久卡住事件。
-- 100 只蚂蚁压力场景能够完成规定 Tick。
+## 11. 独立生命周期调试
 
-## 11. 本地命令
+`scenes/debug/lifecycle_debug.tscn` 使用：
 
-以下命令以仓库根目录为工作目录。
+```text
+ColonySimulation(species_data, null)
+    ↓
+TestTubeHabitat
+    ↓
+ColonyViewAdapter
+```
 
-已验证：
+无栖息地配置时，`ColonySimulation` 保持原有产卵与卵 → 幼虫 → 蛹 → 工蚁流程。阶段中文显示映射位于 View 层的 `LifeStagePresenter`，核心 `AntModel` 不负责本地化。
+
+## 12. 测试结构
+
+`tests/test_runner.gd` 只聚合独立套件：
+
+- `tests/core/simulation_clock_test_suite.gd`
+- `tests/simulation/lifecycle_test_suite.gd`
+- `tests/simulation/humidity_relocation_test_suite.gd`
+- `tests/view/view_adapter_test_suite.gd`
+- `tests/scenes/lifecycle_debug_scene_test_suite.gd`
+- `tests/scenes/humidity_main_scene_test_suite.gd`
+
+生命周期边界从 Resource 计算。湿度套件覆盖命令延迟、确定性、任务选择、所有权、取消／重定向、补水后重评估、1,000 Tick 防振荡、快照隔离、观察解锁、3～5 分钟节奏和 10,000 Tick soak。场景测试检查节点、命令和状态，不绑定完整中文文案。
+
+标准命令：
 
 ```powershell
-& '.\Godot_v4.7.1-stable_win64_console.exe' --version
 & '.\Godot_v4.7.1-stable_win64_console.exe' --headless --editor --path . --quit
 & '.\Godot_v4.7.1-stable_win64_console.exe' --headless --path . --script 'res://tests/test_runner.gd'
 & '.\Godot_v4.7.1-stable_win64_console.exe' --headless --path . --quit-after 30
 ```
 
-2026-07-22 最近一次运行顶层测试入口通过 134 项断言。
+自动测试不替代 1280×720 的人工可读性检查。
 
-打开编辑器：
+## 13. 当前限制
 
-```powershell
-& '.\Godot_v4.7.1-stable_win64_console.exe' --editor --path .
-```
-
-Windows 导出命令只有在安装同版本 Export Templates 并创建 `export_presets.cfg` 后才能加入“已验证”列表。
-
-## 12. 当前风险与开放项
-
-- 真实物种、湿度参数和生命周期仍待养蚁者审校。
-- 15 分钟内同时呈现生命周期、觅食和湿度因果链，可能节奏过密，需要试玩调参。
-- 行为是否足够清晰，不能由单元测试替代，必须进行无讲解试玩。
-- `sucai/` 图片授权未知，只能内部参考。
-- Export Templates 尚未安装，Windows 导出能力仍待验证。
+- 湿度和行为数值是原型节奏参数，未经真实养蚁数据审校。
+- 只有两个直接相连区域、一个物种和固定参与者。
+- 生命周期调试与湿度切片是两个独立入口。
+- 没有觅食、资源消耗、命名、镜头、存档、随机行为、正式素材或外部插件。

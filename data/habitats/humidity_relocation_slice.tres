@@ -1,0 +1,34 @@
+[gd_resource type="Resource" script_class="HabitatScenarioData" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/habitat_scenario_data.gd" id="1_scenario"]
+[ext_resource type="Script" path="res://scripts/core/habitat_zone_data.gd" id="2_zone"]
+
+[sub_resource type="Resource" id="Resource_left_zone"]
+script = ExtResource("2_zone")
+zone_id = &"left_chamber"
+initial_humidity = 0.3
+connected_zone_ids = Array[StringName]([&"right_chamber"])
+available = true
+
+[sub_resource type="Resource" id="Resource_right_zone"]
+script = ExtResource("2_zone")
+zone_id = &"right_chamber"
+initial_humidity = 0.5
+connected_zone_ids = Array[StringName]([&"left_chamber"])
+available = true
+
+[resource]
+script = ExtResource("1_scenario")
+scenario_id = &"humidity_relocation_slice"
+data_status = &"prototype_pacing_fixture"
+scientifically_validated = false
+left_zone = SubResource("Resource_left_zone")
+right_zone = SubResource("Resource_right_zone")
+initial_worker_count = 3
+initial_brood_count = 6
+initial_brood_stage = 1
+initial_worker_zone_id = &"left_chamber"
+initial_brood_zone_id = &"left_chamber"
+humidity_adjustment_zone_id = &"left_chamber"
+humidity_adjustment_amount = 0.1
+observation_stable_ticks = 30

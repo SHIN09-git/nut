@@ -10,7 +10,7 @@ var max_first_generation_brood: int
 
 
 static func from_species_data(species_data: SpeciesData) -> LifecycleConfig:
-	if species_data == null or not species_data.is_valid():
+	if species_data == null or not species_data.is_lifecycle_valid():
 		return null
 
 	var config: LifecycleConfig = LifecycleConfig.new()
