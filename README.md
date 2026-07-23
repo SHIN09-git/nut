@@ -78,4 +78,6 @@
 - 没有觅食、资源消耗、命名、镜头跟随、存档、Steam、正式素材、音频或第三方插件。
 - 当前机器未配置 Windows Export Templates，因此不提供已验证的导出命令。
 
+发布候选的自动与人工检查记录见 `docs/validation/release_candidate_001.md`。
+
 开始修改前请阅读 `AGENTS.md`、`GDD.md` 和 `ARCHITECTURE.md`。`sucai/` 仅作内部观察参考，授权确认前不得作为发行素材。
