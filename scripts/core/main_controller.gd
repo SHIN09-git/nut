@@ -10,8 +10,12 @@ const OBSERVATION_TEXT: String = "工蚁会把幼体搬向更合适的湿度区�
 var _simulation_clock: SimulationClock
 var _colony_simulation: ColonySimulation
 var _latest_snapshot: ColonySnapshot
-var _intervention_available: bool = false
 var _fatal_simulation_error: String = ""
+
+# Tests and alternate launch scenes may replace these before _ready().  The
+# Resources are consumed only to build the simulation's frozen configuration.
+var species_data_source: SpeciesData = SPECIES_A_DATA
+var habitat_scenario_data_source: HabitatScenarioData = HUMIDITY_SCENARIO_DATA
 
 @onready var _status_label: Label = %StatusLabel
 @onready var _habitat_view: HabitatView = %HabitatView
@@ -31,8 +35,8 @@ var _fatal_simulation_error: String = ""
 func _ready() -> void:
 	_simulation_clock = SimulationClock.new()
 	_colony_simulation = ColonySimulation.new(
-		SPECIES_A_DATA,
-		HUMIDITY_SCENARIO_DATA
+		species_data_source,
+		habitat_scenario_data_source
 	)
 	if not _colony_simulation.is_ready():
 		_set_fatal_simulation_error(_colony_simulation.get_configuration_error())
@@ -60,9 +64,11 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if _simulation_clock == null or not _fatal_simulation_error.is_empty():
 		return
-	var processed_ticks: int = _simulation_clock.advance(delta)
-	if processed_ticks > 0:
-		_apply_colony_snapshot()
+	_simulation_clock.advance(delta)
+	if _fatal_simulation_error.is_empty():
+		_habitat_view.set_interpolation_alpha(
+			_simulation_clock.get_interpolation_alpha()
+		)
 
 
 func _input(event: InputEvent) -> void:
@@ -86,6 +92,8 @@ func _on_simulation_tick_requested(
 		_set_fatal_simulation_error(
 			"模拟拒绝了非连续 Tick %d，已暂停。" % tick_index
 		)
+		return
+	_apply_colony_snapshot()
 
 
 func _on_pause_button_pressed() -> void:
@@ -98,13 +106,12 @@ func _on_pause_button_pressed() -> void:
 func _on_water_button_pressed() -> void:
 	if (
 		_water_button.disabled
-		or not _colony_simulation.submit_humidity_adjustment(
-			HUMIDITY_SCENARIO_DATA.humidity_adjustment_zone_id,
-			HUMIDITY_SCENARIO_DATA.humidity_adjustment_amount
-		)
+		or not _colony_simulation.submit_water_action()
 	):
 		return
-	_water_button.disabled = true
+	# The command is still applied only at the next fixed Tick.  Publishing the
+	# same-Tick snapshot exposes its authoritative pending state to the UI.
+	_apply_colony_snapshot()
 	_water_feedback_label.text = "补水指令已提交；水分会在下一次模拟更新时渗入。"
 
 
@@ -126,15 +133,6 @@ func _apply_colony_snapshot() -> void:
 		_set_fatal_simulation_error("栖息地视图拒绝了模拟快照，已暂停。")
 		return
 
-	if not _intervention_available:
-		for ant: AntSnapshot in _latest_snapshot.ants:
-			if (
-				ant.life_stage != AntModel.LifeStage.WORKER
-				and ant.zone_id == HUMIDITY_SCENARIO_DATA.right_zone.zone_id
-			):
-				_intervention_available = true
-				break
-
 	_update_player_guidance()
 	_update_control_state()
 	_update_debug_panel()
@@ -148,27 +146,23 @@ func _update_player_guidance() -> void:
 		return
 
 	_observation_label.text = "观察记录尚未解锁\n先看工蚁如何选择幼体的位置。"
-	if not _intervention_available:
+	if not _latest_snapshot.water_action_unlocked:
 		_instruction_label.text = (
 			"先观察，不要急着操作。注意工蚁从哪个巢室带走幼体。"
 		)
 		_water_feedback_label.text = "补水工具会在第一次搬运完成后开放。"
 		return
 
-	var left_zone: HabitatZoneSnapshot = _latest_snapshot.find_zone(
-		HUMIDITY_SCENARIO_DATA.humidity_adjustment_zone_id
-	)
-	if (
-		left_zone != null
-		and left_zone.humidity + 0.000001 >= SPECIES_A_DATA.brood_humidity_min
-	):
+	if _latest_snapshot.water_target_comfortable:
 		_instruction_label.text = "水分正在稳定。继续观察工蚁是否改变搬运方向。"
 		_water_feedback_label.text = "左室已完成本轮补水；等待群落自行调整。"
 	else:
 		_instruction_label.text = (
 			"幼体的位置发生了变化。尝试给左室少量补水，再观察工蚁。"
 		)
-		if _latest_snapshot.humidity_adjustment_count > 0:
+		if _latest_snapshot.water_action_pending:
+			_water_feedback_label.text = "补水指令已提交；水分会在下一次模拟更新时渗入。"
+		elif _latest_snapshot.water_action_count > 0:
 			_water_feedback_label.text = "水分正在渗入；还可以再补少量水。"
 		else:
 			_water_feedback_label.text = "每次只加入少量水，避免一次改变过多。"
@@ -197,29 +191,20 @@ func _update_control_state() -> void:
 	_speed_16x_button.disabled = speed_multiplier == SimulationClock.VERY_FAST_SPEED
 	_debug_toggle_button.text = "关闭调试" if _debug_panel.visible else "F3 调试"
 
-	var can_water: bool = _intervention_available and not paused
-	if _latest_snapshot != null:
-		var left_zone: HabitatZoneSnapshot = _latest_snapshot.find_zone(
-			HUMIDITY_SCENARIO_DATA.humidity_adjustment_zone_id
-		)
-		can_water = (
-			can_water
-			and not _latest_snapshot.brood_humidity_observation_unlocked
-			and left_zone != null
-			and left_zone.humidity + 0.000001 < SPECIES_A_DATA.brood_humidity_min
-		)
+	var can_water: bool = (
+		not paused
+		and _latest_snapshot != null
+		and _latest_snapshot.water_action_available
+	)
 	_water_button.disabled = not can_water
 
 
 func _update_debug_panel() -> void:
 	if not _debug_panel.visible or _latest_snapshot == null:
 		return
-	var left_zone: HabitatZoneSnapshot = _latest_snapshot.find_zone(
-		HUMIDITY_SCENARIO_DATA.left_zone.zone_id
-	)
-	var right_zone: HabitatZoneSnapshot = _latest_snapshot.find_zone(
-		HUMIDITY_SCENARIO_DATA.right_zone.zone_id
-	)
+	var zone_lines: PackedStringArray = []
+	for zone: HabitatZoneSnapshot in _latest_snapshot.zones:
+		zone_lines.append("%s %.2f" % [zone.zone_id, zone.humidity])
 	var worker_lines: PackedStringArray = []
 	var reservation_lines: PackedStringArray = []
 	for ant: AntSnapshot in _latest_snapshot.ants:
@@ -241,14 +226,16 @@ func _update_debug_panel() -> void:
 
 	_debug_label.text = (
 		"Tick %d  |  speed %d×\n"
-		+ "left %.2f  |  right %.2f\n"
+		+ "%s\n"
+		+ "water actions: %d  |  pending: %s\n"
 		+ "active relocations: %d\n\n"
 		+ "%s\n\nreservations: %s"
 	) % [
 		_latest_snapshot.simulation_tick,
 		_simulation_clock.get_speed_multiplier(),
-		left_zone.humidity if left_zone != null else -1.0,
-		right_zone.humidity if right_zone != null else -1.0,
+		"  |  ".join(zone_lines),
+		_latest_snapshot.water_action_count,
+		str(_latest_snapshot.water_action_pending),
 		_latest_snapshot.count_active_relocations(),
 		"\n".join(worker_lines),
 		"none" if reservation_lines.is_empty() else ", ".join(reservation_lines),

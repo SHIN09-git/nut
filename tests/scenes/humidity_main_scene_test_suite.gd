@@ -15,7 +15,10 @@ var _scene_root: Node
 func run(scene_root: Node) -> void:
 	_scene_root = scene_root
 	_test_main_scene_instantiates_headless()
+	_test_humidity_scene_lifecycle_fields_are_not_applicable()
 	_test_water_button_queues_until_next_tick()
+	_test_real_water_button_path_unlocks_observation()
+	_test_controller_freezes_runtime_resources()
 	_test_f3_toggles_debug_panel()
 	_test_pause_stops_environment_and_behavior()
 	_test_speed_multipliers_match_at_the_same_tick()
@@ -53,6 +56,22 @@ func _test_main_scene_instantiates_headless() -> void:
 	if controller._latest_snapshot != null:
 		_expect_int(controller._latest_snapshot.simulation_tick, 0, "initial main snapshot starts at Tick zero")
 		_expect_int(controller._latest_snapshot.zones.size(), 2, "initial main snapshot contains both zones")
+		_expect_true(
+			not controller._latest_snapshot.lifecycle_active,
+			"humidity main scene identifies lifecycle counters as not applicable"
+		)
+		_expect_true(
+			not controller._latest_snapshot.water_action_unlocked,
+			"water action starts behind the authoritative observation gate"
+		)
+		_expect_true(
+			not controller._latest_snapshot.water_action_available,
+			"water action snapshot starts unavailable"
+		)
+		_expect_true(
+			not controller._latest_snapshot.water_action_pending,
+			"water action snapshot starts without queued input"
+		)
 		_expect_int(
 			controller._latest_snapshot.ants.size(),
 			HUMIDITY_SCENARIO_DATA.initial_worker_count
@@ -73,6 +92,16 @@ func _test_main_scene_instantiates_headless() -> void:
 	if speed_1x_button != null:
 		_expect_true(speed_1x_button.disabled, "main scene starts at 1x")
 
+	_destroy_controller(controller)
+
+
+func _test_humidity_scene_lifecycle_fields_are_not_applicable() -> void:
+	var controller: MainController = _create_controller()
+	var snapshot: ColonySnapshot = controller._latest_snapshot
+	_expect_true(not snapshot.lifecycle_active, "humidity scenario disables lifecycle production")
+	_expect_int(snapshot.queen_laid_egg_count, 0, "humidity scenario exposes no laid-egg count")
+	_expect_int(snapshot.max_first_generation_brood, 0, "humidity scenario exposes no lifecycle brood cap")
+	_expect_int(snapshot.next_egg_tick, -1, "humidity scenario exposes no next egg Tick")
 	_destroy_controller(controller)
 
 
@@ -102,21 +131,27 @@ func _test_water_button_queues_until_next_tick() -> void:
 		return
 
 	var before_humidity: float = before_zone.humidity
-	var before_adjustment_count: int = before_snapshot.humidity_adjustment_count
+	var before_action_count: int = before_snapshot.water_action_count
 	water_button.pressed.emit()
-	var queued_snapshot: ColonySnapshot = controller._colony_simulation.create_snapshot()
+	var queued_snapshot: ColonySnapshot = controller._latest_snapshot
 	var queued_zone: HabitatZoneSnapshot = queued_snapshot.find_zone(
 		HUMIDITY_SCENARIO_DATA.humidity_adjustment_zone_id
 	)
 	_expect_true(water_button.disabled, "water command disables while its queued input is pending")
+	_expect_true(queued_snapshot.water_action_pending, "button click publishes the authoritative pending state")
+	_expect_int(
+		queued_snapshot.simulation_tick,
+		before_snapshot.simulation_tick,
+		"submitting a water command does not advance simulation time"
+	)
 	_expect_float(
 		queued_zone.humidity,
 		before_humidity,
 		"submitting a water command does not mutate humidity immediately"
 	)
 	_expect_int(
-		queued_snapshot.humidity_adjustment_count,
-		before_adjustment_count,
+		queued_snapshot.water_action_count,
+		before_action_count,
 		"submitting a water command does not count as an applied adjustment"
 	)
 
@@ -140,11 +175,208 @@ func _test_water_button_queues_until_next_tick() -> void:
 		"the next fixed Tick changes humidity by the configured amount"
 	)
 	_expect_int(
-		applied_snapshot.humidity_adjustment_count,
-		before_adjustment_count + 1,
+		applied_snapshot.water_action_count,
+		before_action_count + 1,
 		"the next fixed Tick records exactly one applied humidity command"
 	)
+	_expect_true(not applied_snapshot.water_action_pending, "applied water command clears pending state")
 
+	_destroy_controller(controller)
+
+
+func _test_real_water_button_path_unlocks_observation() -> void:
+	var controller: MainController = _create_controller()
+	var water_button: Button = controller.get_node_or_null("%WaterButton") as Button
+	if water_button == null:
+		_record_failure("real player path fixture is complete", "WaterButton", "missing")
+		_destroy_controller(controller)
+		return
+
+	var first_drop_tick: int = _advance_until_water_available(
+		controller,
+		_get_first_drop_deadline()
+	)
+	_expect_true(first_drop_tick >= 0, "first completed relocation unlocks the real water control")
+	if first_drop_tick < 0:
+		_destroy_controller(controller)
+		return
+	var first_drop_snapshot: ColonySnapshot = controller._latest_snapshot
+	_expect_true(
+		first_drop_snapshot.water_action_unlocked,
+		"first landing is retained by authoritative simulation state"
+	)
+	_expect_true(
+		_count_brood_in_zone(
+			first_drop_snapshot,
+			HUMIDITY_SCENARIO_DATA.initial_brood_zone_id
+		) > 0,
+		"water opens while brood still remains in the starting chamber"
+	)
+
+	var expected_action_count: int = _get_commands_to_reach_comfort()
+	var submitted_actions: int = 0
+	while (
+		not controller._latest_snapshot.water_target_comfortable
+		and submitted_actions < expected_action_count + 2
+	):
+		_expect_true(not water_button.disabled, "each required water action uses the enabled UI button")
+		if water_button.disabled:
+			break
+		var before_snapshot: ColonySnapshot = controller._latest_snapshot
+		water_button.pressed.emit()
+		var pending_snapshot: ColonySnapshot = controller._latest_snapshot
+		_expect_true(pending_snapshot.water_action_pending, "button path queues one high-level water action")
+		_expect_int(
+			pending_snapshot.water_action_count,
+			before_snapshot.water_action_count,
+			"queued UI action remains unapplied during its submission Tick"
+		)
+		controller._process(SimulationClock.FIXED_STEP_SECONDS)
+		_expect_int(
+			controller._latest_snapshot.simulation_tick,
+			before_snapshot.simulation_tick + 1,
+			"each UI water action applies at the start of the next fixed Tick"
+		)
+		_expect_int(
+			controller._latest_snapshot.water_action_count,
+			before_snapshot.water_action_count + 1,
+			"each UI click applies exactly one frozen water action"
+		)
+		submitted_actions += 1
+
+	_expect_int(submitted_actions, expected_action_count, "player needs only the configured small set of water actions")
+	_expect_true(controller._latest_snapshot.water_target_comfortable, "real UI path makes the water target comfortable")
+	_expect_true(water_button.disabled, "water control closes once its target is comfortable")
+
+	var reevaluation_seen: bool = false
+	var completion_deadline: int = (
+		controller._latest_snapshot.simulation_tick
+		+ SPECIES_A_DATA.minimum_zone_dwell_ticks
+		+ SPECIES_A_DATA.decision_interval_ticks * 6
+		+ (
+			SPECIES_A_DATA.travel_duration_ticks * 2
+			+ SPECIES_A_DATA.pickup_duration_ticks
+			+ SPECIES_A_DATA.drop_duration_ticks
+		) * HUMIDITY_SCENARIO_DATA.initial_brood_count
+		+ HUMIDITY_SCENARIO_DATA.observation_stable_ticks
+		+ 100
+	)
+	while (
+		not controller._latest_snapshot.brood_humidity_observation_unlocked
+		and controller._latest_snapshot.simulation_tick < completion_deadline
+	):
+		controller._process(SimulationClock.FIXED_STEP_SECONDS)
+		for ant: AntSnapshot in controller._latest_snapshot.ants:
+			if (
+				ant.life_stage == AntModel.LifeStage.WORKER
+				and ant.worker_task_state != WorkerTaskModel.State.IDLE
+				and ant.target_zone_id
+					== HUMIDITY_SCENARIO_DATA.humidity_adjustment_zone_id
+			):
+				reevaluation_seen = true
+
+	_expect_true(reevaluation_seen, "workers visibly reevaluate toward the watered chamber")
+	_expect_true(
+		controller._latest_snapshot.brood_humidity_observation_unlocked,
+		"the real button path reaches the observation unlock"
+	)
+	_expect_int(
+		controller._latest_snapshot.count_active_relocations(),
+		0,
+		"observation unlock occurs only after relocation work settles"
+	)
+	_destroy_controller(controller)
+
+
+func _test_controller_freezes_runtime_resources() -> void:
+	var species_source: SpeciesData = SPECIES_A_DATA.duplicate(true) as SpeciesData
+	var scenario_source: HabitatScenarioData = (
+		HUMIDITY_SCENARIO_DATA.duplicate(true) as HabitatScenarioData
+	)
+	var original_target_zone_id: StringName = scenario_source.humidity_adjustment_zone_id
+	var alternate_zone_id: StringName = (
+		scenario_source.right_zone.zone_id
+		if scenario_source.right_zone.zone_id != original_target_zone_id
+		else scenario_source.left_zone.zone_id
+	)
+	var original_amount: float = scenario_source.humidity_adjustment_amount
+	var expected_action_count: int = _get_commands_to_reach_comfort_from_data(
+		species_source,
+		scenario_source
+	)
+	var controller: MainController = _create_controller(species_source, scenario_source)
+	var water_button: Button = controller.get_node_or_null("%WaterButton") as Button
+	var unlocked_tick: int = _advance_until_water_available(
+		controller,
+		_get_first_drop_deadline()
+	)
+	_expect_true(unlocked_tick >= 0, "freeze fixture reaches authoritative water availability")
+	if water_button == null or unlocked_tick < 0:
+		_destroy_controller(controller)
+		return
+
+	var before_mutation_snapshot: ColonySnapshot = controller._latest_snapshot
+	var before_target: HabitatZoneSnapshot = before_mutation_snapshot.find_zone(
+		original_target_zone_id
+	)
+	var before_alternate: HabitatZoneSnapshot = before_mutation_snapshot.find_zone(
+		alternate_zone_id
+	)
+	_expect_true(before_target != null, "frozen-config water target exists")
+	_expect_true(before_alternate != null, "frozen-config alternate zone exists")
+	if before_target == null or before_alternate == null:
+		_destroy_controller(controller)
+		return
+	scenario_source.humidity_adjustment_zone_id = alternate_zone_id
+	scenario_source.humidity_adjustment_amount = 0.37
+	species_source.brood_humidity_min = 0.90
+	species_source.brood_humidity_max = 0.95
+	controller._update_control_state()
+	controller._update_player_guidance()
+	_expect_true(not water_button.disabled, "mutating source Resources does not change UI availability")
+
+	water_button.pressed.emit()
+	_expect_true(controller._latest_snapshot.water_action_pending, "frozen-config UI action is accepted")
+	controller._process(SimulationClock.FIXED_STEP_SECONDS)
+	var applied_snapshot: ColonySnapshot = controller._latest_snapshot
+	var applied_target: HabitatZoneSnapshot = applied_snapshot.find_zone(
+		original_target_zone_id
+	)
+	var applied_alternate: HabitatZoneSnapshot = applied_snapshot.find_zone(
+		alternate_zone_id
+	)
+	_expect_true(applied_target != null, "original frozen water target remains present")
+	_expect_true(applied_alternate != null, "alternate zone remains present")
+	if applied_target == null or applied_alternate == null:
+		_destroy_controller(controller)
+		return
+	_expect_float(
+		applied_target.humidity,
+		clampf(before_target.humidity + original_amount, 0.0, 1.0),
+		"simulation keeps the frozen water amount and original target"
+	)
+	_expect_float(
+		applied_alternate.humidity,
+		before_alternate.humidity,
+		"mutated source target does not receive the water action"
+	)
+
+	while controller._latest_snapshot.water_action_count < expected_action_count:
+		_expect_true(not water_button.disabled, "frozen comfort range keeps required UI actions available")
+		if water_button.disabled:
+			break
+		water_button.pressed.emit()
+		controller._process(SimulationClock.FIXED_STEP_SECONDS)
+	_expect_int(
+		controller._latest_snapshot.water_action_count,
+		expected_action_count,
+		"frozen scenario applies the original number of water actions"
+	)
+	_expect_true(
+		controller._latest_snapshot.water_target_comfortable,
+		"comfort result uses the frozen species range"
+	)
+	_expect_true(water_button.disabled, "UI follows frozen comfortable state after source mutation")
 	_destroy_controller(controller)
 
 
@@ -179,6 +411,7 @@ func _test_f3_toggles_debug_panel() -> void:
 func _test_pause_stops_environment_and_behavior() -> void:
 	var controller: MainController = _create_controller()
 	var pause_button: Button = controller.get_node_or_null("%PauseButton") as Button
+	var habitat_view: HabitatView = controller.get_node_or_null("%HabitatView") as HabitatView
 	if pause_button == null:
 		_record_failure("pause fixture is complete", "PauseButton", "missing")
 		_destroy_controller(controller)
@@ -188,6 +421,17 @@ func _test_pause_stops_environment_and_behavior() -> void:
 	_expect_true(
 		controller._latest_snapshot.count_active_relocations() > 0,
 		"pause fixture reaches active worker behavior"
+	)
+	controller._process(SimulationClock.FIXED_STEP_SECONDS)
+	controller._process(SimulationClock.FIXED_STEP_SECONDS * 0.5)
+	var active_worker: AntSnapshot = _find_active_worker(controller._latest_snapshot)
+	var active_worker_view: AntView = (
+		habitat_view.get_ant_view(active_worker.entity_id)
+		if habitat_view != null and active_worker != null
+		else null
+	)
+	var paused_visual_position: Vector2 = (
+		active_worker_view.position if active_worker_view != null else Vector2.ZERO
 	)
 	var paused_signature: String = _snapshot_signature(
 		controller._colony_simulation.create_snapshot()
@@ -206,6 +450,13 @@ func _test_pause_stops_environment_and_behavior() -> void:
 		paused_signature,
 		"paused main scene changes neither environment nor worker behavior"
 	)
+	_expect_true(active_worker_view != null, "pause fixture identifies a moving worker view")
+	if active_worker_view != null:
+		_expect_vector2(
+			active_worker_view.position,
+			paused_visual_position,
+			"paused main scene freezes render interpolation"
+		)
 
 	pause_button.pressed.emit()
 	_expect_true(not controller._simulation_clock.is_paused(), "pause control resumes the fixed clock")
@@ -328,9 +579,8 @@ func _test_habitat_view_reuses_nodes_and_attaches_carried_brood() -> void:
 		_destroy_controller(controller)
 		return
 
-	var initial_worker_position: Vector2 = worker_view.position
-	var initial_brood_position: Vector2 = brood_view.position
-	var initial_carry_offset: Vector2 = initial_brood_position - initial_worker_position
+	# Advance once to make both interpolation endpoints part of the carrying
+	# state, then sample halfway between them without advancing another Tick.
 	controller._process(SimulationClock.FIXED_STEP_SECONDS)
 	var next_carried_brood: AntSnapshot = controller._latest_snapshot.find_ant(
 		carried_brood.entity_id
@@ -340,13 +590,23 @@ func _test_habitat_view_reuses_nodes_and_attaches_carried_brood() -> void:
 		carrier.entity_id,
 		"carried brood keeps the same carrier during the next travel Tick"
 	)
+	var interpolation_tick: int = controller._latest_snapshot.simulation_tick
+	var initial_worker_position: Vector2 = worker_view.position
+	var initial_brood_position: Vector2 = brood_view.position
+	var initial_carry_offset: Vector2 = initial_brood_position - initial_worker_position
+	controller._process(SimulationClock.FIXED_STEP_SECONDS * 0.5)
+	_expect_int(
+		controller._latest_snapshot.simulation_tick,
+		interpolation_tick,
+		"render interpolation does not advance simulation state"
+	)
 	_expect_true(
 		not worker_view.position.is_equal_approx(initial_worker_position),
-		"carrier position advances from simulation task progress"
+		"carrier advances smoothly between fixed Tick endpoints"
 	)
 	_expect_true(
 		not brood_view.position.is_equal_approx(initial_brood_position),
-		"carried brood visibly advances with its carrier"
+		"carried brood advances smoothly with its carrier"
 	)
 	_expect_vector2(
 		brood_view.position - worker_view.position,
@@ -357,8 +617,15 @@ func _test_habitat_view_reuses_nodes_and_attaches_carried_brood() -> void:
 	_destroy_controller(controller)
 
 
-func _create_controller() -> MainController:
+func _create_controller(
+	species_source: SpeciesData = null,
+	scenario_source: HabitatScenarioData = null
+) -> MainController:
 	var controller: MainController = MAIN_SCENE.instantiate() as MainController
+	if species_source != null:
+		controller.species_data_source = species_source
+	if scenario_source != null:
+		controller.habitat_scenario_data_source = scenario_source
 	_scene_root.add_child(controller)
 	return controller
 
@@ -425,6 +692,27 @@ func _find_carried_brood(snapshot: ColonySnapshot) -> AntSnapshot:
 	return null
 
 
+func _find_active_worker(snapshot: ColonySnapshot) -> AntSnapshot:
+	for ant: AntSnapshot in snapshot.ants:
+		if (
+			ant.life_stage == AntModel.LifeStage.WORKER
+			and ant.worker_task_state != WorkerTaskModel.State.IDLE
+		):
+			return ant
+	return null
+
+
+func _count_brood_in_zone(
+	snapshot: ColonySnapshot,
+	zone_id: StringName
+) -> int:
+	var count: int = 0
+	for ant: AntSnapshot in snapshot.ants:
+		if ant.life_stage != AntModel.LifeStage.WORKER and ant.zone_id == zone_id:
+			count += 1
+	return count
+
+
 func _get_first_drop_deadline() -> int:
 	return (
 		SPECIES_A_DATA.decision_interval_ticks
@@ -451,14 +739,29 @@ func _get_aligned_first_command_tick() -> int:
 
 
 func _get_commands_to_reach_comfort() -> int:
-	var initial_zone: HabitatZoneData = HUMIDITY_SCENARIO_DATA.left_zone
+	return _get_commands_to_reach_comfort_from_data(
+		SPECIES_A_DATA,
+		HUMIDITY_SCENARIO_DATA
+	)
+
+
+func _get_commands_to_reach_comfort_from_data(
+	species_data: SpeciesData,
+	scenario_data: HabitatScenarioData
+) -> int:
+	var initial_zone: HabitatZoneData = (
+		scenario_data.left_zone
+		if scenario_data.left_zone.zone_id
+			== scenario_data.humidity_adjustment_zone_id
+		else scenario_data.right_zone
+	)
 	var humidity_gap: float = maxf(
-		SPECIES_A_DATA.brood_humidity_min - initial_zone.initial_humidity,
+		species_data.brood_humidity_min - initial_zone.initial_humidity,
 		0.0
 	)
 	return ceili(
 		(humidity_gap - 0.000001)
-		/ HUMIDITY_SCENARIO_DATA.humidity_adjustment_amount
+		/ scenario_data.humidity_adjustment_amount
 	)
 
 
@@ -477,7 +780,12 @@ func _get_speed_button(controller: MainController, speed: int) -> Button:
 func _snapshot_signature(snapshot: ColonySnapshot) -> String:
 	var parts: PackedStringArray = [
 		str(snapshot.simulation_tick),
-		str(snapshot.humidity_adjustment_count),
+		str(snapshot.lifecycle_active),
+		str(snapshot.water_action_unlocked),
+		str(snapshot.water_action_available),
+		str(snapshot.water_action_pending),
+		str(snapshot.water_action_count),
+		str(snapshot.water_target_comfortable),
 		str(snapshot.observation_stable_ticks),
 		str(snapshot.brood_humidity_observation_unlocked),
 	]

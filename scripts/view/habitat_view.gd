@@ -23,6 +23,8 @@ const CONNECTOR_EDGE_COLOR: Color = Color(0.42, 0.40, 0.32, 1.0)
 const CONNECTOR_FILL_COLOR: Color = Color(0.13, 0.15, 0.13, 1.0)
 const CONDENSATION_COLOR: Color = Color(0.55, 0.82, 0.78, 0.48)
 const UNAVAILABLE_OVERLAY_COLOR: Color = Color(0.05, 0.055, 0.05, 0.56)
+const WORKER_BROOD_APPROACH_OFFSET: Vector2 = Vector2(13.0, -7.0)
+const CARRIED_BROOD_OFFSET: Vector2 = Vector2(-2.0, -17.0)
 
 const BROOD_SLOT_RATIOS: Array[Vector2] = [
 	Vector2(0.25, 0.66),
@@ -47,7 +49,11 @@ const CONDENSATION_RATIOS: Array[Vector2] = [
 ]
 
 var _ant_views: Dictionary[int, AntView] = {}
+var _previous_snapshot: ColonySnapshot
 var _latest_snapshot: ColonySnapshot
+var _previous_entity_positions: Dictionary[int, Vector2] = {}
+var _current_entity_positions: Dictionary[int, Vector2] = {}
+var _interpolation_alpha: float = 1.0
 var _zone_ids: Array[StringName] = []
 var _zone_humidity: Dictionary[StringName, float] = {}
 var _zone_available: Dictionary[StringName, bool] = {}
@@ -69,14 +75,21 @@ func _notification(what: int) -> void:
 		return
 	queue_redraw()
 	if is_node_ready():
+		_recalculate_position_endpoints()
 		_layout_latest_snapshot()
 
 
 func apply_snapshot(snapshot: ColonySnapshot) -> bool:
 	if not is_node_ready() or not _validate_snapshot(snapshot):
 		return false
+	if (
+		_latest_snapshot != null
+		and snapshot.simulation_tick < _latest_snapshot.simulation_tick
+	):
+		return false
 
 	_copy_zone_display_state(snapshot)
+	_update_position_endpoints(snapshot)
 	var present_entity_ids: Dictionary[int, bool] = {}
 	for ant_snapshot: AntSnapshot in snapshot.ants:
 		present_entity_ids[ant_snapshot.entity_id] = true
@@ -87,7 +100,10 @@ func apply_snapshot(snapshot: ColonySnapshot) -> bool:
 			_entity_layer.add_child(ant_view)
 			if not ant_view.configure(
 				ant_snapshot,
-				_get_initial_position(ant_snapshot)
+				_current_entity_positions.get(
+					ant_snapshot.entity_id,
+					Vector2.ZERO
+				)
 			):
 				_entity_layer.remove_child(ant_view)
 				ant_view.queue_free()
@@ -104,10 +120,11 @@ func apply_snapshot(snapshot: ColonySnapshot) -> bool:
 	for entity_id: int in removed_entity_ids:
 		var removed_view: AntView = _ant_views[entity_id]
 		_ant_views.erase(entity_id)
+		_previous_entity_positions.erase(entity_id)
+		_current_entity_positions.erase(entity_id)
 		_entity_layer.remove_child(removed_view)
 		removed_view.queue_free()
 
-	_latest_snapshot = snapshot
 	_queen_view.set_entity_id(snapshot.queen_entity_id)
 	_queen_view.set_simulation_tick(snapshot.simulation_tick)
 	_layout_latest_snapshot()
@@ -123,6 +140,15 @@ func set_visuals_paused(value: bool) -> void:
 		ant_view.set_visuals_paused(value)
 
 
+func set_interpolation_alpha(value: float) -> void:
+	if _visuals_paused:
+		return
+	_interpolation_alpha = (
+		clampf(value, 0.0, 1.0) if is_finite(value) else 0.0
+	)
+	_layout_latest_snapshot()
+
+
 func get_ant_view(entity_id: int) -> AntView:
 	return _ant_views.get(entity_id)
 
@@ -133,6 +159,109 @@ func get_ant_view_count() -> int:
 
 func get_queen_view() -> QueenView:
 	return _queen_view
+
+
+func _update_position_endpoints(snapshot: ColonySnapshot) -> void:
+	if _latest_snapshot == null:
+		_previous_snapshot = snapshot
+		_latest_snapshot = snapshot
+		_current_entity_positions = _calculate_entity_positions(snapshot)
+		_previous_entity_positions = _current_entity_positions.duplicate()
+		return
+
+	if snapshot.simulation_tick > _latest_snapshot.simulation_tick:
+		_previous_snapshot = _latest_snapshot
+		_latest_snapshot = snapshot
+		_previous_entity_positions = _calculate_entity_positions(
+			_previous_snapshot
+		)
+		_current_entity_positions = _calculate_entity_positions(
+			_latest_snapshot
+		)
+		for entity_id: int in _current_entity_positions:
+			if not _previous_entity_positions.has(entity_id):
+				_previous_entity_positions[entity_id] = (
+					_current_entity_positions[entity_id]
+				)
+		return
+
+	# A repeated snapshot may refresh presentation data, but it must not rotate
+	# the two authoritative Tick endpoints and accidentally interpolate toward
+	# the same position twice.
+	_latest_snapshot = snapshot
+	_current_entity_positions = _calculate_entity_positions(snapshot)
+	for entity_id: int in _current_entity_positions:
+		if not _previous_entity_positions.has(entity_id):
+			_previous_entity_positions[entity_id] = (
+				_current_entity_positions[entity_id]
+			)
+
+
+func _recalculate_position_endpoints() -> void:
+	if _latest_snapshot == null:
+		return
+	_current_entity_positions = _calculate_entity_positions(_latest_snapshot)
+	_previous_entity_positions = _calculate_entity_positions(
+		_previous_snapshot if _previous_snapshot != null else _latest_snapshot
+	)
+	for entity_id: int in _current_entity_positions:
+		if not _previous_entity_positions.has(entity_id):
+			_previous_entity_positions[entity_id] = (
+				_current_entity_positions[entity_id]
+			)
+
+
+func _calculate_entity_positions(
+	snapshot: ColonySnapshot
+) -> Dictionary[int, Vector2]:
+	var positions: Dictionary[int, Vector2] = {}
+	for ant_snapshot: AntSnapshot in snapshot.ants:
+		if ant_snapshot.life_stage != AntModel.LifeStage.WORKER:
+			continue
+		positions[ant_snapshot.entity_id] = _get_worker_position(
+			ant_snapshot,
+			snapshot
+		)
+
+	for ant_snapshot: AntSnapshot in snapshot.ants:
+		if ant_snapshot.life_stage == AntModel.LifeStage.WORKER:
+			continue
+
+		var brood_position: Vector2
+		var carrier_snapshot: AntSnapshot = snapshot.find_ant(
+			ant_snapshot.carrier_ant_id
+		)
+		if (
+			carrier_snapshot != null
+			and positions.has(carrier_snapshot.entity_id)
+		):
+			brood_position = _get_carried_brood_position(
+				ant_snapshot,
+				carrier_snapshot,
+				positions[carrier_snapshot.entity_id]
+			)
+		else:
+			var reserving_worker: AntSnapshot = snapshot.find_ant(
+				ant_snapshot.reserved_by_ant_id
+			)
+			if (
+				reserving_worker != null
+				and reserving_worker.worker_task_state
+				== WorkerTaskModel.State.PICKING_UP
+				and positions.has(reserving_worker.entity_id)
+			):
+				brood_position = _get_picked_up_brood_position(
+					ant_snapshot,
+					reserving_worker,
+					positions[reserving_worker.entity_id]
+				)
+			else:
+				brood_position = _get_brood_slot_position(
+					_get_valid_zone_id(ant_snapshot.zone_id),
+					ant_snapshot.entity_id
+				)
+		positions[ant_snapshot.entity_id] = brood_position
+	return positions
 
 
 func _validate_snapshot(snapshot: ColonySnapshot) -> bool:
@@ -186,49 +315,47 @@ func _layout_latest_snapshot() -> void:
 		return
 
 	_layout_queen()
-	var worker_positions: Dictionary[int, Vector2] = {}
 	for ant_snapshot: AntSnapshot in _latest_snapshot.ants:
-		if ant_snapshot.life_stage != AntModel.LifeStage.WORKER:
-			continue
 		var ant_view: AntView = _ant_views.get(ant_snapshot.entity_id)
-		if ant_view == null:
-			continue
-		var worker_position: Vector2 = _get_worker_position(
-			ant_snapshot,
-			_latest_snapshot
-		)
-		worker_positions[ant_snapshot.entity_id] = worker_position
-		ant_view.set_slot_position(worker_position)
-		ant_view.z_index = 5
-
-	for ant_snapshot: AntSnapshot in _latest_snapshot.ants:
-		if ant_snapshot.life_stage == AntModel.LifeStage.WORKER:
-			continue
-		var ant_view: AntView = _ant_views.get(ant_snapshot.entity_id)
-		if ant_view == null:
-			continue
-
-		var brood_position: Vector2
 		if (
-			ant_snapshot.carrier_ant_id >= 0
-			and worker_positions.has(ant_snapshot.carrier_ant_id)
+			ant_view == null
+			or not _current_entity_positions.has(ant_snapshot.entity_id)
 		):
-			var carrier_snapshot: AntSnapshot = _latest_snapshot.find_ant(
-				ant_snapshot.carrier_ant_id
+			continue
+		var current_position: Vector2 = _current_entity_positions[
+			ant_snapshot.entity_id
+		]
+		var previous_position: Vector2 = _previous_entity_positions.get(
+			ant_snapshot.entity_id,
+			current_position
+		)
+		ant_view.set_slot_position(
+			previous_position.lerp(current_position, _interpolation_alpha)
+		)
+		if ant_snapshot.life_stage == AntModel.LifeStage.WORKER:
+			ant_view.z_index = 5
+		elif (
+			ant_snapshot.carrier_ant_id >= 0
+			or (
+				ant_snapshot.reserved_by_ant_id >= 0
+				and _is_brood_being_picked_up(ant_snapshot)
 			)
-			brood_position = _get_carried_brood_position(
-				ant_snapshot,
-				carrier_snapshot,
-				worker_positions[ant_snapshot.carrier_ant_id]
-			)
+		):
 			ant_view.z_index = 6
 		else:
-			brood_position = _get_brood_slot_position(
-				_get_valid_zone_id(ant_snapshot.zone_id),
-				ant_snapshot.entity_id
-			)
 			ant_view.z_index = 4
-		ant_view.set_slot_position(brood_position)
+
+
+func _is_brood_being_picked_up(brood: AntSnapshot) -> bool:
+	if _latest_snapshot == null:
+		return false
+	var worker: AntSnapshot = _latest_snapshot.find_ant(
+		brood.reserved_by_ant_id
+	)
+	return (
+		worker != null
+		and worker.worker_task_state == WorkerTaskModel.State.PICKING_UP
+	)
 
 
 func _layout_queen() -> void:
@@ -260,7 +387,7 @@ func _get_worker_position(
 				brood_zone_id = _get_valid_zone_id(target_brood.zone_id)
 			return _get_route_position(
 				_get_worker_idle_position(origin_zone_id, worker.entity_id),
-				_get_brood_slot_position(
+				_get_brood_approach_position(
 					brood_zone_id,
 					worker.target_brood_id
 				),
@@ -269,24 +396,20 @@ func _get_worker_position(
 				progress
 			)
 		WorkerTaskModel.State.PICKING_UP:
-			var pickup_position: Vector2 = _get_brood_slot_position(
+			return _get_brood_approach_position(
 				origin_zone_id,
 				worker.target_brood_id
-			)
-			return pickup_position + Vector2(
-				lerpf(22.0, 13.0, progress),
-				lerpf(-13.0, -7.0, progress)
 			)
 		WorkerTaskModel.State.CARRYING_TO_ZONE:
 			var target_zone_id: StringName = _get_valid_zone_id(
 				worker.target_zone_id
 			)
 			return _get_route_position(
-				_get_brood_slot_position(
+				_get_brood_approach_position(
 					origin_zone_id,
 					worker.target_brood_id
 				),
-				_get_brood_slot_position(
+				_get_brood_approach_position(
 					target_zone_id,
 					worker.target_brood_id
 				),
@@ -295,13 +418,15 @@ func _get_worker_position(
 				progress
 			)
 		WorkerTaskModel.State.DROPPING:
-			var drop_position: Vector2 = _get_brood_slot_position(
-				_get_valid_zone_id(worker.target_zone_id),
-				worker.target_brood_id
+			var drop_zone_id: StringName = _get_valid_zone_id(
+				worker.target_zone_id
 			)
-			return drop_position + Vector2(
-				lerpf(12.0, 16.0, progress),
-				lerpf(-7.0, -2.0, progress)
+			return _get_brood_approach_position(
+				drop_zone_id,
+				worker.target_brood_id
+			).lerp(
+				_get_worker_idle_position(drop_zone_id, worker.entity_id),
+				progress
 			)
 		_:
 			return _get_worker_idle_position(
@@ -316,17 +441,39 @@ func _get_carried_brood_position(
 	carrier_position: Vector2
 ) -> Vector2:
 	if carrier == null:
-		return carrier_position + Vector2(0.0, -17.0)
+		return carrier_position + CARRIED_BROOD_OFFSET
 	if carrier.worker_task_state == WorkerTaskModel.State.DROPPING:
 		var destination: Vector2 = _get_brood_slot_position(
 			_get_valid_zone_id(carrier.target_zone_id),
 			brood.entity_id
 		)
-		return destination + Vector2(
-			0.0,
-			lerpf(-16.0, 0.0, carrier.get_task_progress())
+		var attached_position: Vector2 = (
+			_get_brood_approach_position(
+				_get_valid_zone_id(carrier.target_zone_id),
+				brood.entity_id
+			)
+			+ CARRIED_BROOD_OFFSET
 		)
-	return carrier_position + Vector2(-2.0, -17.0)
+		return attached_position.lerp(
+			destination,
+			carrier.get_task_progress()
+		)
+	return carrier_position + CARRIED_BROOD_OFFSET
+
+
+func _get_picked_up_brood_position(
+	brood: AntSnapshot,
+	worker: AntSnapshot,
+	worker_position: Vector2
+) -> Vector2:
+	var slot_position: Vector2 = _get_brood_slot_position(
+		_get_valid_zone_id(brood.zone_id),
+		brood.entity_id
+	)
+	return slot_position.lerp(
+		worker_position + CARRIED_BROOD_OFFSET,
+		worker.get_task_progress()
+	)
 
 
 func _get_route_position(
@@ -375,13 +522,6 @@ func _sample_polyline(points: Array[Vector2], progress: float) -> Vector2:
 	return points[-1]
 
 
-func _get_initial_position(ant_snapshot: AntSnapshot) -> Vector2:
-	var zone_id: StringName = _get_valid_zone_id(ant_snapshot.zone_id)
-	if ant_snapshot.life_stage == AntModel.LifeStage.WORKER:
-		return _get_worker_idle_position(zone_id, ant_snapshot.entity_id)
-	return _get_brood_slot_position(zone_id, ant_snapshot.entity_id)
-
-
 func _get_worker_idle_position(zone_id: StringName, entity_id: int) -> Vector2:
 	var chamber_rect: Rect2 = _get_zone_rect(zone_id)
 	var slot_index: int = posmod(entity_id - 1, WORKER_SLOT_RATIOS.size())
@@ -392,6 +532,16 @@ func _get_brood_slot_position(zone_id: StringName, entity_id: int) -> Vector2:
 	var chamber_rect: Rect2 = _get_zone_rect(zone_id)
 	var slot_index: int = posmod(entity_id - 1, BROOD_SLOT_RATIOS.size())
 	return chamber_rect.position + chamber_rect.size * BROOD_SLOT_RATIOS[slot_index]
+
+
+func _get_brood_approach_position(
+	zone_id: StringName,
+	brood_entity_id: int
+) -> Vector2:
+	return (
+		_get_brood_slot_position(zone_id, brood_entity_id)
+		+ WORKER_BROOD_APPROACH_OFFSET
+	)
 
 
 func _get_door_position(zone_id: StringName) -> Vector2:

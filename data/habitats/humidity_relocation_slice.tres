@@ -31,4 +31,4 @@ initial_worker_zone_id = &"left_chamber"
 initial_brood_zone_id = &"left_chamber"
 humidity_adjustment_zone_id = &"left_chamber"
 humidity_adjustment_amount = 0.1
-observation_stable_ticks = 30
+observation_stable_ticks = 150

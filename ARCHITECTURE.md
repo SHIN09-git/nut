@@ -1,6 +1,6 @@
 # 《玻璃蚁国》技术架构
 
-> 文档版本：0.4｜更新日期：2026-07-22
+> 文档版本：0.5｜更新日期：2026-07-23
 >
 > 本文描述当前已经实现的湿度与幼体搬运切片。
 
@@ -22,9 +22,10 @@
 
 ```text
 WaterButton
-    ↓ submit_humidity_adjustment(zone_id, amount)
+    ↓ submit_water_action()
 ColonySimulation._pending_humidity_commands
-    ↓ 下一固定 Tick 开始时按 FIFO 应用
+    ↓ 使用冻结 HabitatScenarioConfig 的目标与增量
+    ↓ 下一固定 Tick 开始时应用
 HabitatZoneState.humidity
     ↓
 校验现有任务 → 推进状态机 → 为到期空闲工蚁决策
@@ -36,14 +37,15 @@ ColonySnapshot / AntSnapshot / HabitatZoneSnapshot
     └── F3 DebugPanel
 ```
 
-提交命令时不会改变 `HabitatZoneState`。`ColonySimulation` 先验证 Tick 连续，再消费队列；错误 Tick 不会丢失待处理命令。
+提交命令时不会改变 `HabitatZoneState`。同一时间最多存在一个待处理补水动作；`ColonySimulation` 先验证 Tick 连续，再消费队列，错误 Tick 不会丢失输入。补水工具的首次落地门控、待处理状态、可用性、次数和目标舒适状态均由模拟拥有并复制进快照。
 
 `MainController` 只负责：
 
 - 推进 `SimulationClock`。
-- 把 UI 操作转换成模拟命令。
-- 在现实帧处理完 Tick 后创建快照。
+- 把 UI 操作转换成无参数高层模拟命令。
+- 每个成功固定 Tick 后创建并交付一份快照。
 - 把快照交给 `HabitatView` 和调试 UI。
+- 每个渲染帧把时钟插值系数交给 `HabitatView`。
 - 在模拟拒绝 Tick 时暂停并显示错误。
 
 控制器不创建或逐只管理蚂蚁视觉节点，也不能访问私有 `ColonyState`。
@@ -136,7 +138,7 @@ IDLE
 
 - `MOVING_TO_BROOD` 或 `PICKING_UP` 的目标失效时，可以清空任务并释放预订。
 - `CARRYING_TO_ZONE` 或 `DROPPING` 中的目标失效时，不能直接回到空闲；必须重新选择可达区域并完成放下。
-- 玩家补水可能让原目标不再具有足够改善，此时工蚁按上述规则取消或重定向。
+- 玩家补水让改善不足时，只取消尚未拾取的失效任务；已经携带幼体且目标仍可用、可达时必须完成原任务，只有目标区域不可用或不可达时才重定向并完成放下。
 - 每个 Tick 单次推进现有阶段，位置进度由 `elapsed_ticks / duration_ticks` 复制进快照。
 
 ## 7. 所有权不变量
@@ -167,7 +169,7 @@ IDLE
 7. 按稳定工蚁与幼体 ID 为到期的空闲工蚁分配任务。
 8. 更新观察记录稳定计数与解锁状态。
 9. 校验所有权不变量。
-10. 现实帧的 Tick 批次结束后，由控制器创建一份新快照。
+10. 每个成功 Tick 后，由控制器立即创建并交付一份新快照。
 
 系统结果不依赖场景树处理顺序、渲染帧率或墙钟时间。
 
@@ -179,7 +181,7 @@ IDLE
 - 每个区域对应的 `HabitatZoneSnapshot`，包括新的连接 ID 数组。
 - 每个实体对应的 `AntSnapshot`。
 
-快照包含显示和诊断所需的区域、任务进度、派生预订／携带关系、湿度调整计数和观察状态，但不携带任何内部模型引用。修改快照字段、子对象或数组不会改变模拟。
+快照包含显示和诊断所需的区域、任务进度、派生预订／携带关系、补水门控与待处理状态、生命周期模式和观察状态，但不携带任何内部模型引用。修改快照字段、子对象或数组不会改变模拟。
 
 ## 10. 显示层
 
@@ -191,6 +193,9 @@ IDLE
 - 绘制两个巢室、连接通道和非数字湿度线索。
 - 根据工蚁任务状态与进度计算屏幕位置。
 - 携带中的幼体使用工蚁的快照驱动位置，不运行独立搬运动画。
+- 保存相邻 Tick 的前后位置，并使用 `SimulationClock.get_interpolation_alpha()` 在渲染帧间插值。
+- 同 Tick 快照不轮换端点，旧 Tick 被拒绝；暂停时插值冻结。
+- 相邻搬运状态共享连续端点，16× 与积压排空不会产生视觉回跳。
 - 重复快照不创建重复节点，完整快照中缺失的节点按明确规则移除。
 
 普通 UI 不显示精确湿度、任务枚举、目标 ID 或生命周期倒计时。F3 诊断层读取相同快照并显示精确内部状态。
@@ -217,10 +222,11 @@ ColonyViewAdapter
 - `tests/simulation/lifecycle_test_suite.gd`
 - `tests/simulation/humidity_relocation_test_suite.gd`
 - `tests/view/view_adapter_test_suite.gd`
+- `tests/view/habitat_view_interpolation_test_suite.gd`
 - `tests/scenes/lifecycle_debug_scene_test_suite.gd`
 - `tests/scenes/humidity_main_scene_test_suite.gd`
 
-生命周期边界从 Resource 计算。湿度套件覆盖命令延迟、确定性、任务选择、所有权、取消／重定向、补水后重评估、1,000 Tick 防振荡、快照隔离、观察解锁、3～5 分钟节奏和 10,000 Tick soak。场景测试检查节点、命令和状态，不绑定完整中文文案。
+生命周期边界从 Resource 计算。湿度套件覆盖高层命令、配置冻结、确定性、任务选择、所有权、取消／重定向、补水后重评估、1,000 Tick 防振荡、快照隔离、60～120 秒节奏和 10,000 Tick soak。场景测试覆盖真实按钮通关路径；独立 View 套件覆盖插值、暂停、同 Tick、旧 Tick 和状态边界连续性，不绑定完整中文文案。
 
 标准命令：
 

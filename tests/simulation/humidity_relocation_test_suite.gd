@@ -10,6 +10,8 @@ const RIGHT_ZONE_ID: StringName = &"right_chamber"
 const NO_ENTITY_ID: int = -1
 const SOAK_TICK_COUNT: int = 10_000
 const NO_OSCILLATION_TICK_COUNT: int = 1_000
+const MIN_CORE_LOOP_SECONDS: float = 60.0
+const MAX_CORE_LOOP_SECONDS: float = 120.0
 
 var _assertion_count: int = 0
 var _failure_count: int = 0
@@ -18,10 +20,12 @@ var _failure_count: int = 0
 func run() -> int:
 	_test_invalid_behavior_configuration_is_rejected()
 	_test_humidity_is_clamped_and_non_finite_commands_are_rejected()
+	_test_water_action_gate_and_habitat_lifecycle_semantics()
 	_test_command_is_applied_at_the_start_of_the_next_tick()
 	_test_rejected_tick_preserves_pending_commands()
-	_test_same_tick_commands_apply_in_fifo_order()
+	_test_only_one_water_action_can_be_pending()
 	_test_matching_inputs_and_commands_are_deterministic()
+	_test_water_action_uses_frozen_configuration()
 	_test_unsuitable_brood_zone_creates_relocation_tasks()
 	_test_no_meaningful_improvement_creates_no_task()
 	_test_one_brood_cannot_be_reserved_by_two_workers()
@@ -29,6 +33,7 @@ func run() -> int:
 	_test_carried_brood_has_exactly_one_carrier()
 	_test_drop_assigns_target_zone_and_clears_task_ownership()
 	_test_invalidated_target_clears_pre_pickup_reservations()
+	_test_valid_carry_target_is_not_reconsidered_mid_route()
 	_test_watering_causes_workers_to_reconsider_the_target_zone()
 	_test_stable_environment_does_not_oscillate_for_one_thousand_ticks()
 	_test_snapshot_mutation_cannot_change_internal_state()
@@ -71,69 +76,117 @@ func _test_invalid_behavior_configuration_is_rejected() -> void:
 
 
 func _test_humidity_is_clamped_and_non_finite_commands_are_rejected() -> void:
-	var simulation: ColonySimulation = _create_simulation()
-	var initial_humidity: float = _zone_humidity(
-		simulation.create_snapshot(),
-		LEFT_ZONE_ID
+	var connections: Array[StringName] = []
+	var zone: HabitatZoneState = HabitatZoneState.new(
+		&"clamp_fixture",
+		0.5,
+		connections,
+		true
 	)
 
 	_expect_true(
-		simulation.submit_humidity_adjustment(LEFT_ZONE_ID, 10.0),
+		zone.apply_humidity_adjustment(10.0),
 		"a finite positive humidity command is accepted"
 	)
-	_expect_true(simulation.advance_tick(1), "the upper-clamp command Tick advances")
 	_expect_float(
-		_zone_humidity(simulation.create_snapshot(), LEFT_ZONE_ID),
+		zone.humidity,
 		1.0,
 		"humidity is clamped to one"
 	)
 
 	_expect_true(
-		simulation.submit_humidity_adjustment(LEFT_ZONE_ID, -10.0),
+		zone.apply_humidity_adjustment(-10.0),
 		"a finite negative humidity adjustment is accepted"
 	)
-	_expect_true(simulation.advance_tick(2), "the lower-clamp command Tick advances")
 	_expect_float(
-		_zone_humidity(simulation.create_snapshot(), LEFT_ZONE_ID),
+		zone.humidity,
 		0.0,
 		"humidity is clamped to zero"
 	)
 
-	var before_invalid_commands: ColonySnapshot = simulation.create_snapshot()
 	_expect_true(
-		not simulation.submit_humidity_adjustment(LEFT_ZONE_ID, NAN),
+		not zone.apply_humidity_adjustment(NAN),
 		"a NaN humidity command is rejected"
 	)
 	_expect_true(
-		not simulation.submit_humidity_adjustment(LEFT_ZONE_ID, INF),
+		not zone.apply_humidity_adjustment(INF),
 		"an infinite humidity command is rejected"
 	)
-	_expect_true(simulation.advance_tick(3), "the Tick after invalid commands advances")
-	var after_invalid_commands: ColonySnapshot = simulation.create_snapshot()
 	_expect_float(
-		_zone_humidity(after_invalid_commands, LEFT_ZONE_ID),
-		_zone_humidity(before_invalid_commands, LEFT_ZONE_ID),
+		zone.humidity,
+		0.0,
 		"rejected non-finite commands cannot change humidity"
 	)
+	_expect_true(
+		zone.humidity >= 0.0 and zone.humidity <= 1.0,
+		"the zone remains within the authoritative humidity bounds"
+	)
+
+
+func _test_water_action_gate_and_habitat_lifecycle_semantics() -> void:
+	var simulation: ColonySimulation = _create_simulation()
+	var initial_snapshot: ColonySnapshot = simulation.create_snapshot()
+	_expect_true(
+		not initial_snapshot.lifecycle_active,
+		"the pre-populated humidity scenario marks lifecycle production as inactive"
+	)
 	_expect_int(
-		after_invalid_commands.humidity_adjustment_count,
-		2,
-		"only the two finite humidity commands are counted"
+		initial_snapshot.queen_laid_egg_count,
+		0,
+		"scenario brood is not reported as queen-laid lifecycle brood"
+	)
+	_expect_int(
+		initial_snapshot.max_first_generation_brood,
+		0,
+		"the habitat snapshot does not expose a lifecycle-only brood cap"
+	)
+	_expect_int(
+		initial_snapshot.next_egg_tick,
+		-1,
+		"the habitat snapshot has no lifecycle egg schedule"
 	)
 	_expect_true(
-		initial_humidity >= 0.0 and initial_humidity <= 1.0,
-		"the scenario Resource starts with bounded humidity"
+		not initial_snapshot.water_action_unlocked
+		and not initial_snapshot.water_action_available,
+		"watering remains locked before the first successful brood drop"
+	)
+	_expect_true(
+		not simulation.submit_water_action(),
+		"the simulation rejects watering before the authoritative unlock"
+	)
+
+	var unlocked_snapshot: ColonySnapshot = _advance_until_water_action_available(
+		simulation
+	)
+	_expect_true(
+		unlocked_snapshot.water_action_unlocked,
+		"the first successful brood drop unlocks watering"
+	)
+	_expect_true(
+		unlocked_snapshot.water_action_available,
+		"the snapshot exposes the unlocked and still-needed water action"
+	)
+	_expect_true(
+		not unlocked_snapshot.water_action_pending,
+		"unlocking does not implicitly enqueue an action"
+	)
+	_expect_int(
+		unlocked_snapshot.water_action_count,
+		0,
+		"unlocking does not count as player intervention"
 	)
 
 
 func _test_command_is_applied_at_the_start_of_the_next_tick() -> void:
 	var simulation: ColonySimulation = _create_simulation()
-	var before_submission: ColonySnapshot = simulation.create_snapshot()
+	var before_submission: ColonySnapshot = _advance_until_water_action_available(
+		simulation
+	)
 	var initial_humidity: float = _zone_humidity(before_submission, LEFT_ZONE_ID)
 	var amount: float = HUMIDITY_SCENARIO_DATA.humidity_adjustment_amount
 
 	_expect_true(
-		simulation.submit_humidity_adjustment(LEFT_ZONE_ID, amount),
+		simulation.submit_water_action(),
 		"the scenario watering command is submitted"
 	)
 	var after_submission: ColonySnapshot = simulation.create_snapshot()
@@ -143,12 +196,23 @@ func _test_command_is_applied_at_the_start_of_the_next_tick() -> void:
 		"submitting a command does not immediately mutate humidity"
 	)
 	_expect_int(
-		after_submission.humidity_adjustment_count,
+		after_submission.water_action_count,
 		0,
 		"a queued command is not counted before a Tick applies it"
 	)
+	_expect_true(
+		after_submission.water_action_pending,
+		"a submitted command is immediately visible as pending in the snapshot"
+	)
+	_expect_true(
+		not after_submission.water_action_available,
+		"the player cannot queue another action while one is pending"
+	)
 
-	_expect_true(simulation.advance_tick(1), "the first humidity command Tick advances")
+	_expect_true(
+		simulation.advance_tick(before_submission.simulation_tick + 1),
+		"the first humidity command Tick advances"
+	)
 	var after_tick: ColonySnapshot = simulation.create_snapshot()
 	_expect_float(
 		_zone_humidity(after_tick, LEFT_ZONE_ID),
@@ -156,24 +220,35 @@ func _test_command_is_applied_at_the_start_of_the_next_tick() -> void:
 		"the queued command applies at the start of the next Tick"
 	)
 	_expect_int(
-		after_tick.humidity_adjustment_count,
+		after_tick.water_action_count,
 		1,
 		"the applied command is counted once"
+	)
+	_expect_true(
+		not after_tick.water_action_pending,
+		"the pending flag clears after the next fixed Tick applies the command"
+	)
+	_expect_int(
+		after_tick.humidity_adjustment_count,
+		after_tick.water_action_count,
+		"the legacy diagnostic count mirrors the authoritative water action count"
 	)
 
 
 func _test_rejected_tick_preserves_pending_commands() -> void:
 	var simulation: ColonySimulation = _create_simulation()
-	var initial_snapshot: ColonySnapshot = simulation.create_snapshot()
+	var initial_snapshot: ColonySnapshot = _advance_until_water_action_available(
+		simulation
+	)
 	var initial_humidity: float = _zone_humidity(initial_snapshot, LEFT_ZONE_ID)
 	var amount: float = HUMIDITY_SCENARIO_DATA.humidity_adjustment_amount
 
 	_expect_true(
-		simulation.submit_humidity_adjustment(LEFT_ZONE_ID, amount),
+		simulation.submit_water_action(),
 		"the command-preservation fixture queues one humidity adjustment"
 	)
 	_expect_true(
-		not simulation.advance_tick(2),
+		not simulation.advance_tick(initial_snapshot.simulation_tick + 2),
 		"a non-sequential Tick is rejected before consuming commands"
 	)
 	var after_rejection: ColonySnapshot = simulation.create_snapshot()
@@ -188,13 +263,17 @@ func _test_rejected_tick_preserves_pending_commands() -> void:
 		"a rejected Tick leaves queued humidity unapplied"
 	)
 	_expect_int(
-		after_rejection.humidity_adjustment_count,
+		after_rejection.water_action_count,
 		0,
 		"a rejected Tick does not count the queued adjustment"
 	)
+	_expect_true(
+		after_rejection.water_action_pending,
+		"a rejected Tick preserves the pending water action"
+	)
 
 	_expect_true(
-		simulation.advance_tick(1),
+		simulation.advance_tick(initial_snapshot.simulation_tick + 1),
 		"the next valid Tick still accepts the preserved command"
 	)
 	var after_valid_tick: ColonySnapshot = simulation.create_snapshot()
@@ -204,69 +283,59 @@ func _test_rejected_tick_preserves_pending_commands() -> void:
 		"the preserved command applies on the next valid Tick"
 	)
 	_expect_int(
-		after_valid_tick.humidity_adjustment_count,
+		after_valid_tick.water_action_count,
 		1,
 		"the preserved command is applied exactly once"
 	)
 
 
-func _test_same_tick_commands_apply_in_fifo_order() -> void:
+func _test_only_one_water_action_can_be_pending() -> void:
 	var simulation: ColonySimulation = _create_simulation()
-	var initial_humidity: float = _zone_humidity(
-		simulation.create_snapshot(),
-		LEFT_ZONE_ID
-	)
-	var first_amount: float = 1.0
-	var second_amount: float = -0.25
-	var expected_fifo_humidity: float = clampf(
-		clampf(initial_humidity + first_amount, 0.0, 1.0) + second_amount,
-		0.0,
-		1.0
+	var available_snapshot: ColonySnapshot = _advance_until_water_action_available(
+		simulation
 	)
 
 	_expect_true(
-		simulation.submit_humidity_adjustment(LEFT_ZONE_ID, first_amount),
-		"the FIFO fixture queues its first humidity adjustment"
+		simulation.submit_water_action(),
+		"the available high-level action can be queued"
 	)
 	_expect_true(
-		simulation.submit_humidity_adjustment(LEFT_ZONE_ID, second_amount),
-		"the FIFO fixture queues its second humidity adjustment"
+		not simulation.submit_water_action(),
+		"a second high-level action is rejected while the first is pending"
 	)
 	_expect_true(
-		simulation.advance_tick(1),
-		"the FIFO command batch applies on one fixed Tick"
+		simulation.advance_tick(available_snapshot.simulation_tick + 1),
+		"the single pending action applies on the next fixed Tick"
 	)
 	var snapshot: ColonySnapshot = simulation.create_snapshot()
-	_expect_float(
-		_zone_humidity(snapshot, LEFT_ZONE_ID),
-		expected_fifo_humidity,
-		"same-Tick commands apply FIFO, including clamping after each command"
-	)
 	_expect_int(
-		snapshot.humidity_adjustment_count,
-		2,
-		"the FIFO batch applies each queued command exactly once"
+		snapshot.water_action_count,
+		1,
+		"the rejected duplicate never becomes an applied action"
 	)
 
 
 func _test_matching_inputs_and_commands_are_deterministic() -> void:
 	var first_simulation: ColonySimulation = _create_simulation()
 	var second_simulation: ColonySimulation = _create_simulation()
-	var adjustment_ticks: Array[int] = [40, 240, 440]
 	var target_tick: int = 2_500
+	var submitted_action_count: int = 0
 
 	var tick: int = 1
 	while tick <= target_tick:
-		if adjustment_ticks.has(tick):
-			var amount: float = HUMIDITY_SCENARIO_DATA.humidity_adjustment_amount
+		if (
+			submitted_action_count < _get_watering_action_count_to_reach_comfort()
+			and first_simulation.create_snapshot().water_action_available
+		):
 			_expect_true(
-				first_simulation.submit_humidity_adjustment(LEFT_ZONE_ID, amount),
+				first_simulation.submit_water_action(),
 				"the first deterministic command sequence is accepted"
 			)
 			_expect_true(
-				second_simulation.submit_humidity_adjustment(LEFT_ZONE_ID, amount),
+				second_simulation.submit_water_action(),
 				"the second deterministic command sequence is accepted"
 			)
+			submitted_action_count += 1
 		if not first_simulation.advance_tick(tick):
 			_record_failure(
 				"the first deterministic simulation advances",
@@ -287,6 +356,79 @@ func _test_matching_inputs_and_commands_are_deterministic() -> void:
 		_create_snapshot_signature(first_simulation.create_snapshot()),
 		_create_snapshot_signature(second_simulation.create_snapshot()),
 		"matching initial state and humidity command sequence produce the same snapshot"
+	)
+
+
+func _test_water_action_uses_frozen_configuration() -> void:
+	var species: SpeciesData = SPECIES_A_DATA.duplicate(true) as SpeciesData
+	var scenario: HabitatScenarioData = _duplicate_scenario()
+	var simulation: ColonySimulation = ColonySimulation.new(species, scenario)
+	var available_snapshot: ColonySnapshot = _advance_until_water_action_available(
+		simulation
+	)
+	var original_left_humidity: float = _zone_humidity(
+		available_snapshot,
+		LEFT_ZONE_ID
+	)
+	var original_right_humidity: float = _zone_humidity(
+		available_snapshot,
+		RIGHT_ZONE_ID
+	)
+	var frozen_amount: float = scenario.humidity_adjustment_amount
+
+	scenario.humidity_adjustment_zone_id = RIGHT_ZONE_ID
+	scenario.humidity_adjustment_amount = 0.4
+	species.brood_humidity_min = 0.95
+	species.brood_humidity_max = 1.0
+
+	var after_source_mutation: ColonySnapshot = simulation.create_snapshot()
+	_expect_true(
+		after_source_mutation.water_action_available,
+		"mutating source Resources does not change the frozen UI availability state"
+	)
+	_expect_true(
+		not after_source_mutation.water_target_comfortable,
+		"the comfort decision continues using the frozen species range"
+	)
+	_expect_true(
+		simulation.submit_water_action(),
+		"the frozen high-level water action remains available"
+	)
+	_expect_true(
+		simulation.advance_tick(after_source_mutation.simulation_tick + 1),
+		"the frozen water action applies on the next Tick"
+	)
+	var after_first_action: ColonySnapshot = simulation.create_snapshot()
+	_expect_float(
+		_zone_humidity(after_first_action, LEFT_ZONE_ID),
+		clampf(original_left_humidity + frozen_amount, 0.0, 1.0),
+		"the frozen target and amount change the original left chamber"
+	)
+	_expect_float(
+		_zone_humidity(after_first_action, RIGHT_ZONE_ID),
+		original_right_humidity,
+		"mutating the source target cannot redirect the queued action"
+	)
+
+	var required_action_count: int = _get_watering_action_count_to_reach_comfort()
+	while simulation.create_snapshot().water_action_count < required_action_count:
+		_expect_true(
+			simulation.submit_water_action(),
+			"the frozen fixture accepts the next configured water action"
+		)
+		var before_tick: ColonySnapshot = simulation.create_snapshot()
+		_expect_true(
+			simulation.advance_tick(before_tick.simulation_tick + 1),
+			"the next frozen water action Tick advances"
+		)
+	var comfortable_snapshot: ColonySnapshot = simulation.create_snapshot()
+	_expect_true(
+		comfortable_snapshot.water_target_comfortable,
+		"the target becomes comfortable according to the frozen comfort range"
+	)
+	_expect_true(
+		not comfortable_snapshot.water_action_available,
+		"the frozen comfort result disables further water actions"
 	)
 
 
@@ -489,13 +631,23 @@ func _test_drop_assigns_target_zone_and_clears_task_ownership() -> void:
 
 
 func _test_invalidated_target_clears_pre_pickup_reservations() -> void:
-	var simulation: ColonySimulation = _create_simulation()
+	var scenario: HabitatScenarioData = _duplicate_scenario()
+	scenario.humidity_adjustment_amount = 0.30
+	var simulation: ColonySimulation = ColonySimulation.new(SPECIES_A_DATA, scenario)
+	var unlocked_snapshot: ColonySnapshot = _advance_until_water_action_available(
+		simulation
+	)
 	var reserved_snapshot: ColonySnapshot = _advance_until(
 		simulation,
 		func(snapshot: ColonySnapshot) -> bool:
-			return snapshot.count_active_relocations() > 0,
-		SPECIES_A_DATA.decision_interval_ticks * 2,
-		"workers reserve brood before the target invalidation"
+			return (
+				snapshot.water_action_available
+				and snapshot.count_active_relocations() > 0
+				and _has_active_target_zone(snapshot, RIGHT_ZONE_ID)
+			),
+		unlocked_snapshot.simulation_tick
+		+ SPECIES_A_DATA.decision_interval_ticks * 2,
+		"workers reserve the next brood wave before target invalidation"
 	)
 	_expect_true(
 		reserved_snapshot.count_active_relocations() > 0,
@@ -503,7 +655,7 @@ func _test_invalidated_target_clears_pre_pickup_reservations() -> void:
 	)
 
 	_expect_true(
-		simulation.submit_humidity_adjustment(LEFT_ZONE_ID, 0.30),
+		simulation.submit_water_action(),
 		"watering can make the current brood zone comfortable"
 	)
 	_expect_true(
@@ -519,6 +671,107 @@ func _test_invalidated_target_clears_pre_pickup_reservations() -> void:
 	_expect_true(
 		_all_brood_unreserved_and_uncarried(cancelled_snapshot),
 		"cancelled tasks leave no permanent brood reservations"
+	)
+
+
+func _test_valid_carry_target_is_not_reconsidered_mid_route() -> void:
+	var simulation: ColonySimulation = _create_simulation()
+	var unlocked_snapshot: ColonySnapshot = _advance_until_water_action_available(
+		simulation
+	)
+	var carrying_snapshot: ColonySnapshot = _advance_until(
+		simulation,
+		func(snapshot: ColonySnapshot) -> bool:
+			return _find_carrying_worker_targeting(snapshot, RIGHT_ZONE_ID) != null,
+		unlocked_snapshot.simulation_tick
+		+ SPECIES_A_DATA.decision_interval_ticks
+		+ SPECIES_A_DATA.travel_duration_ticks
+		+ SPECIES_A_DATA.pickup_duration_ticks
+		+ 4,
+		"a second-wave worker carries brood toward the still-valid right chamber"
+	)
+	var carrying_worker: AntSnapshot = _find_carrying_worker_targeting(
+		carrying_snapshot,
+		RIGHT_ZONE_ID
+	)
+	_expect_true(
+		carrying_worker != null,
+		"the delayed-watering fixture reaches a right-bound carrying task"
+	)
+	if carrying_worker == null:
+		return
+
+	var worker_id: int = carrying_worker.entity_id
+	var brood_id: int = carrying_worker.carried_brood_id
+	var action_count: int = _get_watering_action_count_to_reach_comfort()
+	for action_index: int in action_count:
+		_expect_true(
+			simulation.submit_water_action(),
+			"delayed watering action %d is submitted through the high-level command"
+			% (action_index + 1)
+		)
+		var before_tick: ColonySnapshot = simulation.create_snapshot()
+		_expect_true(
+			simulation.advance_tick(before_tick.simulation_tick + 1),
+			"delayed watering action %d applies on the next Tick"
+			% (action_index + 1)
+		)
+		var after_tick: ColonySnapshot = simulation.create_snapshot()
+		var worker_after_water: AntSnapshot = after_tick.find_ant(worker_id)
+		var brood_after_water: AntSnapshot = after_tick.find_ant(brood_id)
+		_expect_true(
+			worker_after_water != null,
+			"the carrying worker keeps its stable ID after delayed watering"
+		)
+		_expect_true(
+			brood_after_water != null,
+			"the carried brood keeps its stable ID after delayed watering"
+		)
+		if worker_after_water == null or brood_after_water == null:
+			return
+		_expect_int(
+			worker_after_water.worker_task_state,
+			WorkerTaskModel.State.CARRYING_TO_ZONE,
+			"watering does not restart or reverse an already valid carrying task"
+		)
+		_expect_string_name(
+			worker_after_water.target_zone_id,
+			RIGHT_ZONE_ID,
+			"watering preserves the valid carrying destination"
+		)
+		_expect_int(
+			worker_after_water.carried_brood_id,
+			brood_id,
+			"watering preserves the worker's current cargo"
+		)
+		_expect_int(
+			brood_after_water.carrier_ant_id,
+			worker_id,
+			"watering preserves the carried brood's single owner"
+		)
+
+	var dropped_snapshot: ColonySnapshot = _advance_until(
+		simulation,
+		func(snapshot: ColonySnapshot) -> bool:
+			var brood: AntSnapshot = snapshot.find_ant(brood_id)
+			return (
+				brood != null
+				and brood.zone_id == RIGHT_ZONE_ID
+				and brood.carrier_ant_id == NO_ENTITY_ID
+			),
+		carrying_snapshot.simulation_tick
+		+ SPECIES_A_DATA.travel_duration_ticks
+		+ SPECIES_A_DATA.drop_duration_ticks
+		+ action_count
+		+ 4,
+		"the valid carrying task finishes at its original destination"
+	)
+	var dropped_brood: AntSnapshot = dropped_snapshot.find_ant(brood_id)
+	_expect_true(
+		dropped_brood != null
+		and dropped_brood.zone_id == RIGHT_ZONE_ID
+		and dropped_brood.carrier_ant_id == NO_ENTITY_ID,
+		"delayed watering only affects a later idle decision"
 	)
 
 
@@ -539,13 +792,9 @@ func _test_watering_causes_workers_to_reconsider_the_target_zone() -> void:
 		"the re-evaluation fixture starts with brood in the right chamber"
 	)
 
-	_submit_scenario_watering_actions(
+	_apply_scenario_watering_actions(
 		simulation,
 		_get_watering_action_count_to_reach_comfort()
-	)
-	_expect_true(
-		simulation.advance_tick(all_right_snapshot.simulation_tick + 1),
-		"the player watering commands apply on the next Tick"
 	)
 	var target_left_snapshot: ColonySnapshot = _advance_until(
 		simulation,
@@ -606,6 +855,12 @@ func _test_snapshot_mutation_cannot_change_internal_state() -> void:
 	mutable_ant.task_elapsed_ticks = 999
 	mutable_ant.task_duration_ticks = 999
 	mutable_snapshot.humidity_adjustment_count = 999
+	mutable_snapshot.lifecycle_active = true
+	mutable_snapshot.water_action_unlocked = false
+	mutable_snapshot.water_action_available = false
+	mutable_snapshot.water_action_pending = true
+	mutable_snapshot.water_action_count = 999
+	mutable_snapshot.water_target_comfortable = true
 	mutable_snapshot.observation_stable_ticks = 999
 	mutable_snapshot.brood_humidity_observation_unlocked = true
 	mutable_snapshot.zones.clear()
@@ -700,22 +955,24 @@ func _test_first_visible_carry_and_full_slice_pacing() -> void:
 		_get_initial_relocation_deadline_tick(),
 		"the pacing fixture completes the initial relocation"
 	)
-	_submit_scenario_watering_actions(simulation, watering_action_count)
-	_expect_true(
-		simulation.advance_tick(all_right_snapshot.simulation_tick + 1),
-		"the pacing fixture applies watering"
+	_apply_scenario_watering_actions(simulation, watering_action_count)
+	var maximum_core_loop_tick: int = ceili(
+		MAX_CORE_LOOP_SECONDS / SimulationClock.FIXED_STEP_SECONDS
 	)
 	var unlocked_snapshot: ColonySnapshot = _advance_until(
 		simulation,
 		func(snapshot: ColonySnapshot) -> bool:
 			return snapshot.brood_humidity_observation_unlocked,
-		3_000,
-		"the humidity relocation slice unlocks its observation within five simulated minutes"
+		maximum_core_loop_tick,
+		"the humidity relocation slice unlocks within the playable prototype window"
+	)
+	var minimum_core_loop_tick: int = ceili(
+		MIN_CORE_LOOP_SECONDS / SimulationClock.FIXED_STEP_SECONDS
 	)
 	_expect_true(
-		unlocked_snapshot.simulation_tick >= 1_800
-		and unlocked_snapshot.simulation_tick <= 3_000,
-		"the configured slice completes in approximately three to five simulated minutes"
+		unlocked_snapshot.simulation_tick >= minimum_core_loop_tick
+		and unlocked_snapshot.simulation_tick <= maximum_core_loop_tick,
+		"the configured slice completes in approximately sixty to one hundred twenty seconds"
 	)
 
 
@@ -824,6 +1081,18 @@ func _advance_until_first_carried_brood(
 	)
 
 
+func _advance_until_water_action_available(
+	simulation: ColonySimulation
+) -> ColonySnapshot:
+	return _advance_until(
+		simulation,
+		func(snapshot: ColonySnapshot) -> bool:
+			return snapshot.water_action_available,
+		_get_initial_relocation_deadline_tick(),
+		"the first successful brood drop unlocks the water action"
+	)
+
+
 func _reach_comfortable_stable_state(
 	simulation: ColonySimulation
 ) -> ColonySnapshot:
@@ -837,17 +1106,10 @@ func _reach_comfortable_stable_state(
 		_get_initial_relocation_deadline_tick(),
 		"all brood settle in the initially better chamber"
 	)
-	_submit_scenario_watering_actions(
+	_apply_scenario_watering_actions(
 		simulation,
 		_get_watering_action_count_to_reach_comfort()
 	)
-	if not simulation.advance_tick(all_right_snapshot.simulation_tick + 1):
-		_record_failure(
-			"the stable-state watering Tick advances",
-			"true",
-			"false"
-		)
-		return simulation.create_snapshot()
 	return _advance_until(
 		simulation,
 		func(snapshot: ColonySnapshot) -> bool:
@@ -860,18 +1122,20 @@ func _reach_comfortable_stable_state(
 	)
 
 
-func _submit_scenario_watering_actions(
+func _apply_scenario_watering_actions(
 	simulation: ColonySimulation,
 	action_count: int
 ) -> void:
 	var action_index: int = 0
 	while action_index < action_count:
 		_expect_true(
-			simulation.submit_humidity_adjustment(
-				HUMIDITY_SCENARIO_DATA.humidity_adjustment_zone_id,
-				HUMIDITY_SCENARIO_DATA.humidity_adjustment_amount
-			),
+			simulation.submit_water_action(),
 			"a configured player watering action is submitted"
+		)
+		var pending_snapshot: ColonySnapshot = simulation.create_snapshot()
+		_expect_true(
+			simulation.advance_tick(pending_snapshot.simulation_tick + 1),
+			"a configured player watering action applies on the next Tick"
 		)
 		action_index += 1
 
@@ -943,6 +1207,19 @@ func _find_first_carrying_worker(snapshot: ColonySnapshot) -> AntSnapshot:
 	return null
 
 
+func _find_carrying_worker_targeting(
+	snapshot: ColonySnapshot,
+	target_zone_id: StringName
+) -> AntSnapshot:
+	for ant: AntSnapshot in snapshot.ants:
+		if (
+			ant.worker_task_state == WorkerTaskModel.State.CARRYING_TO_ZONE
+			and ant.target_zone_id == target_zone_id
+		):
+			return ant
+	return null
+
+
 func _all_brood_in_zone(snapshot: ColonySnapshot, zone_id: StringName) -> bool:
 	var brood_count: int = 0
 	for ant: AntSnapshot in snapshot.ants:
@@ -1008,7 +1285,16 @@ func _zone_humidity(snapshot: ColonySnapshot, zone_id: StringName) -> float:
 func _create_snapshot_signature(snapshot: ColonySnapshot) -> String:
 	var parts: PackedStringArray = [
 		str(snapshot.simulation_tick),
+		str(snapshot.lifecycle_active),
+		str(snapshot.queen_laid_egg_count),
+		str(snapshot.max_first_generation_brood),
+		str(snapshot.next_egg_tick),
 		str(snapshot.humidity_adjustment_count),
+		str(snapshot.water_action_unlocked),
+		str(snapshot.water_action_available),
+		str(snapshot.water_action_pending),
+		str(snapshot.water_action_count),
+		str(snapshot.water_target_comfortable),
 		str(snapshot.observation_stable_ticks),
 		str(snapshot.brood_humidity_observation_unlocked),
 	]

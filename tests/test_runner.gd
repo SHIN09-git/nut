@@ -12,6 +12,9 @@ const HumidityRelocationTestSuiteScript: Script = preload(
 const ViewAdapterTestSuiteScript: Script = preload(
 	"res://tests/view/view_adapter_test_suite.gd"
 )
+const HabitatViewInterpolationTestSuiteScript: Script = preload(
+	"res://tests/view/habitat_view_interpolation_test_suite.gd"
+)
 const LifecycleDebugSceneTestSuiteScript: Script = preload(
 	"res://tests/scenes/lifecycle_debug_scene_test_suite.gd"
 )
@@ -32,6 +35,7 @@ func _run_all_tests() -> void:
 	_run_lifecycle_test_suite()
 	_run_humidity_relocation_test_suite()
 	_run_view_adapter_test_suite()
+	_run_habitat_view_interpolation_test_suite()
 	_run_lifecycle_debug_scene_test_suite()
 	_run_humidity_main_scene_test_suite()
 
@@ -69,6 +73,14 @@ func _run_humidity_relocation_test_suite() -> void:
 
 func _run_view_adapter_test_suite() -> void:
 	var suite: ViewAdapterTestSuite = ViewAdapterTestSuiteScript.new()
+	suite.run(root)
+	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
+
+
+func _run_habitat_view_interpolation_test_suite() -> void:
+	var suite: HabitatViewInterpolationTestSuite = (
+		HabitatViewInterpolationTestSuiteScript.new()
+	)
 	suite.run(root)
 	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
 

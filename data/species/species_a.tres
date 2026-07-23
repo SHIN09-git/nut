@@ -21,4 +21,4 @@ decision_interval_ticks = 100
 pickup_duration_ticks = 20
 travel_duration_ticks = 50
 drop_duration_ticks = 10
-minimum_zone_dwell_ticks = 1500
+minimum_zone_dwell_ticks = 100

@@ -8,6 +8,7 @@ var queen: QueenModel
 var ants: Array[AntModel] = []
 var zones: Array[HabitatZoneState] = []
 var humidity_adjustment_count: int = 0
+var water_action_unlocked: bool = false
 var observation_stable_ticks: int = 0
 var brood_humidity_observation_unlocked: bool = false
 var _next_entity_id: int = 1
@@ -59,7 +60,6 @@ func initialize_habitat(
 		)
 		ants.append(brood)
 
-	queen.laid_egg_count = config.initial_brood_count
 	return true
 
 

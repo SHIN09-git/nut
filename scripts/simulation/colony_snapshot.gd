@@ -2,6 +2,7 @@ class_name ColonySnapshot
 extends RefCounted
 
 var simulation_tick: int = 0
+var lifecycle_active: bool = true
 var queen_entity_id: int = 0
 var queen_laid_egg_count: int = 0
 var max_first_generation_brood: int = 0
@@ -10,6 +11,11 @@ var ants: Array[AntSnapshot] = []
 var scenario_id: StringName = &""
 var zones: Array[HabitatZoneSnapshot] = []
 var humidity_adjustment_count: int = 0
+var water_action_unlocked: bool = false
+var water_action_available: bool = false
+var water_action_pending: bool = false
+var water_action_count: int = 0
+var water_target_comfortable: bool = false
 var observation_stable_ticks: int = 0
 var brood_humidity_observation_unlocked: bool = false
 

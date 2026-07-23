@@ -60,18 +60,14 @@ func get_configuration_error() -> String:
 	return _configuration_error
 
 
-func submit_humidity_adjustment(zone_id: StringName, amount: float) -> bool:
-	if (
-		not is_ready()
-		or not has_habitat()
-		or zone_id.is_empty()
-		or is_nan(amount)
-		or is_inf(amount)
-		or _state.get_zone(zone_id) == null
-	):
+func submit_water_action() -> bool:
+	if not _is_water_action_available():
 		return false
 	_pending_humidity_commands.append(
-		HumidityAdjustmentCommand.new(zone_id, amount)
+		HumidityAdjustmentCommand.new(
+			_habitat_config.humidity_adjustment_zone_id,
+			_habitat_config.humidity_adjustment_amount
+		)
 	)
 	return true
 
@@ -103,11 +99,14 @@ func advance_tick(tick_index: int) -> bool:
 func create_snapshot() -> ColonySnapshot:
 	var snapshot: ColonySnapshot = ColonySnapshot.new()
 	snapshot.simulation_tick = _state.simulation_tick
+	snapshot.lifecycle_active = not has_habitat()
 	snapshot.queen_entity_id = _state.queen.entity_id
-	snapshot.queen_laid_egg_count = _state.queen.laid_egg_count
+	snapshot.queen_laid_egg_count = (
+		_state.queen.laid_egg_count if snapshot.lifecycle_active else 0
+	)
 	snapshot.max_first_generation_brood = (
 		_lifecycle_config.max_first_generation_brood
-		if is_ready()
+		if is_ready() and snapshot.lifecycle_active
 		else 0
 	)
 	snapshot.next_egg_tick = get_next_egg_tick()
@@ -115,6 +114,11 @@ func create_snapshot() -> ColonySnapshot:
 		_habitat_config.scenario_id if has_habitat() else &""
 	)
 	snapshot.humidity_adjustment_count = _state.humidity_adjustment_count
+	snapshot.water_action_unlocked = _state.water_action_unlocked
+	snapshot.water_action_pending = not _pending_humidity_commands.is_empty()
+	snapshot.water_action_count = _state.humidity_adjustment_count
+	snapshot.water_target_comfortable = _is_water_target_comfortable()
+	snapshot.water_action_available = _is_water_action_available()
 	snapshot.observation_stable_ticks = _state.observation_stable_ticks
 	snapshot.brood_humidity_observation_unlocked = (
 		_state.brood_humidity_observation_unlocked
@@ -384,6 +388,7 @@ func _advance_worker_tasks() -> void:
 				brood.zone_id = task.target_zone_id
 				brood.zone_entered_tick = _state.simulation_tick
 				worker.zone_id = task.target_zone_id
+				_state.water_action_unlocked = true
 				task.reset_to_idle(
 					_state.simulation_tick
 					+ _brood_care_config.decision_interval_ticks
@@ -548,26 +553,17 @@ func _retarget_carried_brood_if_needed(
 		return
 
 	var current_target: HabitatZoneState = _state.get_zone(task.target_zone_id)
-	var best_zone: HabitatZoneState = _find_best_available_zone(worker.zone_id)
-	if best_zone == null:
-		return
-
-	var target_invalid: bool = current_target == null or not current_target.available
-	var materially_better: bool = false
-	if not target_invalid:
-		materially_better = (
-			_get_humidity_penalty(current_target.humidity)
-			- _get_humidity_penalty(best_zone.humidity)
-			+ IMPROVEMENT_EPSILON
-			>= _brood_care_config.relocation_min_improvement
-		)
+	var worker_zone: HabitatZoneState = _state.get_zone(worker.zone_id)
 	if (
-		not target_invalid
-		and not materially_better
-		and best_zone.zone_id != task.target_zone_id
+		current_target != null
+		and current_target.available
+		and worker_zone != null
+		and worker_zone.can_reach(current_target.zone_id)
 	):
 		return
-	if best_zone.zone_id == task.target_zone_id:
+
+	var best_zone: HabitatZoneState = _find_best_available_zone(worker.zone_id)
+	if best_zone == null:
 		return
 
 	if best_zone.zone_id == worker.zone_id:
@@ -669,6 +665,31 @@ func _is_humidity_comfortable(humidity: float) -> bool:
 		and humidity - IMPROVEMENT_EPSILON
 		<= _brood_care_config.brood_humidity_max
 	)
+
+
+func _is_water_target_comfortable() -> bool:
+	if not is_ready() or not has_habitat():
+		return false
+	var target_zone: HabitatZoneState = _state.get_zone(
+		_habitat_config.humidity_adjustment_zone_id
+	)
+	return target_zone != null and _is_humidity_comfortable(target_zone.humidity)
+
+
+func _is_water_action_available() -> bool:
+	if (
+		not is_ready()
+		or not has_habitat()
+		or not _state.water_action_unlocked
+		or not _pending_humidity_commands.is_empty()
+		or _state.brood_humidity_observation_unlocked
+		or _is_water_target_comfortable()
+	):
+		return false
+	var target_zone: HabitatZoneState = _state.get_zone(
+		_habitat_config.humidity_adjustment_zone_id
+	)
+	return target_zone != null and target_zone.available
 
 
 func _update_existing_ants() -> void:
