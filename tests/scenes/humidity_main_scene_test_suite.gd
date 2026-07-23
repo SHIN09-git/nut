@@ -19,6 +19,7 @@ func run(scene_root: Node) -> void:
 	_test_water_button_queues_until_next_tick()
 	_test_real_water_button_path_unlocks_observation()
 	_test_controller_freezes_runtime_resources()
+	_test_completed_session_can_restart_twice_from_frozen_config()
 	_test_f3_toggles_debug_panel()
 	_test_pause_stops_environment_and_behavior()
 	_test_speed_multipliers_match_at_the_same_tick()
@@ -37,6 +38,8 @@ func _test_main_scene_instantiates_headless() -> void:
 	var controller: MainController = _create_controller()
 	var habitat_view: HabitatView = controller.get_node_or_null("%HabitatView") as HabitatView
 	var water_button: Button = controller.get_node_or_null("%WaterButton") as Button
+	var completion_panel: Control = controller.get_node_or_null("%CompletionPanel") as Control
+	var restart_button: Button = controller.get_node_or_null("%RestartButton") as Button
 	var debug_panel: Control = controller.get_node_or_null("%DebugPanel") as Control
 	var pause_button: Button = controller.get_node_or_null("%PauseButton") as Button
 	var speed_1x_button: Button = controller.get_node_or_null("%Speed1xButton") as Button
@@ -45,6 +48,8 @@ func _test_main_scene_instantiates_headless() -> void:
 
 	_expect_true(habitat_view != null, "main scene contains a HabitatView")
 	_expect_true(water_button != null, "main scene contains its humidity command control")
+	_expect_true(completion_panel != null, "main scene contains an explicit completion state")
+	_expect_true(restart_button != null, "main scene contains a restart control")
 	_expect_true(debug_panel != null, "main scene contains its F3 diagnostic layer")
 	_expect_true(pause_button != null, "main scene contains a pause control")
 	_expect_true(speed_1x_button != null, "main scene contains a 1x control")
@@ -87,6 +92,10 @@ func _test_main_scene_instantiates_headless() -> void:
 		)
 	if water_button != null:
 		_expect_true(water_button.disabled, "water command starts locked during observation")
+	if completion_panel != null:
+		_expect_true(not completion_panel.visible, "completion state starts hidden")
+	if restart_button != null:
+		_expect_true(not restart_button.is_visible_in_tree(), "restart control starts hidden")
 	if debug_panel != null:
 		_expect_true(not debug_panel.visible, "F3 diagnostic layer starts hidden")
 	if speed_1x_button != null:
@@ -380,6 +389,248 @@ func _test_controller_freezes_runtime_resources() -> void:
 	_destroy_controller(controller)
 
 
+func _test_completed_session_can_restart_twice_from_frozen_config() -> void:
+	var species_source: SpeciesData = SPECIES_A_DATA.duplicate(true) as SpeciesData
+	var scenario_source: HabitatScenarioData = (
+		HUMIDITY_SCENARIO_DATA.duplicate(true) as HabitatScenarioData
+	)
+	var original_left_zone_id: StringName = scenario_source.left_zone.zone_id
+	var original_right_zone_id: StringName = scenario_source.right_zone.zone_id
+	var original_target_zone_id: StringName = scenario_source.humidity_adjustment_zone_id
+	var original_left_humidity: float = scenario_source.left_zone.initial_humidity
+	var original_right_humidity: float = scenario_source.right_zone.initial_humidity
+	var original_water_amount: float = scenario_source.humidity_adjustment_amount
+	var expected_entity_count: int = (
+		scenario_source.initial_worker_count
+		+ scenario_source.initial_brood_count
+	)
+	var expected_action_count: int = _get_commands_to_reach_comfort_from_data(
+		species_source,
+		scenario_source
+	)
+	var controller: MainController = _create_controller(
+		species_source,
+		scenario_source
+	)
+	var habitat_view: HabitatView = controller.get_node_or_null(
+		"%HabitatView"
+	) as HabitatView
+	var water_controls: Control = controller.get_node_or_null(
+		"%WaterControls"
+	) as Control
+	var water_button: Button = controller.get_node_or_null("%WaterButton") as Button
+	var completion_panel: Control = controller.get_node_or_null(
+		"%CompletionPanel"
+	) as Control
+	var restart_button: Button = controller.get_node_or_null(
+		"%RestartButton"
+	) as Button
+	var debug_panel: Control = controller.get_node_or_null("%DebugPanel") as Control
+	var debug_toggle_button: Button = controller.get_node_or_null(
+		"%DebugToggleButton"
+	) as Button
+	var pause_button: Button = controller.get_node_or_null("%PauseButton") as Button
+	var speed_16x_button: Button = controller.get_node_or_null(
+		"%Speed16xButton"
+	) as Button
+	if (
+		habitat_view == null
+		or water_controls == null
+		or water_button == null
+		or completion_panel == null
+		or restart_button == null
+		or debug_panel == null
+		or debug_toggle_button == null
+		or pause_button == null
+		or speed_16x_button == null
+	):
+		_record_failure(
+			"restart fixture is complete",
+			"all session controls",
+			"one or more controls missing"
+		)
+		_destroy_controller(controller)
+		return
+
+	var stable_clock: SimulationClock = controller._simulation_clock
+	var stable_simulation: ColonySimulation = controller._colony_simulation
+
+	# Mutate every source value that would materially expose a restart that
+	# rereads Resources instead of reusing the simulation's frozen configs.
+	scenario_source.initial_worker_count = 1
+	scenario_source.initial_brood_count = 1
+	scenario_source.humidity_adjustment_zone_id = (
+		original_right_zone_id
+		if original_target_zone_id != original_right_zone_id
+		else original_left_zone_id
+	)
+	scenario_source.humidity_adjustment_amount = 0.37
+	scenario_source.observation_stable_ticks = 1
+	scenario_source.left_zone.initial_humidity = 0.88
+	scenario_source.right_zone.initial_humidity = 0.12
+	species_source.brood_humidity_min = 0.90
+	species_source.brood_humidity_max = 0.95
+
+	for restart_index: int in range(2):
+		_expect_true(
+			_complete_session_through_player_controls(controller),
+			"session %d completes through visible player controls" % (restart_index + 1)
+		)
+		_expect_true(
+			controller._latest_snapshot.brood_humidity_observation_unlocked,
+			"completed session exposes the observation result"
+		)
+		_expect_int(
+			controller._latest_snapshot.water_action_count,
+			expected_action_count,
+			"completed session keeps the frozen water-action semantics"
+		)
+		_expect_true(completion_panel.visible, "completed session shows an explicit completion state")
+		_expect_true(
+			restart_button.is_visible_in_tree(),
+			"completed session exposes the restart control"
+		)
+		_expect_true(not water_controls.visible, "completed session replaces the water controls")
+		_expect_true(not restart_button.disabled, "restart remains available after completion")
+
+		var old_first_ant_id: int = controller._latest_snapshot.ants[0].entity_id
+		var old_first_ant_view: AntView = habitat_view.get_ant_view(old_first_ant_id)
+		speed_16x_button.pressed.emit()
+		debug_toggle_button.pressed.emit()
+		pause_button.pressed.emit()
+		_expect_int(
+			controller._simulation_clock.get_speed_multiplier(),
+			SimulationClock.VERY_FAST_SPEED,
+			"restart fixture first leaves the clock at a non-default speed"
+		)
+		_expect_true(controller._simulation_clock.is_paused(), "restart fixture first pauses the clock")
+		_expect_true(debug_panel.visible, "restart fixture first opens the diagnostic layer")
+
+		restart_button.pressed.emit()
+		_expect_true(
+			controller._simulation_clock == stable_clock,
+			"restart resets the existing clock so its signal is connected only once"
+		)
+		_expect_true(
+			controller._colony_simulation == stable_simulation,
+			"restart reinitializes the simulation from its frozen configs"
+		)
+		_expect_int(
+			controller._simulation_clock.get_tick_index(),
+			0,
+			"restart returns the fixed clock to Tick zero"
+		)
+		_expect_int(
+			controller._simulation_clock.get_speed_multiplier(),
+			SimulationClock.NORMAL_SPEED,
+			"restart restores 1x speed"
+		)
+		_expect_true(
+			not controller._simulation_clock.is_paused(),
+			"restart resumes the new observation session"
+		)
+		_expect_true(not debug_panel.visible, "restart hides the F3 diagnostic layer")
+		_expect_true(not completion_panel.visible, "restart clears the prior completion state")
+		_expect_true(water_controls.visible, "restart restores the initial water-tool area")
+		_expect_true(
+			not restart_button.is_visible_in_tree(),
+			"restart control hides until the next completed observation"
+		)
+		_expect_true(water_button.disabled, "restart locks water until the first new relocation")
+
+		var reset_snapshot: ColonySnapshot = controller._latest_snapshot
+		_expect_int(reset_snapshot.simulation_tick, 0, "reset snapshot starts at Tick zero")
+		_expect_true(
+			not reset_snapshot.water_action_unlocked,
+			"reset snapshot clears the first-relocation gate"
+		)
+		_expect_true(
+			not reset_snapshot.water_action_pending,
+			"reset snapshot contains no command from the previous session"
+		)
+		_expect_int(reset_snapshot.water_action_count, 0, "reset snapshot clears water-action count")
+		_expect_true(
+			not reset_snapshot.brood_humidity_observation_unlocked,
+			"reset snapshot clears the observation unlock"
+		)
+		_expect_int(
+			reset_snapshot.ants.size(),
+			expected_entity_count,
+			"restart keeps the frozen initial entity counts"
+		)
+		_expect_int(
+			habitat_view.get_ant_view_count(),
+			expected_entity_count,
+			"restart projects exactly one view per frozen initial entity"
+		)
+		var reset_left_zone: HabitatZoneSnapshot = reset_snapshot.find_zone(
+			original_left_zone_id
+		)
+		var reset_right_zone: HabitatZoneSnapshot = reset_snapshot.find_zone(
+			original_right_zone_id
+		)
+		_expect_true(reset_left_zone != null, "restart keeps the frozen left-zone ID")
+		_expect_true(reset_right_zone != null, "restart keeps the frozen right-zone ID")
+		if reset_left_zone != null:
+			_expect_float(
+				reset_left_zone.humidity,
+				original_left_humidity,
+				"restart keeps the frozen left-zone humidity"
+			)
+		if reset_right_zone != null:
+			_expect_float(
+				reset_right_zone.humidity,
+				original_right_humidity,
+				"restart keeps the frozen right-zone humidity"
+			)
+		var reset_first_ant_view: AntView = habitat_view.get_ant_view(old_first_ant_id)
+		_expect_true(
+			reset_first_ant_view != null,
+			"restart rebuilds the stable entity ID projection"
+		)
+		_expect_true(
+			reset_first_ant_view != old_first_ant_view,
+			"restart leaves no visual node from the completed session"
+		)
+
+	# The third fresh session confirms a single button press still queues and
+	# applies exactly one action with the original frozen target and amount.
+	var unlocked_tick: int = _advance_until_water_available(
+		controller,
+		_get_first_drop_deadline()
+	)
+	_expect_true(unlocked_tick >= 0, "twice-restarted session opens its water control")
+	if unlocked_tick >= 0:
+		var before_zone: HabitatZoneSnapshot = controller._latest_snapshot.find_zone(
+			original_target_zone_id
+		)
+		_expect_true(before_zone != null, "twice-restarted session keeps the frozen water target")
+		if before_zone != null:
+			var before_humidity: float = before_zone.humidity
+			water_button.pressed.emit()
+			_expect_true(
+				controller._latest_snapshot.water_action_pending,
+				"one click after two restarts queues one command"
+			)
+			controller._process(SimulationClock.FIXED_STEP_SECONDS)
+			var applied_zone: HabitatZoneSnapshot = controller._latest_snapshot.find_zone(
+				original_target_zone_id
+			)
+			_expect_int(
+				controller._latest_snapshot.water_action_count,
+				1,
+				"one click after two restarts applies exactly one command"
+			)
+			if applied_zone != null:
+				_expect_float(
+					applied_zone.humidity,
+					clampf(before_humidity + original_water_amount, 0.0, 1.0),
+					"restart keeps the original frozen water amount and target"
+				)
+
+	_destroy_controller(controller)
+
+
 func _test_f3_toggles_debug_panel() -> void:
 	var controller: MainController = _create_controller()
 	var debug_panel: Control = controller.get_node_or_null("%DebugPanel") as Control
@@ -615,6 +866,51 @@ func _test_habitat_view_reuses_nodes_and_attaches_carried_brood() -> void:
 	)
 
 	_destroy_controller(controller)
+
+
+func _complete_session_through_player_controls(
+	controller: MainController
+) -> bool:
+	var water_button: Button = controller.get_node_or_null("%WaterButton") as Button
+	if water_button == null:
+		return false
+	if _advance_until_water_available(controller, _get_first_drop_deadline()) < 0:
+		return false
+
+	var maximum_action_count: int = _get_commands_to_reach_comfort() + 2
+	var submitted_action_count: int = 0
+	while (
+		not controller._latest_snapshot.water_target_comfortable
+		and submitted_action_count < maximum_action_count
+	):
+		if water_button.disabled:
+			return false
+		water_button.pressed.emit()
+		if not controller._latest_snapshot.water_action_pending:
+			return false
+		controller._process(SimulationClock.FIXED_STEP_SECONDS)
+		submitted_action_count += 1
+
+	if not controller._latest_snapshot.water_target_comfortable:
+		return false
+	var completion_deadline: int = (
+		controller._latest_snapshot.simulation_tick
+		+ SPECIES_A_DATA.minimum_zone_dwell_ticks
+		+ SPECIES_A_DATA.decision_interval_ticks * 6
+		+ (
+			SPECIES_A_DATA.travel_duration_ticks * 2
+			+ SPECIES_A_DATA.pickup_duration_ticks
+			+ SPECIES_A_DATA.drop_duration_ticks
+		) * HUMIDITY_SCENARIO_DATA.initial_brood_count
+		+ HUMIDITY_SCENARIO_DATA.observation_stable_ticks
+		+ 100
+	)
+	while (
+		not controller._latest_snapshot.brood_humidity_observation_unlocked
+		and controller._latest_snapshot.simulation_tick < completion_deadline
+	):
+		controller._process(SimulationClock.FIXED_STEP_SECONDS)
+	return controller._latest_snapshot.brood_humidity_observation_unlocked
 
 
 func _create_controller(

@@ -23,6 +23,9 @@ var habitat_scenario_data_source: HabitatScenarioData = HUMIDITY_SCENARIO_DATA
 @onready var _instruction_label: Label = %InstructionLabel
 @onready var _water_feedback_label: Label = %WaterFeedbackLabel
 @onready var _water_button: Button = %WaterButton
+@onready var _water_controls: VBoxContainer = %WaterControls
+@onready var _completion_panel: VBoxContainer = %CompletionPanel
+@onready var _restart_button: Button = %RestartButton
 @onready var _debug_panel: PanelContainer = %DebugPanel
 @onready var _debug_label: Label = %DebugLabel
 @onready var _debug_toggle_button: Button = %DebugToggleButton
@@ -45,6 +48,7 @@ func _ready() -> void:
 	_simulation_clock.tick_requested.connect(_on_simulation_tick_requested)
 	_pause_button.pressed.connect(_on_pause_button_pressed)
 	_water_button.pressed.connect(_on_water_button_pressed)
+	_restart_button.pressed.connect(_on_restart_button_pressed)
 	_debug_toggle_button.pressed.connect(_toggle_debug_panel)
 	_speed_1x_button.pressed.connect(
 		_on_speed_button_pressed.bind(SimulationClock.NORMAL_SPEED)
@@ -115,6 +119,16 @@ func _on_water_button_pressed() -> void:
 	_water_feedback_label.text = "补水指令已提交；水分会在下一次模拟更新时渗入。"
 
 
+func _on_restart_button_pressed() -> void:
+	if (
+		_restart_button.disabled
+		or _latest_snapshot == null
+		or not _latest_snapshot.brood_humidity_observation_unlocked
+	):
+		return
+	_restart_session()
+
+
 func _on_speed_button_pressed(multiplier: int) -> void:
 	_simulation_clock.set_speed_multiplier(multiplier)
 	_update_control_state()
@@ -140,11 +154,13 @@ func _apply_colony_snapshot() -> void:
 
 func _update_player_guidance() -> void:
 	if _latest_snapshot.brood_humidity_observation_unlocked:
+		_set_completion_state(true)
 		_observation_label.text = "观察记录已解锁\n“%s”" % OBSERVATION_TEXT
 		_instruction_label.text = "群落已经恢复稳定。你完成了这次观察。"
 		_water_feedback_label.text = "幼体已经安置妥当，工蚁回到了空闲状态。"
 		return
 
+	_set_completion_state(false)
 	_observation_label.text = "观察记录尚未解锁\n先看工蚁如何选择幼体的位置。"
 	if not _latest_snapshot.water_action_unlocked:
 		_instruction_label.text = (
@@ -173,6 +189,7 @@ func _update_control_state() -> void:
 		_status_label.text = "模拟错误 · 已暂停"
 		_pause_button.disabled = true
 		_water_button.disabled = true
+		_restart_button.disabled = true
 		_speed_1x_button.disabled = true
 		_speed_4x_button.disabled = true
 		_speed_16x_button.disabled = true
@@ -183,7 +200,14 @@ func _update_control_state() -> void:
 	_status_label.text = (
 		"已暂停 · %d×" % speed_multiplier
 		if paused
-		else "观察中 · %d×" % speed_multiplier
+		else (
+			"观察完成 · %d×" % speed_multiplier
+			if (
+				_latest_snapshot != null
+				and _latest_snapshot.brood_humidity_observation_unlocked
+			)
+			else "观察中 · %d×" % speed_multiplier
+		)
 	)
 	_pause_button.text = "继续" if paused else "暂停"
 	_speed_1x_button.disabled = speed_multiplier == SimulationClock.NORMAL_SPEED
@@ -197,6 +221,10 @@ func _update_control_state() -> void:
 		and _latest_snapshot.water_action_available
 	)
 	_water_button.disabled = not can_water
+	_restart_button.disabled = (
+		_latest_snapshot == null
+		or not _latest_snapshot.brood_humidity_observation_unlocked
+	)
 
 
 func _update_debug_panel() -> void:
@@ -264,6 +292,29 @@ func _format_optional_id(entity_id: int) -> String:
 
 func _format_optional_zone(zone_id: StringName) -> String:
 	return String(zone_id) if not zone_id.is_empty() else "---"
+
+
+func _restart_session() -> void:
+	if not _colony_simulation.restart_session():
+		var restart_error: String = _colony_simulation.get_configuration_error()
+		if restart_error.is_empty():
+			restart_error = "无法从冻结配置重新开始观察。"
+		_set_fatal_simulation_error(restart_error)
+		return
+	_fatal_simulation_error = ""
+	_latest_snapshot = null
+	_simulation_clock.reset()
+	_debug_panel.visible = false
+	_debug_label.text = "等待第一份模拟快照……"
+	_set_completion_state(false)
+	_habitat_view.reset_projection()
+	_habitat_view.set_visuals_paused(false)
+	_apply_colony_snapshot()
+
+
+func _set_completion_state(completed: bool) -> void:
+	_water_controls.visible = not completed
+	_completion_panel.visible = completed
 
 
 func _set_fatal_simulation_error(message: String) -> void:

@@ -132,6 +132,31 @@ func apply_snapshot(snapshot: ColonySnapshot) -> bool:
 	return true
 
 
+func reset_projection() -> void:
+	for ant_view: AntView in _ant_views.values():
+		if ant_view.get_parent() != null:
+			ant_view.get_parent().remove_child(ant_view)
+		ant_view.queue_free()
+	_ant_views.clear()
+
+	_previous_snapshot = null
+	_latest_snapshot = null
+	_previous_entity_positions.clear()
+	_current_entity_positions.clear()
+	_interpolation_alpha = 1.0
+	_zone_ids.clear()
+	_zone_humidity.clear()
+	_zone_available.clear()
+	_visuals_paused = false
+
+	if _queen_view != null:
+		_queen_view.set_entity_id(-1)
+		_queen_view.set_simulation_tick(0)
+		_queen_view.set_visuals_paused(false)
+		_layout_queen()
+	queue_redraw()
+
+
 func set_visuals_paused(value: bool) -> void:
 	_visuals_paused = value
 	if _queen_view != null:

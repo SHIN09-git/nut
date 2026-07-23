@@ -21,6 +21,7 @@ func run(scene_root: Node) -> void:
 	_test_new_and_missing_entities_follow_stable_mapping_rules()
 	_test_task_state_position_endpoints_are_continuous()
 	_test_carried_brood_stays_attached_during_interpolation()
+	_test_projection_reset_starts_a_clean_tick_zero_session()
 
 
 func get_assertion_count() -> int:
@@ -301,6 +302,107 @@ func _test_carried_brood_stays_attached_during_interpolation() -> void:
 			expected_offset,
 			"carried brood remains attached at alpha %.1f" % alpha
 		)
+
+	_destroy_habitat(habitat)
+
+
+func _test_projection_reset_starts_a_clean_tick_zero_session() -> void:
+	var habitat: HabitatView = _create_habitat()
+	var old_session_snapshot: ColonySnapshot = _make_snapshot(
+		90,
+		WorkerTaskModel.State.IDLE,
+		0,
+		0,
+		RIGHT_ZONE_ID,
+		RIGHT_ZONE_ID,
+		true
+	)
+	_expect_true(
+		habitat.apply_snapshot(old_session_snapshot),
+		"reset fixture accepts the old session snapshot"
+	)
+	var old_worker_view: AntView = habitat.get_ant_view(WORKER_ID)
+	var old_brood_view: AntView = habitat.get_ant_view(BROOD_ID)
+	habitat.set_interpolation_alpha(0.25)
+	habitat.set_visuals_paused(true)
+
+	habitat.reset_projection()
+	habitat.reset_projection()
+	_expect_int(
+		habitat.get_ant_view_count(),
+		0,
+		"two consecutive resets leave no mapped entity views"
+	)
+	_expect_true(
+		habitat.get_ant_view(WORKER_ID) == null,
+		"reset clears stable entity lookup"
+	)
+	_expect_true(
+		old_worker_view != null and old_worker_view.get_parent() == null,
+		"reset detaches the old worker node from the projection tree"
+	)
+	_expect_true(
+		old_brood_view != null and old_brood_view.get_parent() == null,
+		"reset detaches the old brood node from the projection tree"
+	)
+	_expect_int(
+		habitat.get_queen_view().entity_id,
+		-1,
+		"reset restores the queen projection to an unbound entity"
+	)
+	_expect_true(
+		not habitat.get_queen_view().are_visuals_paused(),
+		"reset clears the paused presentation state"
+	)
+
+	var new_session_snapshot: ColonySnapshot = _make_snapshot(
+		0,
+		WorkerTaskModel.State.IDLE,
+		0,
+		0,
+		LEFT_ZONE_ID,
+		LEFT_ZONE_ID
+	)
+	_expect_true(
+		habitat.apply_snapshot(new_session_snapshot),
+		"reset allows the new session to begin at Tick zero"
+	)
+	var new_worker_view: AntView = habitat.get_ant_view(WORKER_ID)
+	var new_brood_view: AntView = habitat.get_ant_view(BROOD_ID)
+	_expect_true(
+		new_worker_view != null and new_worker_view != old_worker_view,
+		"the new session creates a fresh worker view"
+	)
+	_expect_true(
+		new_brood_view != null and new_brood_view != old_brood_view,
+		"the new session creates a fresh brood view"
+	)
+	_expect_int(
+		habitat.get_ant_view_count(),
+		2,
+		"the new session contains exactly its two snapshot entities"
+	)
+	if new_worker_view != null:
+		var tick_zero_position: Vector2 = new_worker_view.position
+		habitat.set_interpolation_alpha(0.0)
+		_expect_vector2(
+			new_worker_view.position,
+			tick_zero_position,
+			"reset clears old interpolation endpoints"
+		)
+	_expect_true(
+		habitat.apply_snapshot(new_session_snapshot),
+		"reapplying the new Tick zero snapshot is accepted"
+	)
+	_expect_int(
+		habitat.get_ant_view_count(),
+		2,
+		"reapplying Tick zero after reset creates no duplicate views"
+	)
+	_expect_true(
+		habitat.get_ant_view(WORKER_ID) == new_worker_view,
+		"the new session reuses its own stable worker mapping"
+	)
 
 	_destroy_habitat(habitat)
 

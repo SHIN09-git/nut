@@ -1,6 +1,6 @@
 # 《玻璃蚁国》技术架构
 
-> 文档版本：0.5｜更新日期：2026-07-23
+> 文档版本：0.6｜更新日期：2026-07-23
 >
 > 本文描述当前已经实现的湿度与幼体搬运切片。
 
@@ -46,6 +46,7 @@ ColonySnapshot / AntSnapshot / HabitatZoneSnapshot
 - 每个成功固定 Tick 后创建并交付一份快照。
 - 把快照交给 `HabitatView` 和调试 UI。
 - 每个渲染帧把时钟插值系数交给 `HabitatView`。
+- 在完成快照允许时协调会话重置，但不重新读取 Resource、不替换时钟或逐只管理视觉节点。
 - 在模拟拒绝 Tick 时暂停并显示错误。
 
 控制器不创建或逐只管理蚂蚁视觉节点，也不能访问私有 `ColonyState`。
@@ -66,6 +67,7 @@ data/habitats/humidity_relocation_slice.tres
 - `BroodCareConfig` 保存幼体舒适湿度、最小改善、决策间隔、拾取／移动／放下时长和区域停留冷却。
 - `HabitatScenarioConfig` 保存切片初始实体、区域、连接、湿度、单次补水量和观察稳定窗口。
 - Resource 通过验证后复制到私有运行时对象；修改源 `.tres` 不会改变已经开始的模拟。
+- `restart_session()` 使用相同的私有冻结配置创建全新 `ColonyState`，并清空旧会话的待处理命令；不会再次读取 Resource。
 - 两份数据都标记为 `prototype_pacing_fixture` 且 `scientifically_validated = false`。它们是游戏节奏夹具，不是真实物种数据。
 
 ## 4. 权威模型
@@ -197,6 +199,7 @@ IDLE
 - 同 Tick 快照不轮换端点，旧 Tick 被拒绝；暂停时插值冻结。
 - 相邻搬运状态共享连续端点，16× 与积压排空不会产生视觉回跳。
 - 重复快照不创建重复节点，完整快照中缺失的节点按明确规则移除。
+- 会话重置会清空快照端点和实体映射，解绑旧节点，然后允许新会话从 Tick 0 建立全新投影。
 
 普通 UI 不显示精确湿度、任务枚举、目标 ID 或生命周期倒计时。F3 诊断层读取相同快照并显示精确内部状态。
 
@@ -226,7 +229,7 @@ ColonyViewAdapter
 - `tests/scenes/lifecycle_debug_scene_test_suite.gd`
 - `tests/scenes/humidity_main_scene_test_suite.gd`
 
-生命周期边界从 Resource 计算。湿度套件覆盖高层命令、配置冻结、确定性、任务选择、所有权、取消／重定向、补水后重评估、1,000 Tick 防振荡、快照隔离、60～120 秒节奏和 10,000 Tick soak。场景测试覆盖真实按钮通关路径；独立 View 套件覆盖插值、暂停、同 Tick、旧 Tick 和状态边界连续性，不绑定完整中文文案。
+生命周期边界从 Resource 计算。湿度套件覆盖高层命令、配置冻结、确定性、任务选择、所有权、取消／重定向、补水后重评估、会话重置、1,000 Tick 防振荡、快照隔离、60～120 秒节奏和 10,000 Tick soak。场景测试覆盖真实按钮通关与连续两次重开路径；独立 View 套件覆盖插值、暂停、同 Tick、旧 Tick、状态边界连续性和 Tick 0 新会话投影，不绑定完整中文文案。
 
 标准命令：
 

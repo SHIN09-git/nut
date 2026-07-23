@@ -235,13 +235,18 @@ autowrap_mode = 2
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="WaterHeading" type="Label" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
+[node name="WaterControls" type="VBoxContainer" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 9
+
+[node name="WaterHeading" type="Label" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent/WaterControls"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
 theme_override_font_sizes/font_size = 18
 text = "补水工具"
 
-[node name="WaterFeedbackLabel" type="Label" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
+[node name="WaterFeedbackLabel" type="Label" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent/WaterControls"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 54)
 layout_mode = 2
@@ -249,12 +254,37 @@ theme_override_colors/font_color = Color(0.73, 0.77, 0.69, 1)
 text = "补水工具会在第一次搬运完成后开放。"
 autowrap_mode = 2
 
-[node name="WaterButton" type="Button" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
+[node name="WaterButton" type="Button" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent/WaterControls"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
 disabled = true
 text = "给左室补水"
+
+[node name="CompletionPanel" type="VBoxContainer" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 9
+
+[node name="CompletionHeading" type="Label" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent/CompletionPanel"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
+theme_override_font_sizes/font_size = 18
+text = "观察完成"
+
+[node name="CompletionLabel" type="Label" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent/CompletionPanel"]
+custom_minimum_size = Vector2(0, 54)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.73, 0.77, 0.69, 1)
+text = "已经记录工蚁对环境变化的反应。可以用同一组条件再次观察。"
+autowrap_mode = 2
+
+[node name="RestartButton" type="Button" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent/CompletionPanel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+text = "重新观察"
 
 [node name="Footer" type="Label" parent="SafeArea/Content"]
 custom_minimum_size = Vector2(0, 26)

@@ -26,6 +26,7 @@ func run() -> int:
 	_test_only_one_water_action_can_be_pending()
 	_test_matching_inputs_and_commands_are_deterministic()
 	_test_water_action_uses_frozen_configuration()
+	_test_restart_clears_session_state_and_keeps_frozen_configuration()
 	_test_unsuitable_brood_zone_creates_relocation_tasks()
 	_test_no_meaningful_improvement_creates_no_task()
 	_test_one_brood_cannot_be_reserved_by_two_workers()
@@ -429,6 +430,133 @@ func _test_water_action_uses_frozen_configuration() -> void:
 	_expect_true(
 		not comfortable_snapshot.water_action_available,
 		"the frozen comfort result disables further water actions"
+	)
+
+
+func _test_restart_clears_session_state_and_keeps_frozen_configuration() -> void:
+	var species: SpeciesData = SPECIES_A_DATA.duplicate(true) as SpeciesData
+	var scenario: HabitatScenarioData = _duplicate_scenario()
+	var simulation: ColonySimulation = ColonySimulation.new(species, scenario)
+	var initial_snapshot: ColonySnapshot = simulation.create_snapshot()
+	var initial_left_humidity: float = _zone_humidity(initial_snapshot, LEFT_ZONE_ID)
+	var initial_right_humidity: float = _zone_humidity(initial_snapshot, RIGHT_ZONE_ID)
+	var frozen_amount: float = scenario.humidity_adjustment_amount
+	var expected_ant_count: int = (
+		scenario.initial_worker_count + scenario.initial_brood_count
+	)
+
+	_advance_until_water_action_available(simulation)
+	_expect_true(
+		simulation.submit_water_action(),
+		"restart fixture queues one unapplied high-level water action"
+	)
+	_expect_true(
+		simulation.create_snapshot().water_action_pending,
+		"restart fixture contains pending input before reset"
+	)
+
+	scenario.left_zone.initial_humidity = 0.90
+	scenario.right_zone.initial_humidity = 0.10
+	scenario.initial_worker_count = 1
+	scenario.initial_brood_count = 1
+	scenario.initial_worker_zone_id = RIGHT_ZONE_ID
+	scenario.initial_brood_zone_id = RIGHT_ZONE_ID
+	scenario.humidity_adjustment_zone_id = RIGHT_ZONE_ID
+	scenario.humidity_adjustment_amount = 0.40
+	scenario.observation_stable_ticks = 1
+	species.brood_humidity_min = 0.90
+	species.brood_humidity_max = 0.95
+	species.decision_interval_ticks = 1
+
+	_expect_true(
+		simulation.restart_session(),
+		"humidity simulation restarts from its internally frozen configuration"
+	)
+	var restarted_snapshot: ColonySnapshot = simulation.create_snapshot()
+	_expect_int(restarted_snapshot.simulation_tick, 0, "humidity restart returns to Tick zero")
+	_expect_int(
+		restarted_snapshot.ants.size(),
+		expected_ant_count,
+		"humidity restart restores the frozen initial entity count"
+	)
+	_expect_float(
+		_zone_humidity(restarted_snapshot, LEFT_ZONE_ID),
+		initial_left_humidity,
+		"humidity restart restores the frozen left chamber"
+	)
+	_expect_float(
+		_zone_humidity(restarted_snapshot, RIGHT_ZONE_ID),
+		initial_right_humidity,
+		"humidity restart restores the frozen right chamber"
+	)
+	_expect_true(
+		not restarted_snapshot.water_action_unlocked,
+		"humidity restart closes the first-drop gate"
+	)
+	_expect_true(
+		not restarted_snapshot.water_action_pending,
+		"humidity restart discards pending commands from the old session"
+	)
+	_expect_int(
+		restarted_snapshot.water_action_count,
+		0,
+		"humidity restart clears the applied water count"
+	)
+	_expect_int(
+		restarted_snapshot.observation_stable_ticks,
+		0,
+		"humidity restart clears observation stability progress"
+	)
+	_expect_true(
+		not restarted_snapshot.brood_humidity_observation_unlocked,
+		"humidity restart clears the completed observation"
+	)
+	_expect_true(
+		simulation.has_valid_habitat_ownership(),
+		"humidity restart preserves initial ownership invariants"
+	)
+
+	_expect_true(
+		simulation.advance_tick(1),
+		"the restarted simulation accepts its first sequential Tick"
+	)
+	var after_first_tick: ColonySnapshot = simulation.create_snapshot()
+	_expect_float(
+		_zone_humidity(after_first_tick, LEFT_ZONE_ID),
+		initial_left_humidity,
+		"the old pending water action does not leak into the restarted session"
+	)
+	_expect_int(
+		after_first_tick.water_action_count,
+		0,
+		"the restarted first Tick applies no stale command"
+	)
+
+	var available_again: ColonySnapshot = _advance_until_water_action_available(
+		simulation
+	)
+	_expect_true(
+		simulation.submit_water_action(),
+		"the restarted session unlocks the same frozen high-level action"
+	)
+	_expect_true(
+		simulation.advance_tick(available_again.simulation_tick + 1),
+		"the restarted water action applies on its next Tick"
+	)
+	var restarted_action_snapshot: ColonySnapshot = simulation.create_snapshot()
+	_expect_float(
+		_zone_humidity(restarted_action_snapshot, LEFT_ZONE_ID),
+		clampf(initial_left_humidity + frozen_amount, 0.0, 1.0),
+		"restart keeps the frozen water target and amount"
+	)
+	_expect_float(
+		_zone_humidity(restarted_action_snapshot, RIGHT_ZONE_ID),
+		initial_right_humidity,
+		"restart ignores the mutated source water target"
+	)
+	_expect_true(
+		not restarted_action_snapshot.water_target_comfortable,
+		"restart keeps the frozen brood comfort range"
 	)
 
 

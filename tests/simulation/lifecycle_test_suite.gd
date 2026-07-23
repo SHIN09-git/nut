@@ -20,6 +20,7 @@ func run() -> void:
 	_test_non_sequential_tick_is_rejected()
 	_test_matching_inputs_are_deterministic()
 	_test_runtime_config_is_copied_from_resource()
+	_test_restart_uses_frozen_lifecycle_configuration()
 	_test_snapshot_is_isolated_from_runtime_state()
 	_test_speed_only_changes_wall_clock_pacing()
 	_test_clock_backlog_matches_direct_ticks()
@@ -211,6 +212,47 @@ func _test_runtime_config_is_copied_from_resource() -> void:
 		snapshot.count_stage(AntModel.LifeStage.WORKER),
 		1,
 		"editing the source Resource cannot change active stage boundaries"
+	)
+
+
+func _test_restart_uses_frozen_lifecycle_configuration() -> void:
+	var source_data: SpeciesData = _make_species_data(2, 3, 20, 20, 20, 2)
+	var simulation: ColonySimulation = ColonySimulation.new(source_data)
+	_advance_to_tick(simulation, 8)
+	_expect_int(
+		simulation.create_snapshot().queen_laid_egg_count,
+		2,
+		"lifecycle restart fixture first reaches a populated colony"
+	)
+
+	source_data.first_egg_delay_ticks = 100
+	source_data.egg_laying_interval_ticks = 100
+	source_data.max_first_generation_brood = 10
+	_expect_true(
+		simulation.restart_session(),
+		"a valid lifecycle simulation can restart from its frozen configuration"
+	)
+	var restarted_snapshot: ColonySnapshot = simulation.create_snapshot()
+	_expect_int(restarted_snapshot.simulation_tick, 0, "lifecycle restart returns to Tick zero")
+	_expect_int(
+		restarted_snapshot.queen_laid_egg_count,
+		0,
+		"lifecycle restart clears the queen's session count"
+	)
+	_expect_int(restarted_snapshot.ants.size(), 0, "lifecycle restart removes prior brood")
+	_expect_int(
+		restarted_snapshot.next_egg_tick,
+		2,
+		"lifecycle restart keeps the original frozen first-egg boundary"
+	)
+
+	_advance_to_tick(simulation, 2)
+	var first_restarted_egg: ColonySnapshot = simulation.create_snapshot()
+	_expect_int(first_restarted_egg.ants.size(), 1, "restarted lifecycle lays on the frozen Tick")
+	_expect_int(
+		first_restarted_egg.ants[0].entity_id,
+		1,
+		"restarted lifecycle resets stable entity allocation for the new session"
 	)
 
 

@@ -72,6 +72,25 @@ func submit_water_action() -> bool:
 	return true
 
 
+func restart_session() -> bool:
+	if not is_ready():
+		return false
+
+	var initial_state: ColonyState = ColonyState.new()
+	if has_habitat():
+		if not initial_state.initialize_habitat(
+			_habitat_config,
+			_brood_care_config
+		):
+			return false
+		if not _has_valid_habitat_ownership(initial_state):
+			return false
+
+	_state = initial_state
+	_pending_humidity_commands.clear()
+	return true
+
+
 func advance_tick(tick_index: int) -> bool:
 	if not is_ready() or tick_index != _state.simulation_tick + 1:
 		return false
@@ -212,13 +231,19 @@ func get_stage_duration_ticks(stage: AntModel.LifeStage) -> int:
 func has_valid_habitat_ownership() -> bool:
 	if not has_habitat():
 		return true
+	return _has_valid_habitat_ownership(_state)
+
+
+func _has_valid_habitat_ownership(state: ColonyState) -> bool:
+	if state == null:
+		return false
 
 	var reservation_counts: Dictionary = {}
 	var carrier_counts: Dictionary = {}
-	for ant: AntModel in _state.ants:
+	for ant: AntModel in state.ants:
 		if ant.life_stage != AntModel.LifeStage.WORKER:
 			continue
-		if ant.worker_task == null or _state.get_zone(ant.zone_id) == null:
+		if ant.worker_task == null or state.get_zone(ant.zone_id) == null:
 			return false
 
 		var task: WorkerTaskModel = ant.worker_task
@@ -235,10 +260,10 @@ func has_valid_habitat_ownership() -> bool:
 		if (
 			task.target_brood_id < 0
 			or task.target_zone_id.is_empty()
-			or _state.get_zone(task.target_zone_id) == null
+			or state.get_zone(task.target_zone_id) == null
 		):
 			return false
-		var target_brood: AntModel = _state.get_ant(task.target_brood_id)
+		var target_brood: AntModel = state.get_ant(task.target_brood_id)
 		if (
 			target_brood == null
 			or target_brood.life_stage == AntModel.LifeStage.WORKER
@@ -274,12 +299,12 @@ func has_valid_habitat_ownership() -> bool:
 		else:
 			return false
 
-	for ant: AntModel in _state.ants:
+	for ant: AntModel in state.ants:
 		if ant.life_stage == AntModel.LifeStage.WORKER:
 			continue
 		var belongs_to_zone: bool = (
 			not ant.zone_id.is_empty()
-			and _state.get_zone(ant.zone_id) != null
+			and state.get_zone(ant.zone_id) != null
 		)
 		var carrier_count: int = int(carrier_counts.get(ant.entity_id, 0))
 		if belongs_to_zone == (carrier_count == 1):
