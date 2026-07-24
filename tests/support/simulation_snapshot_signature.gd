@@ -1,0 +1,138 @@
+class_name SimulationSnapshotSignature
+extends RefCounted
+
+
+static func canonical_snapshot(snapshot: ColonySnapshot) -> String:
+	if snapshot == null:
+		return "<null-snapshot>"
+
+	var lines: PackedStringArray = [
+		(
+			"snapshot|tick=%d|lifecycle=%s|queen=%d|laid=%d|max_brood=%d"
+			+ "|next_egg=%d|scenario=%s|humidity_actions=%d"
+			+ "|water_unlocked=%s|water_available=%s|water_pending=%s"
+			+ "|water_count=%d|water_comfortable=%s|stable_ticks=%d"
+			+ "|brood_observation=%s"
+		)
+		% [
+			snapshot.simulation_tick,
+			str(snapshot.lifecycle_active),
+			snapshot.queen_entity_id,
+			snapshot.queen_laid_egg_count,
+			snapshot.max_first_generation_brood,
+			snapshot.next_egg_tick,
+			String(snapshot.scenario_id),
+			snapshot.humidity_adjustment_count,
+			str(snapshot.water_action_unlocked),
+			str(snapshot.water_action_available),
+			str(snapshot.water_action_pending),
+			snapshot.water_action_count,
+			str(snapshot.water_target_comfortable),
+			snapshot.observation_stable_ticks,
+			str(snapshot.brood_humidity_observation_unlocked),
+		],
+	]
+
+	var zones: Array[HabitatZoneSnapshot] = []
+	zones.assign(snapshot.zones)
+	zones.sort_custom(
+		func(first: HabitatZoneSnapshot, second: HabitatZoneSnapshot) -> bool:
+			return String(first.zone_id) < String(second.zone_id)
+	)
+	for zone: HabitatZoneSnapshot in zones:
+		var connected_zone_ids: PackedStringArray = []
+		for connected_zone_id: StringName in zone.connected_zone_ids:
+			connected_zone_ids.append(String(connected_zone_id))
+		connected_zone_ids.sort()
+		lines.append(
+			"zone|id=%s|humidity=%s|available=%s|connections=%s"
+			% [
+				String(zone.zone_id),
+				_format_float(zone.humidity),
+				str(zone.available),
+				",".join(connected_zone_ids),
+			]
+		)
+
+	var ants: Array[AntSnapshot] = []
+	ants.assign(snapshot.ants)
+	ants.sort_custom(
+		func(first: AntSnapshot, second: AntSnapshot) -> bool:
+			return first.entity_id < second.entity_id
+	)
+	for ant: AntSnapshot in ants:
+		lines.append(
+			(
+				"ant|id=%d|stage=%d|total_age=%d|stage_age=%d"
+				+ "|stage_duration=%d|zone=%s|zone_entered=%d"
+				+ "|reserved_by=%d|carrier=%d|task=%d|origin=%s"
+				+ "|target_brood=%d|target_zone=%s|carried_brood=%d"
+				+ "|task_elapsed=%d|task_duration=%d"
+			)
+			% [
+				ant.entity_id,
+				ant.life_stage,
+				ant.total_age_ticks,
+				ant.stage_age_ticks,
+				ant.stage_duration_ticks,
+				String(ant.zone_id),
+				ant.zone_entered_tick,
+				ant.reserved_by_ant_id,
+				ant.carrier_ant_id,
+				ant.worker_task_state,
+				String(ant.task_origin_zone_id),
+				ant.target_brood_id,
+				String(ant.target_zone_id),
+				ant.carried_brood_id,
+				ant.task_elapsed_ticks,
+				ant.task_duration_ticks,
+			]
+		)
+
+	var event_history: String = canonical_event_history(
+		snapshot.observation_events
+	)
+	if not event_history.is_empty():
+		lines.append(event_history)
+	return "\n".join(lines)
+
+
+static func canonical_event_history(
+	events: Array[ObservationEvent]
+) -> String:
+	var lines: PackedStringArray = []
+	for event: ObservationEvent in events:
+		if event == null:
+			lines.append("event|null")
+			continue
+		lines.append(
+			"event|id=%d|tick=%d|type=%d|actor=%d|subject=%d|source=%s|target=%s"
+			% [
+				event.event_id,
+				event.tick,
+				event.event_type,
+				event.actor_entity_id,
+				event.subject_entity_id,
+				String(event.source_zone_id),
+				String(event.target_zone_id),
+			]
+		)
+	return "\n".join(lines)
+
+
+static func snapshot_digest(snapshot: ColonySnapshot) -> String:
+	return canonical_snapshot(snapshot).sha256_text()
+
+
+static func event_history_digest(
+	events: Array[ObservationEvent]
+) -> String:
+	return canonical_event_history(events).sha256_text()
+
+
+static func roll_digest(previous_digest: String, record: String) -> String:
+	return ("%s\n%s" % [previous_digest, record]).sha256_text()
+
+
+static func _format_float(value: float) -> String:
+	return "%.9f" % value

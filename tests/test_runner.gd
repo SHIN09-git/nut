@@ -9,6 +9,9 @@ const LifecycleTestSuiteScript: Script = preload(
 const HumidityRelocationTestSuiteScript: Script = preload(
 	"res://tests/simulation/humidity_relocation_test_suite.gd"
 )
+const BroodRelocationEquivalenceTestSuiteScript: Script = preload(
+	"res://tests/simulation/brood_relocation_equivalence_test_suite.gd"
+)
 const ObservationEventTestSuiteScript: Script = preload(
 	"res://tests/simulation/observation_event_test_suite.gd"
 )
@@ -46,6 +49,7 @@ func _run_all_tests() -> void:
 	_run_simulation_clock_test_suite()
 	_run_lifecycle_test_suite()
 	_run_humidity_relocation_test_suite()
+	_run_brood_relocation_equivalence_test_suite()
 	_run_observation_event_test_suite()
 	_run_player_annotation_state_test_suite()
 	_run_view_adapter_test_suite()
@@ -82,6 +86,14 @@ func _run_lifecycle_test_suite() -> void:
 func _run_humidity_relocation_test_suite() -> void:
 	var suite: HumidityRelocationTestSuite = (
 		HumidityRelocationTestSuiteScript.new()
+	)
+	suite.run()
+	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
+
+
+func _run_brood_relocation_equivalence_test_suite() -> void:
+	var suite: BroodRelocationEquivalenceTestSuite = (
+		BroodRelocationEquivalenceTestSuiteScript.new()
 	)
 	suite.run()
 	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
