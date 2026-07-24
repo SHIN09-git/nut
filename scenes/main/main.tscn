@@ -1,7 +1,8 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/main_controller.gd" id="1_controller"]
 [ext_resource type="PackedScene" path="res://scenes/habitat/humidity_habitat.tscn" id="2_habitat"]
+[ext_resource type="Script" path="res://scripts/view/worker_observation_panel.gd" id="3_worker_panel"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBox_header"]
 bg_color = Color(0.075, 0.095, 0.088, 1)
@@ -167,22 +168,129 @@ layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 12
 
-[node name="HabitatFrame" type="PanelContainer" parent="SafeArea/Content/Body"]
+[node name="LeftColumn" type="VBoxContainer" parent="SafeArea/Content/Body"]
 custom_minimum_size = Vector2(760, 0)
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="HabitatFrame" type="PanelContainer" parent="SafeArea/Content/Body/LeftColumn"]
+custom_minimum_size = Vector2(0, 360)
+layout_mode = 2
+size_flags_vertical = 3
 theme_override_styles/panel = SubResource("StyleBox_habitat")
 
-[node name="HabitatMargin" type="MarginContainer" parent="SafeArea/Content/Body/HabitatFrame"]
+[node name="HabitatMargin" type="MarginContainer" parent="SafeArea/Content/Body/LeftColumn/HabitatFrame"]
 layout_mode = 2
 theme_override_constants/margin_left = 10
 theme_override_constants/margin_top = 10
 theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 10
 
-[node name="HabitatView" parent="SafeArea/Content/Body/HabitatFrame/HabitatMargin" instance=ExtResource("2_habitat")]
+[node name="HabitatView" parent="SafeArea/Content/Body/LeftColumn/HabitatFrame/HabitatMargin" instance=ExtResource("2_habitat")]
 unique_name_in_owner = true
 layout_mode = 2
+
+[node name="WorkerIdentityPanel" type="PanelContainer" parent="SafeArea/Content/Body/LeftColumn"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 150)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBox_side")
+script = ExtResource("3_worker_panel")
+
+[node name="Margin" type="MarginContainer" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 10
+
+[node name="Content" type="HBoxContainer" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Summary" type="VBoxContainer" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content"]
+custom_minimum_size = Vector2(292, 0)
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Heading" type="Label" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/Summary"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
+theme_override_font_sizes/font_size = 17
+text = "个体观察"
+
+[node name="WorkerPromptLabel" type="Label" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/Summary"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.73, 0.77, 0.69, 1)
+text = "点击一只工蚁，持续观察它的行动。"
+vertical_alignment = 1
+autowrap_mode = 2
+
+[node name="SelectedWorkerContent" type="VBoxContainer" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/Summary"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="WorkerDisplayNameLabel" type="Label" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/Summary/SelectedWorkerContent"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.89, 0.83, 0.66, 1)
+theme_override_font_sizes/font_size = 16
+text = "未命名工蚁"
+
+[node name="WorkerCurrentBehaviorLabel" type="Label" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/Summary/SelectedWorkerContent"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.73, 0.77, 0.69, 1)
+text = "正在巢室内停留"
+
+[node name="NamingRow" type="HBoxContainer" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/Summary/SelectedWorkerContent"]
+layout_mode = 2
+theme_override_constants/separation = 7
+
+[node name="WorkerNameEdit" type="LineEdit" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/Summary/SelectedWorkerContent/NamingRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(188, 32)
+layout_mode = 2
+size_flags_horizontal = 3
+max_length = 16
+placeholder_text = "可选：给它起个名字"
+
+[node name="WorkerNameButton" type="Button" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/Summary/SelectedWorkerContent/NamingRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(74, 32)
+layout_mode = 2
+text = "保存"
+
+[node name="Divider" type="VSeparator" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content"]
+layout_mode = 2
+
+[node name="History" type="VBoxContainer" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 5
+
+[node name="HistoryHeading" type="Label" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/History"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
+theme_override_font_sizes/font_size = 17
+text = "最近行动"
+
+[node name="WorkerHistoryLabel" type="Label" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/History"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.73, 0.77, 0.69, 1)
+theme_override_font_sizes/font_size = 12
+text = "选择工蚁后，这里会留下它最近的行动。"
+vertical_alignment = 1
+autowrap_mode = 2
 
 [node name="SidePanel" type="PanelContainer" parent="SafeArea/Content/Body"]
 custom_minimum_size = Vector2(300, 0)

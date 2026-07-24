@@ -142,6 +142,7 @@ func create_snapshot() -> ColonySnapshot:
 	snapshot.brood_humidity_observation_unlocked = (
 		_state.brood_humidity_observation_unlocked
 	)
+	snapshot.observation_events = _state.copy_observation_events()
 
 	for zone: HabitatZoneState in _state.zones:
 		snapshot.zones.append(HabitatZoneSnapshot.new(
@@ -381,39 +382,79 @@ func _advance_worker_tasks() -> void:
 
 		match task.state:
 			WorkerTaskModel.State.MOVING_TO_BROOD:
+				var pickup_zone_id: StringName = brood.zone_id
+				var relocation_target_zone_id: StringName = (
+					task.target_zone_id
+				)
 				worker.zone_id = brood.zone_id
 				task.begin(
 					WorkerTaskModel.State.PICKING_UP,
-					brood.zone_id,
+					pickup_zone_id,
 					brood.entity_id,
-					task.target_zone_id,
+					relocation_target_zone_id,
 					_brood_care_config.pickup_duration_ticks
+				)
+				_state.record_observation_event(
+					ObservationEvent.Type.BROOD_PICKUP_STARTED,
+					worker.entity_id,
+					brood.entity_id,
+					pickup_zone_id,
+					relocation_target_zone_id
 				)
 			WorkerTaskModel.State.PICKING_UP:
 				var pickup_zone_id: StringName = brood.zone_id
+				var relocation_target_zone_id: StringName = (
+					task.target_zone_id
+				)
 				brood.zone_id = &""
 				task.carried_brood_id = brood.entity_id
 				task.begin(
 					WorkerTaskModel.State.CARRYING_TO_ZONE,
 					pickup_zone_id,
 					brood.entity_id,
-					task.target_zone_id,
+					relocation_target_zone_id,
 					_brood_care_config.travel_duration_ticks
 				)
+				_state.record_observation_event(
+					ObservationEvent.Type.BROOD_CARRY_STARTED,
+					worker.entity_id,
+					brood.entity_id,
+					pickup_zone_id,
+					relocation_target_zone_id
+				)
 			WorkerTaskModel.State.CARRYING_TO_ZONE:
-				worker.zone_id = task.target_zone_id
+				var relocation_source_zone_id: StringName = (
+					task.origin_zone_id
+				)
+				var relocation_target_zone_id: StringName = (
+					task.target_zone_id
+				)
+				worker.zone_id = relocation_target_zone_id
 				task.begin(
 					WorkerTaskModel.State.DROPPING,
-					worker.zone_id,
+					relocation_source_zone_id,
 					brood.entity_id,
-					task.target_zone_id,
+					relocation_target_zone_id,
 					_brood_care_config.drop_duration_ticks
 				)
 			WorkerTaskModel.State.DROPPING:
-				brood.zone_id = task.target_zone_id
+				var relocation_source_zone_id: StringName = (
+					task.origin_zone_id
+				)
+				var relocation_target_zone_id: StringName = (
+					task.target_zone_id
+				)
+				brood.zone_id = relocation_target_zone_id
 				brood.zone_entered_tick = _state.simulation_tick
-				worker.zone_id = task.target_zone_id
+				worker.zone_id = relocation_target_zone_id
 				_state.water_action_unlocked = true
+				_state.record_observation_event(
+					ObservationEvent.Type.BROOD_DROPPED,
+					worker.entity_id,
+					brood.entity_id,
+					relocation_source_zone_id,
+					relocation_target_zone_id
+				)
 				task.reset_to_idle(
 					_state.simulation_tick
 					+ _brood_care_config.decision_interval_ticks
@@ -454,6 +495,13 @@ func _assign_idle_workers() -> void:
 			brood.entity_id,
 			target_zone.zone_id,
 			_brood_care_config.travel_duration_ticks
+		)
+		_state.record_observation_event(
+			ObservationEvent.Type.RELOCATION_STARTED,
+			worker.entity_id,
+			brood.entity_id,
+			brood.zone_id,
+			target_zone.zone_id
 		)
 		reserved_brood_ids[brood.entity_id] = true
 
@@ -673,6 +721,9 @@ func _update_observation_record() -> void:
 		>= _habitat_config.observation_stable_ticks
 	):
 		_state.brood_humidity_observation_unlocked = true
+		_state.record_observation_event(
+			ObservationEvent.Type.BROOD_HUMIDITY_OBSERVATION_COMPLETED
+		)
 
 
 func _get_humidity_penalty(humidity: float) -> float:

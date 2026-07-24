@@ -10,6 +10,7 @@ const OBSERVATION_TEXT: String = "工蚁会把幼体搬向更合适的湿度区�
 var _simulation_clock: SimulationClock
 var _colony_simulation: ColonySimulation
 var _latest_snapshot: ColonySnapshot
+var _player_annotation_state: PlayerAnnotationState
 var _fatal_simulation_error: String = ""
 
 # Tests and alternate launch scenes may replace these before _ready().  The
@@ -19,6 +20,7 @@ var habitat_scenario_data_source: HabitatScenarioData = HUMIDITY_SCENARIO_DATA
 
 @onready var _status_label: Label = %StatusLabel
 @onready var _habitat_view: HabitatView = %HabitatView
+@onready var _worker_observation_panel: WorkerObservationPanel = %WorkerIdentityPanel
 @onready var _observation_label: Label = %ObservationLabel
 @onready var _instruction_label: Label = %InstructionLabel
 @onready var _water_feedback_label: Label = %WaterFeedbackLabel
@@ -37,6 +39,7 @@ var habitat_scenario_data_source: HabitatScenarioData = HUMIDITY_SCENARIO_DATA
 
 func _ready() -> void:
 	_simulation_clock = SimulationClock.new()
+	_player_annotation_state = PlayerAnnotationState.new()
 	_colony_simulation = ColonySimulation.new(
 		species_data_source,
 		habitat_scenario_data_source
@@ -46,6 +49,12 @@ func _ready() -> void:
 		return
 
 	_simulation_clock.tick_requested.connect(_on_simulation_tick_requested)
+	_habitat_view.worker_selection_requested.connect(
+		_on_worker_selection_requested
+	)
+	_worker_observation_panel.name_commit_requested.connect(
+		_on_worker_name_commit_requested
+	)
 	_pause_button.pressed.connect(_on_pause_button_pressed)
 	_water_button.pressed.connect(_on_water_button_pressed)
 	_restart_button.pressed.connect(_on_restart_button_pressed)
@@ -119,6 +128,27 @@ func _on_water_button_pressed() -> void:
 	_water_feedback_label.text = "补水指令已提交；水分会在下一次模拟更新时渗入。"
 
 
+func _on_worker_selection_requested(entity_id: int) -> void:
+	if (
+		_latest_snapshot == null
+		or not _player_annotation_state.select_worker(
+			entity_id,
+			_latest_snapshot
+		)
+	):
+		return
+	_habitat_view.set_selected_worker_id(
+		_player_annotation_state.get_selected_worker_id()
+	)
+	_update_worker_observation_panel()
+
+
+func _on_worker_name_commit_requested(worker_name: String) -> void:
+	if not _player_annotation_state.set_selected_worker_name(worker_name):
+		return
+	_update_worker_observation_panel()
+
+
 func _on_restart_button_pressed() -> void:
 	if (
 		_restart_button.disabled
@@ -143,13 +173,49 @@ func _toggle_debug_panel() -> void:
 
 func _apply_colony_snapshot() -> void:
 	_latest_snapshot = _colony_simulation.create_snapshot()
+	_player_annotation_state.reconcile(_latest_snapshot)
 	if not _habitat_view.apply_snapshot(_latest_snapshot):
 		_set_fatal_simulation_error("栖息地视图拒绝了模拟快照，已暂停。")
 		return
+	_habitat_view.set_selected_worker_id(
+		_player_annotation_state.get_selected_worker_id()
+	)
 
+	_update_worker_observation_panel()
 	_update_player_guidance()
 	_update_control_state()
 	_update_debug_panel()
+
+
+func _update_worker_observation_panel() -> void:
+	if (
+		_worker_observation_panel == null
+		or _player_annotation_state == null
+	):
+		return
+	var selected_worker_id: int = (
+		_player_annotation_state.get_selected_worker_id()
+	)
+	if _latest_snapshot == null or selected_worker_id < 0:
+		_worker_observation_panel.reset_panel()
+		return
+	var worker_snapshot: AntSnapshot = _latest_snapshot.find_ant(
+		selected_worker_id
+	)
+	if (
+		worker_snapshot == null
+		or worker_snapshot.life_stage != AntModel.LifeStage.WORKER
+	):
+		_worker_observation_panel.reset_panel()
+		return
+	var worker_name: String = _player_annotation_state.get_worker_name(
+		selected_worker_id
+	)
+	_worker_observation_panel.apply_selection(
+		worker_snapshot,
+		worker_name,
+		_player_annotation_state.get_recent_events(selected_worker_id)
+	)
 
 
 func _update_player_guidance() -> void:
@@ -303,10 +369,12 @@ func _restart_session() -> void:
 		return
 	_fatal_simulation_error = ""
 	_latest_snapshot = null
+	_player_annotation_state.reset_session()
 	_simulation_clock.reset()
 	_debug_panel.visible = false
 	_debug_label.text = "等待第一份模拟快照……"
 	_set_completion_state(false)
+	_worker_observation_panel.reset_panel()
 	_habitat_view.reset_projection()
 	_habitat_view.set_visuals_paused(false)
 	_apply_colony_snapshot()

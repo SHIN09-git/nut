@@ -6,6 +6,7 @@ const BROOD_LIGHT: Color = Color(0.91, 0.88, 0.72, 1.0)
 const BROOD_SHADE: Color = Color(0.70, 0.66, 0.51, 1.0)
 const WORKER_BODY: Color = Color(0.16, 0.09, 0.055, 1.0)
 const WORKER_HIGHLIGHT: Color = Color(0.36, 0.21, 0.12, 1.0)
+const SELECTION_OUTLINE: Color = Color(0.88, 0.76, 0.46, 0.74)
 const TRANSITION_DURATION_SECONDS: float = 0.38
 
 var entity_id: int = -1
@@ -14,6 +15,7 @@ var _transition_count: int = 0
 var _transition_elapsed_seconds: float = TRANSITION_DURATION_SECONDS
 var _visuals_paused: bool = false
 var _slot_position: Vector2 = Vector2.ZERO
+var _selected: bool = false
 
 
 func configure(snapshot: AntSnapshot, slot_position: Vector2) -> bool:
@@ -35,6 +37,8 @@ func apply_snapshot(snapshot: AntSnapshot) -> bool:
 		return true
 
 	life_stage = snapshot.life_stage
+	if life_stage != AntModel.LifeStage.WORKER:
+		_selected = false
 	_transition_count += 1
 	_start_transition_animation()
 	queue_redraw()
@@ -48,6 +52,20 @@ func set_slot_position(new_position: Vector2) -> void:
 
 func set_visuals_paused(value: bool) -> void:
 	_visuals_paused = value
+
+
+func set_selected(value: bool) -> void:
+	var next_selected: bool = (
+		value and life_stage == AntModel.LifeStage.WORKER
+	)
+	if _selected == next_selected:
+		return
+	_selected = next_selected
+	queue_redraw()
+
+
+func is_selected() -> bool:
+	return _selected
 
 
 func are_visuals_paused() -> bool:
@@ -99,6 +117,8 @@ func _draw() -> void:
 		AntModel.LifeStage.PUPA:
 			_draw_pupa()
 		AntModel.LifeStage.WORKER:
+			if _selected:
+				_draw_selection_outline()
 			_draw_worker()
 
 
@@ -155,6 +175,19 @@ func _draw_worker() -> void:
 	draw_line(Vector2(13.0, -4.0), Vector2(19.0, -9.0), limb_color, 1.5, true)
 	draw_line(Vector2(14.0, -1.0), Vector2(21.0, -3.0), limb_color, 1.5, true)
 	draw_circle(Vector2(12.0, -2.2), 1.0, Color(0.82, 0.63, 0.30, 1.0))
+
+
+func _draw_selection_outline() -> void:
+	draw_arc(
+		Vector2(2.0, 0.0),
+		24.0,
+		0.0,
+		TAU,
+		40,
+		SELECTION_OUTLINE,
+		2.0,
+		true
+	)
 
 
 func _draw_ellipse(center: Vector2, radii: Vector2, color: Color) -> void:

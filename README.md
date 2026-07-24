@@ -10,10 +10,13 @@
 - 工蚁使用确定性的 `IDLE → MOVING_TO_BROOD → PICKING_UP → CARRYING_TO_ZONE → DROPPING` 状态机。
 - 幼体预订、携带和区域归属保持单一所有权；目标失效时任务会安全取消或重定向。
 - `HabitatView` 只读快照，按稳定实体 ID 维护视觉节点；幼体在携带时跟随对应工蚁，位置由相邻固定 Tick 的任务进度插值而非独立 Tween 产生。
+- 玩家可以直接点击画面中的工蚁，使用静态轮廓持续辨认同一稳定个体；可选名称只保存在当前会话。
+- 个体观察面板显示所选工蚁的自然语言当前行为和最近 4 条结构化行动记录，不显示内部实体或事件 ID。
+- 模拟输出会话内单调、容量 64 的结构化观察事件；即使 16× 一帧跨越多个 Tick，界面也按事件游标依次消费而不只保留最后一条。
 - 普通视图不显示精确湿度、内部任务、目标 ID 或生命周期倒计时。
 - F3 诊断层显示 Tick、速度、左右室精确湿度、工蚁任务、目标、携带、预订和活跃搬运数。
 - 玩家完成补水且群落连续稳定后，由模拟解锁观察记录。
-- 解锁后界面显示明确的“观察完成”状态；“重新观察”会从同一份冻结配置恢复 Tick 0、1×、未暂停和初始实体，不继承旧命令或视觉节点。
+- 解锁后界面显示明确的“观察完成”状态；“重新观察”会从同一份冻结配置恢复 Tick 0、1×、未暂停和初始实体，不继承旧命令、视觉节点、选择、名称或个人行动记录。
 - 湿度场景通过快照明确标记生命周期不适用，不把预置幼体计为蚁后产卵。
 - 生命周期试管展示保留为独立调试场景，不再是默认入口。
 
@@ -50,6 +53,8 @@
 
 - 先观察工蚁完成第一次幼体搬运，随后“给左室补水”按钮会开放。
 - 正常流程分 3 次少量补水。
+- 点击任一工蚁可持续观察它；名称为可选项，留空保存会清除名称。
+- 个体观察面板会跟随所选工蚁更新当前行为，并保留最近 4 条行动。
 - 使用“暂停”、`1×`、`4×`、`16×` 控制观察节奏。
 - 按 F3 显示或隐藏诊断层。
 - 观察记录解锁后，使用“重新观察”立即开始一局干净的新会话。
@@ -58,7 +63,7 @@
 
 ## 测试
 
-`tests/test_runner.gd` 是唯一顶层入口，聚合固定时钟、生命周期、湿度搬运、快照／View 映射及两个场景的测试：
+`tests/test_runner.gd` 是唯一顶层入口，聚合固定时钟、生命周期、湿度搬运、结构化事件、会话注释、快照／View 映射及场景测试：
 
 ```powershell
 & '.\Godot_v4.7.1-stable_win64_console.exe' --headless --path . --script 'res://tests/test_runner.gd'
@@ -71,13 +76,28 @@
 & '.\Godot_v4.7.1-stable_win64_console.exe' --headless --path . --quit-after 30
 ```
 
+## Windows 导出
+
+仓库中的 `export_presets.cfg` 配置 Windows Desktop x86_64 release，并排除内部参考目录与测试。安装精确匹配 Godot `4.7.1.stable` 的官方 Windows Export Templates 后可运行：
+
+```powershell
+New-Item -ItemType Directory -Force -Path '.\builds\windows'
+& '.\Godot_v4.7.1-stable_win64_console.exe' `
+  --headless `
+  --path . `
+  --export-release 'Windows Desktop' `
+  'builds/windows/ColonyUnderGlass.exe'
+```
+
+`builds/` 已忽略，不进入版本控制。
+
 ## 当前限制
 
 - 只有两个直接相连区域、一个物种和固定参与者。
 - 湿度切片内生命周期冻结；完整生命周期只在独立调试场景中运行。
-- 没有觅食、资源消耗、命名、镜头跟随、存档、Steam、正式素材、音频或第三方插件。
-- 当前机器未配置 Windows Export Templates，因此不提供已验证的导出命令。
+- 名称、选择和个人行动记录不会跨“重新观察”保留。
+- 没有觅食、资源消耗、镜头跟随、直接命令个体、存档、Steam、正式素材、音频或第三方插件。
 
-发布候选的自动与人工检查记录见 `docs/validation/release_candidate_001.md`。
+v0.1 发布基线记录见 `docs/validation/v0.1_baseline_001.md`；M2 技术与人工检查边界见 `docs/validation/worker_identity_001.md`。
 
 开始修改前请阅读 `AGENTS.md`、`GDD.md` 和 `ARCHITECTURE.md`。`sucai/` 仅作内部观察参考，授权确认前不得作为发行素材。

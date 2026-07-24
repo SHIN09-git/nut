@@ -1,8 +1,8 @@
 # 《玻璃蚁国》技术架构
 
-> 文档版本：0.6｜更新日期：2026-07-23
+> 文档版本：0.7｜更新日期：2026-07-24
 >
-> 本文描述当前已经实现的湿度与幼体搬运切片。
+> 本文描述当前已经实现的湿度、幼体搬运与工蚁身份观察切片。
 
 ## 1. 固定技术决定
 
@@ -32,8 +32,9 @@ HabitatZoneState.humidity
     ↓
 更新观察稳定状态 → 校验所有权
     ↓ create_snapshot() 深复制
-ColonySnapshot / AntSnapshot / HabitatZoneSnapshot
+ColonySnapshot / AntSnapshot / HabitatZoneSnapshot / ObservationEvent
     ├── HabitatView
+    ├── PlayerAnnotationState → WorkerObservationPanel
     └── F3 DebugPanel
 ```
 
@@ -45,6 +46,7 @@ ColonySnapshot / AntSnapshot / HabitatZoneSnapshot
 - 把 UI 操作转换成无参数高层模拟命令。
 - 每个成功固定 Tick 后创建并交付一份快照。
 - 把快照交给 `HabitatView` 和调试 UI。
+- 协调 `HabitatView` 的选择请求、会话注释和 `WorkerObservationPanel` 投影。
 - 每个渲染帧把时钟插值系数交给 `HabitatView`。
 - 在完成快照允许时协调会话重置，但不重新读取 Resource、不替换时钟或逐只管理视觉节点。
 - 在模拟拒绝 Tick 时暂停并显示错误。
@@ -81,6 +83,7 @@ data/habitats/humidity_relocation_slice.tres
 - 两个 `HabitatZoneState`。
 - 已应用湿度调整次数。
 - 观察稳定 Tick 和观察记录解锁状态。
+- 会话内单调事件 ID 和最多 64 条的结构化观察事件历史。
 
 ### `HabitatZoneState`
 
@@ -103,6 +106,20 @@ DROPPING
 ```
 
 任务是预订与携带关系的唯一事实来源，保存来源区域、目标幼体、目标区域、当前携带幼体、阶段已用 Tick、阶段总 Tick 和下一次决策 Tick。
+
+### `ObservationEvent`
+
+模拟在搬运开始、开始拾取、开始携带、实际放下和观察首次完成时追加结构化值对象。每条事件只包含：
+
+- `event_id`
+- `tick`
+- `event_type`
+- `actor_entity_id`
+- `subject_entity_id`
+- `source_zone_id`
+- `target_zone_id`
+
+事件 ID 在单个会话内从 1 单调递增；同 Tick 事件沿现有稳定工蚁 ID 更新顺序追加。历史是容量 64 的 FIFO，只服务当前小型切片，不是通用事件总线。重开创建新的 `ColonyState`，清空历史并让新会话从事件 ID 1 开始。
 
 ## 5. 搬运决策
 
@@ -167,9 +184,9 @@ IDLE
 3. 应用并清空本 Tick 的湿度命令批次，湿度夹紧到有限的 0.0～1.0。
 4. 栖息地切片不推进生命周期；无栖息地的独立调试入口保持原生命周期流程。
 5. 按稳定工蚁 ID 校验、取消或重定向现有任务。
-6. 推进现有搬运状态机。
-7. 按稳定工蚁与幼体 ID 为到期的空闲工蚁分配任务。
-8. 更新观察记录稳定计数与解锁状态。
+6. 推进现有搬运状态机，并在跨越拾取、携带和放下边界时追加结构化事件。
+7. 按稳定工蚁与幼体 ID 为到期的空闲工蚁分配任务，并在任务开始时追加事件。
+8. 更新观察记录稳定计数与解锁状态；首次解锁时追加完成事件。
 9. 校验所有权不变量。
 10. 每个成功 Tick 后，由控制器立即创建并交付一份新快照。
 
@@ -182,8 +199,9 @@ IDLE
 - 一个 `ColonySnapshot`。
 - 每个区域对应的 `HabitatZoneSnapshot`，包括新的连接 ID 数组。
 - 每个实体对应的 `AntSnapshot`。
+- 有界结构化事件历史中每个 `ObservationEvent` 的副本。
 
-快照包含显示和诊断所需的区域、任务进度、派生预订／携带关系、补水门控与待处理状态、生命周期模式和观察状态，但不携带任何内部模型引用。修改快照字段、子对象或数组不会改变模拟。
+快照包含显示和诊断所需的区域、任务进度、派生预订／携带关系、补水门控与待处理状态、生命周期模式、观察状态和结构化事件，但不携带任何内部模型引用。修改快照字段、事件对象、子对象或数组不会改变模拟。
 
 ## 10. 显示层
 
@@ -200,8 +218,22 @@ IDLE
 - 相邻搬运状态共享连续端点，16× 与积压排空不会产生视觉回跳。
 - 重复快照不创建重复节点，完整快照中缺失的节点按明确规则移除。
 - 会话重置会清空快照端点和实体映射，解绑旧节点，然后允许新会话从 Tick 0 建立全新投影。
+- 鼠标命中使用当前插值后的 `AntView.position`；只接受工蚁，重叠时先选最近者，距离相同按稳定实体 ID。
+- `AntView` 只投影是否选中的静态轮廓，不拥有选择事实。
 
 普通 UI 不显示精确湿度、任务枚举、目标 ID 或生命周期倒计时。F3 诊断层读取相同快照并显示精确内部状态。
+
+### 会话身份层
+
+`PlayerAnnotationState` 是独立于权威模拟的会话对象：
+
+- 只保存当前选择的稳定工蚁 ID、可选名称、每只工蚁最近最多 5 条事件副本和事件消费游标。
+- 每次快照按 `event_id` 顺序消费所有新事件；重复快照按游标去重，ID 缺口被显式记录。
+- 选择实体消失或不再是工蚁时，清除对应选择、名称与历史。
+- `restart_session()` 的控制流程同时重置选择、全部名称、个人历史和消费游标。
+- 不持有 `AntModel`、`ColonyState` 或可写模拟引用，也不向模拟回写任何身份信息。
+
+`WorkerObservationPanel` 只读取所选 `AntSnapshot` 和过滤后的事件副本，显示自然语言当前行为与最近 4 条记录。名称提交只写入 `PlayerAnnotationState`。16× 时控制器仍在每个成功 Tick 后交付快照，因此同一渲染帧跨越的多条事件会依次被消费，而不是只保留最后一条。
 
 ## 11. 独立生命周期调试
 
@@ -224,12 +256,16 @@ ColonyViewAdapter
 - `tests/core/simulation_clock_test_suite.gd`
 - `tests/simulation/lifecycle_test_suite.gd`
 - `tests/simulation/humidity_relocation_test_suite.gd`
+- `tests/simulation/observation_event_test_suite.gd`
+- `tests/session/player_annotation_state_test_suite.gd`
 - `tests/view/view_adapter_test_suite.gd`
 - `tests/view/habitat_view_interpolation_test_suite.gd`
+- `tests/view/worker_observation_panel_test_suite.gd`
 - `tests/scenes/lifecycle_debug_scene_test_suite.gd`
 - `tests/scenes/humidity_main_scene_test_suite.gd`
+- `tests/scenes/worker_identity_scene_test_suite.gd`
 
-生命周期边界从 Resource 计算。湿度套件覆盖高层命令、配置冻结、确定性、任务选择、所有权、取消／重定向、补水后重评估、会话重置、1,000 Tick 防振荡、快照隔离、60～120 秒节奏和 10,000 Tick soak。场景测试覆盖真实按钮通关与连续两次重开路径；独立 View 套件覆盖插值、暂停、同 Tick、旧 Tick、状态边界连续性和 Tick 0 新会话投影，不绑定完整中文文案。
+生命周期边界从 Resource 计算。湿度套件覆盖高层命令、配置冻结、确定性、任务选择、所有权、取消／重定向、补水后重评估、会话重置、1,000 Tick 防振荡、快照隔离、60～120 秒节奏和 10,000 Tick soak。事件与身份套件覆盖单调唯一顺序、深复制、64 条上限、16× 多 Tick 批次、稳定选择、命名不改变完整模拟签名、所选工蚁过滤和连续两次重开清理。场景测试使用实际按钮和 `HabitatView` 鼠标输入路径，不绑定完整中文文案。
 
 标准命令：
 
@@ -246,4 +282,5 @@ ColonyViewAdapter
 - 湿度和行为数值是原型节奏参数，未经真实养蚁数据审校。
 - 只有两个直接相连区域、一个物种和固定参与者。
 - 生命周期调试与湿度切片是两个独立入口。
-- 没有觅食、资源消耗、命名、镜头、存档、随机行为、正式素材或外部插件。
+- 名称、选择和个人记录只存在于当前会话，重开后不保留。
+- 没有觅食、资源消耗、镜头、直接个体命令、存档、随机行为、正式素材或外部插件。

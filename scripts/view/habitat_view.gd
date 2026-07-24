@@ -1,6 +1,8 @@
 class_name HabitatView
 extends Control
 
+signal worker_selection_requested(entity_id: int)
+
 const ANT_VIEW_SCRIPT: Script = preload("res://scripts/view/ant_view.gd")
 
 const VIEW_MINIMUM_SIZE: Vector2 = Vector2(720.0, 360.0)
@@ -25,6 +27,7 @@ const CONDENSATION_COLOR: Color = Color(0.55, 0.82, 0.78, 0.48)
 const UNAVAILABLE_OVERLAY_COLOR: Color = Color(0.05, 0.055, 0.05, 0.56)
 const WORKER_BROOD_APPROACH_OFFSET: Vector2 = Vector2(13.0, -7.0)
 const CARRIED_BROOD_OFFSET: Vector2 = Vector2(-2.0, -17.0)
+const WORKER_SELECTION_RADIUS: float = 28.0
 
 const BROOD_SLOT_RATIOS: Array[Vector2] = [
 	Vector2(0.25, 0.66),
@@ -58,6 +61,7 @@ var _zone_ids: Array[StringName] = []
 var _zone_humidity: Dictionary[StringName, float] = {}
 var _zone_available: Dictionary[StringName, bool] = {}
 var _visuals_paused: bool = false
+var _selected_worker_id: int = -1
 
 @onready var _entity_layer: Node2D = %EntityLayer
 @onready var _queen_view: QueenView = %QueenView
@@ -77,6 +81,22 @@ func _notification(what: int) -> void:
 	if is_node_ready():
 		_recalculate_position_endpoints()
 		_layout_latest_snapshot()
+
+
+func _gui_input(event: InputEvent) -> void:
+	var mouse_event: InputEventMouseButton = event as InputEventMouseButton
+	if (
+		mouse_event == null
+		or not mouse_event.pressed
+		or mouse_event.button_index != MOUSE_BUTTON_LEFT
+	):
+		return
+
+	var worker_id: int = _find_worker_at_position(mouse_event.position)
+	if worker_id < 0:
+		return
+	worker_selection_requested.emit(worker_id)
+	accept_event()
 
 
 func apply_snapshot(snapshot: ColonySnapshot) -> bool:
@@ -127,6 +147,7 @@ func apply_snapshot(snapshot: ColonySnapshot) -> bool:
 
 	_queen_view.set_entity_id(snapshot.queen_entity_id)
 	_queen_view.set_simulation_tick(snapshot.simulation_tick)
+	_apply_selected_worker_projection()
 	_layout_latest_snapshot()
 	queue_redraw()
 	return true
@@ -148,6 +169,7 @@ func reset_projection() -> void:
 	_zone_humidity.clear()
 	_zone_available.clear()
 	_visuals_paused = false
+	_selected_worker_id = -1
 
 	if _queen_view != null:
 		_queen_view.set_entity_id(-1)
@@ -174,6 +196,19 @@ func set_interpolation_alpha(value: float) -> void:
 	_layout_latest_snapshot()
 
 
+func set_selected_worker_id(entity_id: int) -> bool:
+	var selected_worker_id: int = -1
+	if entity_id >= 0 and _is_selectable_worker(entity_id):
+		selected_worker_id = entity_id
+	_selected_worker_id = selected_worker_id
+	_apply_selected_worker_projection()
+	return selected_worker_id == entity_id
+
+
+func get_selected_worker_id() -> int:
+	return _selected_worker_id
+
+
 func get_ant_view(entity_id: int) -> AntView:
 	return _ant_views.get(entity_id)
 
@@ -184,6 +219,58 @@ func get_ant_view_count() -> int:
 
 func get_queen_view() -> QueenView:
 	return _queen_view
+
+
+func _find_worker_at_position(local_position: Vector2) -> int:
+	if _latest_snapshot == null:
+		return -1
+
+	var selection_radius_squared: float = (
+		WORKER_SELECTION_RADIUS * WORKER_SELECTION_RADIUS
+	)
+	var closest_distance_squared: float = selection_radius_squared
+	var closest_entity_id: int = -1
+	for ant: AntSnapshot in _latest_snapshot.ants:
+		if ant.life_stage != AntModel.LifeStage.WORKER:
+			continue
+		var ant_view: AntView = _ant_views.get(ant.entity_id)
+		if ant_view == null:
+			continue
+		var distance_squared: float = ant_view.position.distance_squared_to(
+			local_position
+		)
+		if (
+			distance_squared < closest_distance_squared
+			or (
+				is_equal_approx(distance_squared, closest_distance_squared)
+				and (
+					closest_entity_id < 0
+					or ant.entity_id < closest_entity_id
+				)
+			)
+		):
+			closest_distance_squared = distance_squared
+			closest_entity_id = ant.entity_id
+	return closest_entity_id
+
+
+func _is_selectable_worker(entity_id: int) -> bool:
+	if _latest_snapshot == null or not _ant_views.has(entity_id):
+		return false
+	var ant: AntSnapshot = _latest_snapshot.find_ant(entity_id)
+	return ant != null and ant.life_stage == AntModel.LifeStage.WORKER
+
+
+func _apply_selected_worker_projection() -> void:
+	if (
+		_selected_worker_id >= 0
+		and not _is_selectable_worker(_selected_worker_id)
+	):
+		_selected_worker_id = -1
+	for entity_id: int in _ant_views:
+		_ant_views[entity_id].set_selected(
+			entity_id == _selected_worker_id
+		)
 
 
 func _update_position_endpoints(snapshot: ColonySnapshot) -> void:

@@ -18,6 +18,7 @@ var water_action_count: int = 0
 var water_target_comfortable: bool = false
 var observation_stable_ticks: int = 0
 var brood_humidity_observation_unlocked: bool = false
+var observation_events: Array[ObservationEvent] = []
 
 
 func count_stage(stage: AntModel.LifeStage) -> int:
