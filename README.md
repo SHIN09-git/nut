@@ -114,4 +114,6 @@ New-Item -ItemType Directory -Force -Path '.\builds\windows'
 
 v0.1 发布基线见 `docs/validation/v0.1_baseline_001.md`；M2 身份验证见 `docs/validation/worker_identity_001.md`；M3 糖水验证见 `docs/validation/sugar_foraging_001.md`；M4 连续体验验证见 `docs/validation/v0_2_combined_001.md`。
 
+未来 3～4 小时完整独立游戏的章节、存档、设施、UI、音画、验证与发行路线见 `CODEX_V1_MASTER_PLAN.md`。该计划不表示未来能力已经实现；当前可运行事实仍以本 README、`GDD.md` 和 `ARCHITECTURE.md` 为准。
+
 开始修改前请阅读 `AGENTS.md`、`GDD.md` 和 `ARCHITECTURE.md`。`sucai/` 仅作内部观察参考，授权确认前不得作为发行素材。
