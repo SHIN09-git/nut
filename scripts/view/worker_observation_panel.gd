@@ -178,6 +178,12 @@ func _describe_event(event_type: ObservationEvent.Type) -> String:
 			return "群落的糖水觅食观察已经完成。"
 		ObservationEvent.Type.FORAGING_TASK_CANCELLED:
 			return "环境变化后放弃了这次觅食。"
+		ObservationEvent.Type.FIRST_WORKER_EMERGED:
+			return "从晚期蛹羽化为第一只工蚁。"
+		ObservationEvent.Type.IDENTITY_OBSERVATION_COMPLETED:
+			return "成为本局持续观察的工蚁个体。"
+		ObservationEvent.Type.OBSERVATION_SESSION_COMPLETED:
+			return "参与完成了本局连续观察。"
 		_:
 			return "发生了一次新的行为。"
 

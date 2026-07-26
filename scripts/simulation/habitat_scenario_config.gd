@@ -17,6 +17,7 @@ var nest_zone_id: StringName
 var sugar_placement_zone_id: StringName
 var sugar_portions: int
 var foraging_observation_card_id: StringName
+var sequence_config: ScenarioSequenceConfig
 
 
 static func from_data(
@@ -53,6 +54,12 @@ static func from_data(
 	config.foraging_observation_card_id = (
 		scenario_data.foraging_observation_card_id
 	)
+	if scenario_data.sequence_data != null:
+		config.sequence_config = ScenarioSequenceConfig.from_data(
+			scenario_data.sequence_data
+		)
+		if config.sequence_config == null:
+			return null
 	return config
 
 
@@ -68,3 +75,18 @@ func is_sugar_foraging() -> bool:
 		scenario_kind
 		== HabitatScenarioData.ScenarioKind.SUGAR_FORAGING
 	)
+
+
+func is_combined_observation() -> bool:
+	return (
+		scenario_kind
+		== HabitatScenarioData.ScenarioKind.COMBINED_OBSERVATION
+	)
+
+
+func supports_humidity_relocation() -> bool:
+	return is_humidity_relocation() or is_combined_observation()
+
+
+func supports_sugar_foraging() -> bool:
+	return is_sugar_foraging() or is_combined_observation()

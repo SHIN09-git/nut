@@ -1,0 +1,49 @@
+[gd_resource type="Resource" script_class="HabitatScenarioData" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/habitat_scenario_data.gd" id="1_scenario"]
+[ext_resource type="Script" path="res://scripts/core/habitat_zone_data.gd" id="2_zone"]
+[ext_resource type="Resource" path="res://data/behaviors/sugar_foraging_prototype.tres" id="3_foraging"]
+[ext_resource type="Resource" path="res://data/habitats/combined_observation_sequence.tres" id="4_sequence"]
+
+[sub_resource type="Resource" id="Resource_nursery_zone"]
+script = ExtResource("2_zone")
+zone_id = &"nursery_chamber"
+initial_humidity = 0.3
+connected_zone_ids = Array[StringName]([&"resting_chamber"])
+available = true
+
+[sub_resource type="Resource" id="Resource_resting_zone"]
+script = ExtResource("2_zone")
+zone_id = &"resting_chamber"
+initial_humidity = 0.5
+connected_zone_ids = Array[StringName]([&"nursery_chamber", &"foraging_area"])
+available = true
+
+[sub_resource type="Resource" id="Resource_foraging_zone"]
+script = ExtResource("2_zone")
+zone_id = &"foraging_area"
+initial_humidity = 0.5
+connected_zone_ids = Array[StringName]([&"resting_chamber"])
+available = true
+
+[resource]
+script = ExtResource("1_scenario")
+scenario_id = &"combined_observation_slice"
+scenario_kind = 2
+data_status = &"prototype_pacing_fixture"
+scientifically_validated = false
+zones = Array[ExtResource("2_zone")]([SubResource("Resource_nursery_zone"), SubResource("Resource_resting_zone"), SubResource("Resource_foraging_zone")])
+initial_worker_count = 0
+initial_brood_count = 5
+initial_brood_stage = 1
+initial_worker_zone_id = &"nursery_chamber"
+initial_brood_zone_id = &"nursery_chamber"
+humidity_adjustment_zone_id = &"nursery_chamber"
+humidity_adjustment_amount = 0.1
+observation_stable_ticks = 30
+foraging_data = ExtResource("3_foraging")
+nest_zone_id = &"nursery_chamber"
+sugar_placement_zone_id = &"foraging_area"
+sugar_portions = 1
+foraging_observation_card_id = &"sugar_return_and_share"
+sequence_data = ExtResource("4_sequence")

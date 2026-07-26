@@ -1,40 +1,30 @@
 # Colony Under Glass
 
-《玻璃蚁国》的 Godot 4.7.1 灰盒。默认入口仍是约 60～120 秒的湿度与幼体搬运切片；仓库另提供独立糖水觅食场景，用来验证“放置环境资源 → 工蚁自主发现 → 采集 → 返巢分享”。
+《玻璃蚁国》的 Godot 4.7.1 灰盒。默认入口是一局连续观察：见证第一只工蚁羽化，选择并可选命名它，通过补水观察幼体搬运，再放置糖水观察自主觅食，最后解锁三张观察卡并重新开始。
 
 ## 当前功能
 
-- 主场景直接生成 1 只蚁后、3 只工蚁、6 个幼体和两个相连巢室。
-- 模拟以 0.1 秒固定 Tick 推进，支持暂停、1×、4×、16×；倍速不改变 Tick 边界。
-- 左室补水是模拟拥有的无参数高层动作；目标和单次水量来自启动时冻结的场景配置，并在下一固定 Tick 开始时应用。
-- 工蚁使用确定性的 `IDLE → MOVING_TO_BROOD → PICKING_UP → CARRYING_TO_ZONE → DROPPING` 状态机。
-- 幼体预订、携带和区域归属保持单一所有权；目标失效时任务会安全取消或重定向。
-- `HabitatView` 只读快照，按稳定实体 ID 维护视觉节点；幼体在携带时跟随对应工蚁，位置由相邻固定 Tick 的任务进度插值而非独立 Tween 产生。
-- 玩家可以直接点击画面中的工蚁，使用静态轮廓持续辨认同一稳定个体；可选名称只保存在当前会话。
-- 个体观察面板显示所选工蚁的自然语言当前行为和最近 4 条结构化行动记录，不显示内部实体或事件 ID。
-- 模拟输出会话内单调、容量 64 的结构化观察事件；即使 16× 一帧跨越多个 Tick，界面也按事件游标依次消费而不只保留最后一条。
-- 普通视图不显示精确湿度、内部任务、目标 ID 或生命周期倒计时。
-- F3 诊断层显示 Tick、速度、左右室精确湿度、工蚁任务、目标、携带、预订和活跃搬运数。
-- 玩家完成补水且群落连续稳定后，由模拟解锁观察记录。
-- 解锁后界面显示明确的“观察完成”状态；“重新观察”会从同一份冻结配置恢复 Tick 0、1×、未暂停和初始实体，不继承旧命令、视觉节点、选择、名称或个人行动记录。
-- 湿度场景通过快照明确标记生命周期不适用，不把预置幼体计为蚁后产卵。
-- 生命周期试管展示保留为独立调试场景，不再是默认入口。
-- 独立糖水场景生成 1 只蚁后、3 只工蚁，以及巢室、出入口、觅食区三个相连区域。
-- 玩家使用两步操作放置糖水：先启用工具，再点击右侧觅食区；模拟只接收无参数命令，并在下一固定 Tick 按冻结配置创建食物源。
-- 工蚁通过确定性 `IDLE → SEEKING_FOOD → MOVING_TO_FOOD → COLLECTING → RETURNING_TO_NEST → SHARING` 状态机自主完成任务，玩家不能指定执行者。
-- 一份糖水只有一个预订者或携带者；分享后解锁观察记录，不产生资源条、饥饿或经济。
-- `GameSnapshot` 分离群落、场景工具状态和观察记录；糖水 View 只读快照并按稳定实体 ID 复用节点。
+- 默认场景使用同一份权威群落状态和同一个 0.1 秒固定 Tick 时钟连续推进五个阶段：建群序幕、认识个体、湿度观察、糖水觅食、观察总结。
+- 第一只工蚁以晚期蛹开始；羽化后保持同一个稳定实体 ID 和同一个 `AntView`，继续参与幼体搬运和糖水觅食。
+- 玩家可以点击工蚁持续观察，并为当前会话中的个体设置可选名称；选择和名称不改变模拟快照。
+- 补水、继续观察和放置糖水都是无参数高层命令，在下一连续固定 Tick 开始时按冻结配置应用。
+- 幼体搬运使用确定性的五状态行为；预订、区域归属和携带关系始终保持单一所有权。
+- 糖水觅食使用确定性的发现、移动、采集、返巢和分享流程；玩家不能指定执行者。
+- `ScenarioDirector` 只编排这五个固定阶段，不是通用关卡脚本系统；阶段转换属于权威模拟状态。
+- `GameSnapshot` 分离群落、场景工具、观察记录和连续阶段；UI 与 View 只读取快照。
+- 普通视图不显示精确湿度、内部任务枚举、目标 ID 或生命周期倒计时；F3 打开诊断层。
+- 支持暂停、1×、4×、16×；倍速只改变现实时间内处理的 Tick 数，不改变单 Tick 语义。
+- 完成后可立即重新开始；重开会清除旧命令、阶段、资源、观察卡、名称、选择、事件游标和视觉映射。
+- 旧的双室湿度切片、独立糖水切片和完整生命周期试管场景仍可单独启动，用于回归与调试。
 
-当前所有物种、湿度和行为参数都是 `prototype_pacing_fixture`，未经科学验证。数据事实来源只有：
+当前所有物种、湿度和行为参数都是 `prototype_pacing_fixture`，未经科学验证。影响当前连续体验的配置事实来源包括：
 
 - `data/species/species_a.tres`
-- `data/habitats/humidity_relocation_slice.tres`
-- `data/habitats/sugar_foraging_slice.tres`
+- `data/habitats/combined_observation_slice.tres`
+- `data/habitats/combined_observation_sequence.tres`
 - `data/behaviors/sugar_foraging_prototype.tres`
 
-发布候选检查与验收标准见 `ROADMAP.md`；GDD 与架构文档只描述已经实现的能力。
-
-测试会从这些 Resource 计算节奏边界，不在生产代码或文档中复制生命周期 Tick。
+旧独立场景继续使用各自的 `.tres` 配置。测试从 Resource 计算节奏边界，不在生产代码或文档中复制生命周期 Tick。
 
 ## 运行
 
@@ -44,73 +34,60 @@
 & '.\Godot_v4.7.1-stable_win64_console.exe' --editor --path .
 ```
 
-直接运行默认湿度切片：
+运行默认连续观察：
 
 ```powershell
 & '.\Godot_v4.7.1-stable_win64_console.exe' --path .
 ```
 
-单独运行生命周期调试场景：
+运行保留场景：
 
 ```powershell
-& '.\Godot_v4.7.1-stable_win64_console.exe' --path . --scene 'res://scenes/debug/lifecycle_debug.tscn'
-```
+# 双室湿度切片
+& '.\Godot_v4.7.1-stable_win64_console.exe' `
+  --path . `
+  --scene 'res://scenes/main/main.tscn'
 
-单独运行糖水觅食切片：
-
-```powershell
+# 独立糖水切片
 & '.\Godot_v4.7.1-stable_win64_console.exe' `
   --path . `
   --scene 'res://scenes/foraging/sugar_foraging.tscn'
+
+# 完整生命周期调试
+& '.\Godot_v4.7.1-stable_win64_console.exe' `
+  --path . `
+  --scene 'res://scenes/debug/lifecycle_debug.tscn'
 ```
 
 ## 操作
 
-### 默认湿度切片
+### 默认连续观察
 
-- 先观察工蚁完成第一次幼体搬运，随后“给左室补水”按钮会开放。
-- 正常流程分 3 次少量补水。
-- 点击任一工蚁可持续观察它；名称为可选项，留空保存会清除名称。
-- 个体观察面板会跟随所选工蚁更新当前行为，并保留最近 4 条行动。
-- 使用“暂停”、`1×`、`4×`、`16×` 控制观察节奏。
-- 按 F3 显示或隐藏诊断层。
-- 观察记录解锁后，使用“重新观察”立即开始一局干净的新会话。
+- 等待晚期蛹羽化，点击第一只工蚁；命名是可选步骤。
+- 点击“继续观察环境”进入湿度阶段。
+- 先观察第一次幼体搬运；补水开放后分三次给育幼室少量补水。
+- 湿度观察卡解锁后，点击“准备放置糖水”，再点击右侧觅食区。
+- 观察同一只工蚁发现、采集、返巢和分享；三张观察卡完成后可重新开始。
+- 使用“暂停”、`1×`、`4×`、`16×` 控制节奏；按 F3 显示或隐藏诊断层。
 
-主视图提供环境和行为线索，但不会直接提示“湿度过低”。
-
-### 独立糖水切片
-
-- 点击“准备放置糖水”启用工具。
-- 点击右侧觅食区完成提交；点击其他区域或按 Esc 取消。
-- 命令提交后，糖水在下一固定 Tick 出现。
-- 不需要也不能指定工蚁；观察哪只工蚁最先改变行动。
-- 可继续选择、命名工蚁并查看它最近的行动。
-- 暂停、1×、4×、16× 和 F3 与默认切片一致。
-- 分享完成后使用“重新观察”开始干净的新会话。
+主视图给出环境和行为线索，但不会直接提示“湿度过低”，也不会让玩家直接命令某只工蚁。
 
 ## 测试
 
-`tests/test_runner.gd` 是唯一顶层入口，聚合固定时钟、生命周期、湿度搬运黄金回归、糖水觅食、结构化事件、会话注释、快照／View 映射及场景测试：
-
-```powershell
-& '.\Godot_v4.7.1-stable_win64_console.exe' --headless --path . --script 'res://tests/test_runner.gd'
-```
-
-脚本解析和主场景冒烟：
-
-```powershell
-& '.\Godot_v4.7.1-stable_win64_console.exe' --headless --editor --path . --quit
-& '.\Godot_v4.7.1-stable_win64_console.exe' --headless --path . --quit-after 30
-```
-
-独立糖水场景冒烟：
+`tests/test_runner.gd` 是唯一顶层入口，聚合固定时钟、生命周期、湿度搬运、糖水觅食、连续场景编排、结构化事件、会话注释、快照隔离、View 映射和真实 UI 路径测试：
 
 ```powershell
 & '.\Godot_v4.7.1-stable_win64_console.exe' `
   --headless `
   --path . `
-  --scene 'res://scenes/foraging/sugar_foraging.tscn' `
-  --quit-after 30
+  --script 'res://tests/test_runner.gd'
+```
+
+脚本解析和默认主场景冒烟：
+
+```powershell
+& '.\Godot_v4.7.1-stable_win64_console.exe' --headless --editor --path . --quit
+& '.\Godot_v4.7.1-stable_win64_console.exe' --headless --path . --quit-after 30
 ```
 
 ## Windows 导出
@@ -130,12 +107,11 @@ New-Item -ItemType Directory -Force -Path '.\builds\windows'
 
 ## 当前限制
 
-- 默认入口仍是湿度切片；糖水切片是独立场景，尚未组合为 M4 的连续体验。
-- 糖水场景固定为三个区域、三只工蚁、一个食物源和一份糖水。
-- 湿度切片内生命周期冻结；完整生命周期只在独立调试场景中运行。
-- 名称、选择和个人行动记录不会跨“重新观察”保留。
-- 没有蛋白质、饥饿、能量、资源经济、多食物点、自由地图、镜头跟随、直接命令个体、存档、Steam、正式素材、音频或第三方插件。
+- 当前冻结节奏的无停顿自动流程在 Tick 586，即 58.6 模拟秒完成；它已验证连续因果链，但尚未达到 v0.2 计划中的 12～15 分钟外部试玩目标。不会用无信息等待填充时长。
+- 连续场景只受控推进一只晚期蛹；完整卵、幼虫、蛹、工蚁生命周期仍只在独立调试场景运行。
+- 名称、选择和个人行动记录不会跨“重新开始”或跨程序会话保存。
+- 尚无蛋白质、饥饿、能量、资源经济、多食物点、自由地图、设施建造、镜头跟随、存档、Steam、正式素材、音频或第三方插件。
 
-v0.1 发布基线记录见 `docs/validation/v0.1_baseline_001.md`；M2 技术与人工检查边界见 `docs/validation/worker_identity_001.md`；M3 验证见 `docs/validation/sugar_foraging_001.md`。
+v0.1 发布基线见 `docs/validation/v0.1_baseline_001.md`；M2 身份验证见 `docs/validation/worker_identity_001.md`；M3 糖水验证见 `docs/validation/sugar_foraging_001.md`；M4 连续体验验证见 `docs/validation/v0_2_combined_001.md`。
 
 开始修改前请阅读 `AGENTS.md`、`GDD.md` 和 `ARCHITECTURE.md`。`sucai/` 仅作内部观察参考，授权确认前不得作为发行素材。

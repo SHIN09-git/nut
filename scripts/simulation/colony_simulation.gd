@@ -1,6 +1,8 @@
 class_name ColonySimulation
 extends RefCounted
 
+const HUMIDITY_EPSILON: float = 0.000001
+
 signal egg_laid(entity_id: int, simulation_tick: int)
 signal life_stage_changed(
 	entity_id: int,
@@ -12,6 +14,7 @@ signal life_stage_changed(
 enum PendingCommandType {
 	WATER_ACTION,
 	PLACE_SUGAR_ACTION,
+	CONTINUE_OBSERVATION_ACTION,
 }
 
 var _lifecycle_config: LifecycleConfig
@@ -19,6 +22,7 @@ var _brood_care_config: BroodCareConfig
 var _habitat_config: HabitatScenarioConfig
 var _brood_relocation_system: BroodRelocationSystem
 var _foraging_system: ForagingSystem
+var _scenario_director: ScenarioDirector
 var _state: ColonyState
 var _pending_commands: Array[int] = []
 var _configuration_error: String = ""
@@ -48,6 +52,14 @@ func _init(
 			"ColonySimulation requires valid HabitatScenarioData"
 		)
 		return
+	if (
+		_habitat_config.is_combined_observation()
+		and not _has_viable_combined_humidity_loop()
+	):
+		_configuration_error = (
+			"Combined observation humidity loop is not completable"
+		)
+		return
 
 	_brood_relocation_system = BroodRelocationSystem.new(
 		_brood_care_config
@@ -58,7 +70,7 @@ func _init(
 		)
 		return
 
-	if _habitat_config.is_sugar_foraging():
+	if _habitat_config.supports_sugar_foraging():
 		_foraging_system = ForagingSystem.new(
 			_habitat_config.foraging_config,
 			_habitat_config
@@ -71,12 +83,25 @@ func _init(
 
 	if not _state.initialize_habitat(
 		_habitat_config,
-		_brood_care_config
+		_brood_care_config,
+		_lifecycle_config
 	):
 		_configuration_error = (
 			"ColonySimulation could not initialize habitat state"
 		)
 		return
+	if _habitat_config.is_combined_observation():
+		_scenario_director = ScenarioDirector.new(
+			_habitat_config.sequence_config,
+			_lifecycle_config,
+			_brood_care_config,
+			_habitat_config
+		)
+		if not _scenario_director.is_ready():
+			_configuration_error = (
+				"ColonySimulation could not initialize scenario director"
+			)
+			return
 	if not has_valid_habitat_ownership():
 		_configuration_error = "Initial habitat ownership is invalid"
 
@@ -107,6 +132,15 @@ func submit_place_sugar_action() -> bool:
 	return true
 
 
+func submit_continue_observation_action() -> bool:
+	if not _is_continue_observation_action_available():
+		return false
+	_pending_commands.append(
+		PendingCommandType.CONTINUE_OBSERVATION_ACTION
+	)
+	return true
+
+
 func restart_session() -> bool:
 	if not is_ready():
 		return false
@@ -115,7 +149,8 @@ func restart_session() -> bool:
 	if has_habitat():
 		if not initial_state.initialize_habitat(
 			_habitat_config,
-			_brood_care_config
+			_brood_care_config,
+			_lifecycle_config
 		):
 			return false
 		if not _has_valid_habitat_ownership(initial_state):
@@ -137,17 +172,32 @@ func advance_tick(tick_index: int) -> bool:
 		return true
 
 	_apply_pending_commands()
+	if _scenario_director != null:
+		var lifecycle_change: Dictionary = (
+			_scenario_director.advance_controlled_lifecycle(_state)
+		)
+		if not lifecycle_change.is_empty():
+			life_stage_changed.emit(
+				int(lifecycle_change["entity_id"]),
+				int(lifecycle_change["previous_stage"]),
+				int(lifecycle_change["current_stage"]),
+				_state.simulation_tick
+			)
+
 	_brood_relocation_system.validate_tasks(_state)
 	if _foraging_system != null:
 		_foraging_system.validate_tasks(_state)
 	_brood_relocation_system.advance_tasks(_state)
 	if _foraging_system != null:
 		_foraging_system.advance_tasks(_state)
-	_brood_relocation_system.assign_idle_workers(_state)
-	if _foraging_system != null:
+	if _should_assign_brood_relocation():
+		_brood_relocation_system.assign_idle_workers(_state)
+	if _should_assign_foraging():
 		_foraging_system.assign_idle_workers(_state)
-	if _habitat_config.is_humidity_relocation():
+	if _should_update_humidity_observation():
 		_update_observation_record()
+	if _scenario_director != null:
+		_scenario_director.update_after_systems(_state)
 	if not has_valid_habitat_ownership():
 		_configuration_error = (
 			"Habitat ownership invariant failed at Tick %d"
@@ -177,7 +227,7 @@ func create_snapshot() -> ColonySnapshot:
 	snapshot.humidity_adjustment_count = _state.humidity_adjustment_count
 	snapshot.water_action_unlocked = (
 		_state.water_action_unlocked
-		if _is_humidity_relocation_scenario()
+		if _supports_humidity_relocation()
 		else false
 	)
 	snapshot.water_action_pending = _has_pending_command(
@@ -185,19 +235,19 @@ func create_snapshot() -> ColonySnapshot:
 	)
 	snapshot.water_action_count = (
 		_state.humidity_adjustment_count
-		if _is_humidity_relocation_scenario()
+		if _supports_humidity_relocation()
 		else 0
 	)
 	snapshot.water_target_comfortable = _is_water_target_comfortable()
 	snapshot.water_action_available = _is_water_action_available()
 	snapshot.observation_stable_ticks = (
 		_state.observation_stable_ticks
-		if _is_humidity_relocation_scenario()
+		if _supports_humidity_relocation()
 		else 0
 	)
 	snapshot.brood_humidity_observation_unlocked = (
 		_state.brood_humidity_observation_unlocked
-		if _is_humidity_relocation_scenario()
+		if _supports_humidity_relocation()
 		else false
 	)
 	snapshot.observation_events = _state.copy_observation_events()
@@ -291,7 +341,7 @@ func create_snapshot() -> ColonySnapshot:
 
 
 func create_game_snapshot() -> GameSnapshot:
-	if not is_ready() or not _is_sugar_foraging_scenario():
+	if not is_ready() or not _supports_sugar_foraging():
 		return null
 
 	var place_action_pending: bool = _has_pending_command(
@@ -324,11 +374,20 @@ func create_game_snapshot() -> GameSnapshot:
 			_state.copy_unlocked_observation_card_ids()
 		)
 	)
+	var sequence_snapshot: ScenarioSequenceSnapshot
+	if _scenario_director != null:
+		sequence_snapshot = _scenario_director.create_snapshot(
+			_state,
+			_has_pending_command(
+				PendingCommandType.CONTINUE_OBSERVATION_ACTION
+			)
+		)
 	return GameSnapshot.new(
 		_state.simulation_tick,
 		create_snapshot(),
 		scenario_snapshot,
-		observation_snapshot
+		observation_snapshot,
+		sequence_snapshot
 	)
 
 
@@ -387,6 +446,11 @@ func _has_valid_habitat_ownership(state: ColonyState) -> bool:
 		and not _foraging_system.has_valid_ownership(state)
 	):
 		return false
+	if (
+		_scenario_director != null
+		and not _scenario_director.has_valid_state(state)
+	):
+		return false
 	return true
 
 
@@ -402,10 +466,15 @@ func _apply_pending_commands() -> void:
 					_foraging_system.apply_configured_sugar_placement(
 						_state
 					)
+			PendingCommandType.CONTINUE_OBSERVATION_ACTION:
+				if _scenario_director != null:
+					_scenario_director.apply_identity_continue_action(
+						_state
+					)
 
 
 func _apply_water_action() -> void:
-	if not _is_humidity_relocation_scenario():
+	if not _supports_humidity_relocation():
 		return
 	var zone: HabitatZoneState = _state.get_zone(
 		_habitat_config.humidity_adjustment_zone_id
@@ -478,8 +547,47 @@ func _is_sugar_foraging_scenario() -> bool:
 	)
 
 
+func _supports_humidity_relocation() -> bool:
+	return (
+		is_ready()
+		and has_habitat()
+		and _habitat_config.supports_humidity_relocation()
+	)
+
+
+func _supports_sugar_foraging() -> bool:
+	return (
+		is_ready()
+		and has_habitat()
+		and _habitat_config.supports_sugar_foraging()
+	)
+
+
+func _should_assign_brood_relocation() -> bool:
+	if _is_humidity_relocation_scenario():
+		return true
+	return (
+		_scenario_director != null
+		and _scenario_director.is_humidity_phase_active(_state)
+	)
+
+
+func _should_assign_foraging() -> bool:
+	if _is_sugar_foraging_scenario():
+		return _foraging_system != null
+	return (
+		_foraging_system != null
+		and _scenario_director != null
+		and _scenario_director.is_foraging_phase_active(_state)
+	)
+
+
+func _should_update_humidity_observation() -> bool:
+	return _should_assign_brood_relocation()
+
+
 func _is_water_target_comfortable() -> bool:
-	if not _is_humidity_relocation_scenario():
+	if not _supports_humidity_relocation():
 		return false
 	var target_zone: HabitatZoneState = _state.get_zone(
 		_habitat_config.humidity_adjustment_zone_id
@@ -494,7 +602,11 @@ func _is_water_target_comfortable() -> bool:
 
 func _is_water_action_available() -> bool:
 	if (
-		not _is_humidity_relocation_scenario()
+		not _supports_humidity_relocation()
+		or (
+			_scenario_director != null
+			and not _scenario_director.is_humidity_phase_active(_state)
+		)
 		or not _state.water_action_unlocked
 		or _has_pending_command(PendingCommandType.WATER_ACTION)
 		or _state.brood_humidity_observation_unlocked
@@ -509,8 +621,12 @@ func _is_water_action_available() -> bool:
 
 func _is_place_sugar_action_available() -> bool:
 	if (
-		not _is_sugar_foraging_scenario()
+		not _supports_sugar_foraging()
 		or _foraging_system == null
+		or (
+			_scenario_director != null
+			and not _scenario_director.is_foraging_phase_active(_state)
+		)
 		or _has_pending_command(PendingCommandType.PLACE_SUGAR_ACTION)
 		or _state.total_sugar_portions_placed > 0
 		or _state.unlocked_observation_card_ids.has(
@@ -524,8 +640,104 @@ func _is_place_sugar_action_available() -> bool:
 	return placement_zone != null and placement_zone.available
 
 
+func _is_continue_observation_action_available() -> bool:
+	return (
+		is_ready()
+		and _scenario_director != null
+		and not _has_pending_command(
+			PendingCommandType.CONTINUE_OBSERVATION_ACTION
+		)
+		and _scenario_director.is_identity_continue_available(_state)
+	)
+
+
 func _has_pending_command(command_type: int) -> bool:
 	return _pending_commands.has(command_type)
+
+
+func _has_viable_combined_humidity_loop() -> bool:
+	if _habitat_config == null or _brood_care_config == null:
+		return false
+	var source_zone: HabitatZoneState
+	for zone: HabitatZoneState in _habitat_config.zones:
+		if zone.zone_id == _habitat_config.initial_brood_zone_id:
+			source_zone = zone
+			break
+	if source_zone == null or not source_zone.available:
+		return false
+
+	var source_penalty: float = _get_brood_humidity_penalty(
+		source_zone.humidity
+	)
+	var best_destination: HabitatZoneState
+	var best_penalty: float = INF
+	for candidate: HabitatZoneState in _habitat_config.zones:
+		if (
+			not candidate.available
+			or candidate.zone_id == source_zone.zone_id
+			or not source_zone.can_reach(candidate.zone_id)
+		):
+			continue
+		var candidate_penalty: float = _get_brood_humidity_penalty(
+			candidate.humidity
+		)
+		if (
+			source_penalty - candidate_penalty
+			+ HUMIDITY_EPSILON
+			< _brood_care_config.relocation_min_improvement
+		):
+			continue
+		if (
+			best_destination == null
+			or candidate_penalty < best_penalty
+			or (
+				is_equal_approx(candidate_penalty, best_penalty)
+				and String(candidate.zone_id)
+					< String(best_destination.zone_id)
+			)
+		):
+			best_destination = candidate
+			best_penalty = candidate_penalty
+	if best_destination == null:
+		return false
+
+	var watered_humidity: float = source_zone.humidity
+	var water_action_count: int = 0
+	while (
+		water_action_count < 4
+		and not _is_brood_humidity_comfortable(watered_humidity)
+	):
+		watered_humidity = clampf(
+			watered_humidity + _habitat_config.humidity_adjustment_amount,
+			0.0,
+			1.0
+		)
+		water_action_count += 1
+	if not _is_brood_humidity_comfortable(watered_humidity):
+		return false
+
+	return (
+		best_penalty
+		+ HUMIDITY_EPSILON
+		>= _brood_care_config.relocation_min_improvement
+	)
+
+
+func _get_brood_humidity_penalty(humidity: float) -> float:
+	if humidity < _brood_care_config.brood_humidity_min:
+		return _brood_care_config.brood_humidity_min - humidity
+	if humidity > _brood_care_config.brood_humidity_max:
+		return humidity - _brood_care_config.brood_humidity_max
+	return 0.0
+
+
+func _is_brood_humidity_comfortable(humidity: float) -> bool:
+	return (
+		humidity + HUMIDITY_EPSILON
+			>= _brood_care_config.brood_humidity_min
+		and humidity - HUMIDITY_EPSILON
+			<= _brood_care_config.brood_humidity_max
+	)
 
 
 func _update_existing_ants() -> void:

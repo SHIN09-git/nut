@@ -16,6 +16,7 @@ var brood_humidity_observation_unlocked: bool = false
 var shared_sugar_portions: int = 0
 var total_sugar_portions_placed: int = 0
 var unlocked_observation_card_ids: Dictionary[StringName, bool] = {}
+var scenario_progress: ScenarioProgressState
 var _next_entity_id: int = 1
 var _next_observation_event_id: int = 1
 var _observation_events: Array[ObservationEvent] = []
@@ -35,13 +36,43 @@ func create_egg() -> AntModel:
 
 func initialize_habitat(
 	config: HabitatScenarioConfig,
-	brood_care_config: BroodCareConfig
+	brood_care_config: BroodCareConfig,
+	lifecycle_config: LifecycleConfig = null
 ) -> bool:
 	if config == null or brood_care_config == null or not ants.is_empty():
 		return false
 
 	for zone: HabitatZoneState in config.zones:
 		zones.append(zone.duplicate_state())
+
+	if config.is_combined_observation():
+		if (
+			lifecycle_config == null
+			or config.sequence_config == null
+			or (
+				config.sequence_config.first_worker_initial_pupa_age_ticks
+				>= lifecycle_config.pupa_duration_ticks
+			)
+		):
+			return false
+		var first_worker_pupa: AntModel = AntModel.new(
+			_next_entity_id,
+			AntModel.LifeStage.PUPA
+		)
+		_next_entity_id += 1
+		first_worker_pupa.configure_brood(
+			config.initial_brood_zone_id,
+			-brood_care_config.minimum_zone_dwell_ticks
+		)
+		first_worker_pupa.stage_age_ticks = (
+			config.sequence_config.first_worker_initial_pupa_age_ticks
+		)
+		first_worker_pupa.total_age_ticks = first_worker_pupa.stage_age_ticks
+		ants.append(first_worker_pupa)
+		scenario_progress = ScenarioProgressState.new()
+		scenario_progress.first_worker_entity_id = (
+			first_worker_pupa.entity_id
+		)
 
 	for worker_index: int in config.initial_worker_count:
 		var worker: AntModel = AntModel.new(

@@ -1,0 +1,71 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/view/combined_habitat_view.gd" id="1_habitat"]
+[ext_resource type="Script" path="res://scripts/view/queen_view.gd" id="2_queen"]
+
+[node name="CombinedHabitat" type="Control"]
+custom_minimum_size = Vector2(720, 350)
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+script = ExtResource("1_habitat")
+
+[node name="EntityLayer" type="Node2D" parent="."]
+unique_name_in_owner = true
+
+[node name="QueenView" type="Node2D" parent="EntityLayer"]
+unique_name_in_owner = true
+script = ExtResource("2_queen")
+
+[node name="OverlayLayer" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="NurseryZoneLabel" type="Label" parent="OverlayLayer"]
+unique_name_in_owner = true
+offset_right = 112.0
+offset_bottom = 24.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.82, 0.78, 0.63, 0.9)
+theme_override_font_sizes/font_size = 13
+text = "育幼室"
+
+[node name="RestingZoneLabel" type="Label" parent="OverlayLayer"]
+unique_name_in_owner = true
+offset_right = 112.0
+offset_bottom = 24.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.82, 0.78, 0.63, 0.9)
+theme_override_font_sizes/font_size = 13
+text = "栖息室"
+
+[node name="ForagingZoneLabel" type="Label" parent="OverlayLayer"]
+unique_name_in_owner = true
+visible = false
+offset_right = 116.0
+offset_bottom = 24.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.75, 0.82, 0.70, 0.9)
+theme_override_font_sizes/font_size = 13
+text = "觅食区"
+
+[node name="PlacementHint" type="Label" parent="OverlayLayer"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(164, 28)
+offset_right = 164.0
+offset_bottom = 28.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.96, 0.84, 0.48, 1)
+theme_override_font_sizes/font_size = 12
+text = "点击觅食区放置糖水"
+horizontal_alignment = 1

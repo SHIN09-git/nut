@@ -1,8 +1,8 @@
 # 《玻璃蚁国》技术架构
 
-> 文档版本：0.8｜更新日期：2026-07-27
+> 文档版本：0.9｜更新日期：2026-07-27
 >
-> 本文描述当前已经实现的生命周期调试、湿度搬运、工蚁身份观察与独立糖水觅食切片。
+> 本文描述当前已经实现的 M4 连续组合观察，以及仍保留的生命周期、湿度搬运和糖水觅食独立调试／验证路径。
 
 ## 1. 固定技术决定
 
@@ -21,57 +21,64 @@
 ## 2. 数据流与命令边界
 
 ```text
-WaterButton
-    ↓ submit_water_action()（无参数）
+CombinedObservationController
+    ├── 身份阶段按钮 → submit_continue_observation_action()
+    ├── 湿度阶段按钮 → submit_water_action()
+    └── 糖水阶段有效落点 → submit_place_sugar_action()
+                              （三个入口都是无参数高层命令）
+    ↓
 ColonySimulation._pending_commands
-    ↓ 使用冻结 HabitatScenarioConfig 的目标与增量
-    ↓ 下一固定 Tick 开始时应用
-HabitatZoneState.humidity
+    ↓ 先验证 Tick 连续，再按提交顺序消费
+    ↓ 下一合法固定 Tick 开始时使用冻结配置应用
+ColonyState + ScenarioProgressState
     ↓
-校验现有任务 → 推进状态机 → 为到期空闲工蚁决策
+ScenarioDirector 受控生命周期
     ↓
-更新观察稳定状态 → 校验所有权
-    ↓ create_snapshot() 深复制
-ColonySnapshot / AntSnapshot / HabitatZoneSnapshot / ObservationEvent
-    ├── HabitatView
-    ├── PlayerAnnotationState → WorkerObservationPanel
-    └── F3 DebugPanel
-```
-
-独立糖水场景使用同一命令纪律：
-
-```text
-SugarToolButton
-    ↓ 只在 View 层进入“等待落点”
-SugarForagingHabitatView 的有效区域点击
-    ↓ submit_place_sugar_action()（无参数）
-ColonySimulation._pending_commands
-    ↓ 下一合法固定 Tick 开始时应用
-    ↓ 使用冻结 HabitatScenarioConfig 决定区域与份数
-FoodSourceState
+搬运／觅食任务校验与推进
     ↓
-ForagingSystem 校验 → 推进 → 分配
-    ↓ create_game_snapshot()
+按当前阶段分配新任务 → 更新湿度观察 → 推进组合阶段
+    ↓
+校验栖息地、任务、守恒与组合进度不变量
+    ↓ create_game_snapshot() 深复制
 GameSnapshot
     ├── ColonySnapshot
     ├── ForagingScenarioSnapshot
-    └── ObservationJournalSnapshot
+    ├── ObservationJournalSnapshot
+    └── ScenarioSequenceSnapshot
+            ├── CombinedHabitatView
+            ├── CombinedObservationController 的阶段 UI
+            ├── PlayerAnnotationState → WorkerObservationPanel
+            └── F3 DebugPanel
 ```
 
-提交命令时不会改变 `HabitatZoneState`。同一时间最多存在一个待处理补水动作；`ColonySimulation` 先验证 Tick 连续，再消费队列，错误 Tick 不会丢失输入。补水工具的首次落地门控、待处理状态、可用性、次数和目标舒适状态均由模拟拥有并复制进快照。
+提交命令时不会直接修改权威状态。控制器在提交成功后立即重新取同 Tick 快照，所以 UI 可以先看到 `continue_action_pending`、`water_action_pending` 或 `place_action_pending`；命令效果只会在下一合法固定 Tick 出现。`ColonySimulation` 在消费命令前拒绝非连续 Tick，因此错误推进不会丢失已提交输入。
 
-`MainController` 与独立的 `SugarForagingController` 只负责：
+组合会话从开始到总结始终持有同一个 `SimulationClock`、同一个 `ColonySimulation` 和其中同一个 `ColonyState`。`ScenarioDirector` 只持有冻结配置并协调阶段，不拥有第二套权威状态，也不会在阶段切换时替换时钟、重载场景或重建首工。
+
+`CombinedObservationController` 只负责：
 
 - 推进 `SimulationClock`。
-- 把 UI 操作转换成无参数高层模拟命令。
-- 每个成功固定 Tick 后创建并交付一份快照。
-- 把快照交给 `HabitatView` 和调试 UI。
-- 协调 `HabitatView` 的选择请求、会话注释和 `WorkerObservationPanel` 投影。
-- 每个渲染帧把时钟插值系数交给 `HabitatView`。
-- 在完成快照允许时协调会话重置，但不重新读取 Resource、不替换时钟或逐只管理视觉节点。
-- 在模拟拒绝 Tick 时暂停并显示错误。
+- 把阶段 UI 操作转换成无参数高层模拟命令。
+- 每个成功固定 Tick 后创建并交付一份 `GameSnapshot`。
+- 把快照交给 `CombinedHabitatView`、会话注释层、观察面板和调试 UI。
+- 每个渲染帧把时钟插值系数交给 View。
+- 在总结快照允许时协调会话重置；重置复用冻结配置和同一个时钟对象。
+- 在模拟或 View 拒绝更新时暂停并显示可见错误。
 
-控制器不创建或逐只管理蚂蚁视觉节点，也不能访问私有 `ColonyState`。糖水落点的屏幕坐标只用于 View 命中判断，不进入命令或模拟。
+控制器不能访问私有 `ColonyState`，也不创建或逐只管理蚂蚁视觉节点。糖水落点的屏幕坐标只用于 View 命中判断，不进入命令或模拟。
+
+原有独立湿度和糖水入口继续遵守相同边界：
+
+```text
+MainController / SugarForagingController
+    ↓ 无参数补水／放置命令
+ColonySimulation._pending_commands
+    ↓ 下一合法固定 Tick 应用
+ColonySnapshot 或 GameSnapshot
+    ├── HabitatView / SugarForagingHabitatView
+    ├── PlayerAnnotationState → WorkerObservationPanel
+    └── F3 DebugPanel
+```
 
 ## 3. 配置冻结
 
@@ -87,6 +94,13 @@ data/habitats/sugar_foraging_slice.tres
     ├── HabitatScenarioConfig（3 zones）
     └── data/behaviors/sugar_foraging_prototype.tres
          └── ForagingConfig
+
+data/habitats/combined_observation_slice.tres
+    ├── HabitatScenarioConfig（3 zones）
+    ├── data/habitats/combined_observation_sequence.tres
+    │    └── ScenarioSequenceConfig
+    └── data/behaviors/sugar_foraging_prototype.tres
+         └── ForagingConfig
 ```
 
 - `LifecycleConfig` 只保存产卵和阶段转换配置。
@@ -94,11 +108,14 @@ data/habitats/sugar_foraging_slice.tres
 - `HabitatScenarioData.zones` 是包含 2～3 个稳定区域 ID 的强类型数组。
 - `HabitatScenarioConfig` 保存切片初始实体、区域、连接、湿度与对应场景的高层动作参数。
 - `ForagingConfig` 保存发现、去程、采集、返程和分享时长。
+- `ScenarioSequenceConfig` 保存首工晚期蛹的初始阶段年龄，以及首工羽化和湿度响应两张观察卡 ID。
 - Resource 通过验证后复制到私有运行时对象；修改源 `.tres` 不会改变已经开始的模拟。
 - `restart_session()` 使用相同的私有冻结配置创建全新 `ColonyState`，并清空旧会话的待处理命令；不会再次读取 Resource。
 - 所有行为与场景数据都标记为 `prototype_pacing_fixture` 且 `scientifically_validated = false`。它们是游戏节奏夹具，不是真实物种数据。
 
 M3 前先把已经验证的幼体搬运逻辑提取为 `BroodRelocationSystem`。`ColonySimulation` 继续拥有连续 Tick 检查、命令队列、系统调用顺序、观察状态、不变量总校验与快照创建。提交 `62ae740` 固定了拆分前的补水流程、事件、重开与滚动快照 SHA-256 黄金结果；拆分后的旧回归继续使用同一份签名验证行为等价。
+
+M4 在既有 `HabitatScenarioData.ScenarioKind` 末尾追加 `COMBINED_OBSERVATION`，不改变原有枚举值。组合配置同时声明湿度和糖水能力，并额外冻结 `ScenarioSequenceData`；原有湿度和糖水配置继续走各自的兼容路径。组合 Resource 必须精确符合“育幼室 ↔ 栖息室 ↔ 觅食区”的双向线性邻接，补水目标、首工初始区和幼体初始区都必须是巢室；额外捷径或不可用区域会在冻结前被拒绝。`ColonySimulation` 再结合冻结的 `BroodCareConfig` 验证：初始状态能触发明显改善的首次搬运，最多 4 次配置补水能到达舒适范围，并能让幼体产生返回巢室的明确改善；不可完成的组合不会进入运行态。
 
 ## 4. 权威模型
 
@@ -109,10 +126,38 @@ M3 前先把已经验证的幼体搬运逻辑提取为 `BroodRelocationSystem`�
 - 当前模拟 Tick。
 - 蚁后与稳定 ID 实体数组。
 - 2～3 个 `HabitatZoneState`。
-- 糖水场景中的 `FoodSourceState`、已放置份数、已分享份数和观察卡 ID。
+- `FoodSourceState`、已放置糖水份数、已分享份数和观察卡 ID。
 - 已应用湿度调整次数。
 - 观察稳定 Tick 和观察记录解锁状态。
+- 组合场景中的 `ScenarioProgressState`。
 - 会话内单调事件 ID 和最多 64 条的结构化观察事件历史。
+
+组合场景初始化时，蚁后固定为实体 ID 0，晚期蛹先于其余幼体创建并取得实体 ID 1。它从蛹原地转换为工蚁时不创建替代实体；`ScenarioProgressState.first_worker_entity_id` 始终指向这个 ID，`configure_worker()` 在同一个 `AntModel` 上建立 `WorkerTaskModel` 与 `ForagingTaskModel`。重开会从冻结配置重新执行同一稳定 ID 分配顺序。
+
+### `ScenarioProgressState` 与 `ScenarioDirector`
+
+`ScenarioProgressState` 是组合流程的权威事实来源，归 `ColonyState` 所有，保存当前阶段、进入阶段的 Tick、首工实体 ID，以及首工羽化、湿度完成和糖水完成 Tick。
+
+`ScenarioDirector` 是纯 `RefCounted` 协调器，只持有冻结的生命周期、育幼、栖息地和序列配置。它不持有平行状态，也不引用 Godot 场景节点。它负责：
+
+- 仅在建群序幕推进指定晚期蛹的受控生命周期。
+- 首工羽化后在原实体上配置两类任务状态，记录事件并解锁首工观察卡。
+- 应用身份阶段的继续命令。
+- 在湿度或糖水系统达成条件后推进阶段并记录完成 Tick。
+- 从 `ScenarioProgressState` 构造只读的 `ScenarioSequenceSnapshot`。
+- 校验首工、阶段时间、观察卡、糖水与实体 ID 之间的组合流程不变量。
+
+五阶段只能逐段前进：
+
+```text
+FOUNDING_PRELUDE
+    → IDENTITY_OBSERVATION
+    → HUMIDITY_OBSERVATION
+    → SUGAR_FORAGING
+    → OBSERVATION_SUMMARY
+```
+
+首工羽化自动完成第一段；`submit_continue_observation_action()` 在下一合法 Tick 完成身份段；湿度观察稳定条件达成后进入糖水段；糖水分享观察卡解锁后进入总结段。阶段切换不创建新 `ColonyState`。
 
 ### `HabitatZoneState`
 
@@ -161,7 +206,7 @@ SHARING
 
 ### `ObservationEvent`
 
-模拟在幼体搬运和糖水发现、出发、采集、返程、分享、取消与观察首次完成时追加结构化值对象。每条事件只包含：
+模拟在首工羽化、身份观察完成、幼体搬运、糖水发现、出发、采集、返程、分享、取消、各观察首次完成和整局完成时追加结构化值对象。M4 追加的事件类型包括 `FIRST_WORKER_EMERGED`、`IDENTITY_OBSERVATION_COMPLETED` 与 `OBSERVATION_SESSION_COMPLETED`；每条事件只包含：
 
 - `event_id`
 - `tick`
@@ -190,7 +235,7 @@ penalty(h) =
 - 一个幼体被某个活跃任务选中后，后续工蚁不能再次预订。
 - 工蚁只在空闲、决策间隔到期或当前目标失效时重新评估。
 - `minimum_zone_dwell_ticks` 从放下 Tick 开始计算，防止幼体在区域间反复振荡。
-- 当前湿度搬运场景只有两个直接连接区域，不使用路径系统。
+- 独立湿度场景有两个直接连接区域；组合场景虽然有三个区域，幼体搬运也只检查来源区的直接连接，不使用多跳路径系统。
 
 ### 糖水任务与路径
 
@@ -246,23 +291,32 @@ IDLE
 - 同一工蚁不能同时执行幼体搬运与觅食。
 - 软失效取消采集前任务并清理预订；采集后路径失效不丢弃携带所有权。
 
+组合场景还由 `ScenarioDirector.has_valid_state()` 校验：
+
+- 首工实体始终存在，建群序幕中仍是未配置任务的蛹，后续阶段中仍是同时具有两类任务状态的同一只工蚁。
+- 蚁后、蚂蚁和食物源的实体 ID 不重复。
+- 阶段进入 Tick 和各完成 Tick 不超出当前模拟 Tick。
+- 观察卡、完成 Tick、糖水放置状态和当前阶段保持一致。
+- 身份阶段首工空闲；糖水阶段不残留搬运任务；总结阶段两类任务都已回到空闲。
+
 ## 8. 每 Tick 更新顺序
 
 `ColonySimulation.advance_tick()` 的实际顺序：
 
 1. 验证 Tick 必须连续；失败时不消费命令。
 2. 写入当前 Tick。
-3. 按提交顺序应用并清空本 Tick 的补水／糖水高层命令；湿度夹紧到有限的 0.0～1.0。
-4. 栖息地切片不推进生命周期；无栖息地的独立调试入口保持原生命周期流程。
+3. 按提交顺序应用并清空本 Tick 的身份继续／补水／糖水高层命令；湿度夹紧到有限的 0.0～1.0。
+4. 组合场景由 `ScenarioDirector` 推进指定晚期蛹；其他栖息地切片不推进生命周期，无栖息地的独立调试入口保持完整生命周期流程。
 5. 校验 `BroodRelocationSystem` 现有任务。
-6. 在糖水场景校验 `ForagingSystem` 现有任务。
+6. 配有觅食系统时校验 `ForagingSystem` 现有任务。
 7. 推进幼体搬运任务。
-8. 推进糖水觅食任务。
-9. 为仍空闲的工蚁分配幼体搬运任务。
-10. 为仍空闲的工蚁分配糖水觅食任务。
-11. 仅在湿度场景更新湿度观察稳定计数与解锁状态。
-12. 同时校验栖息地、幼体搬运和糖水所有权。
-13. 每个成功 Tick 后，由控制器立即创建并交付一份新快照。
+8. 配有觅食系统时推进糖水觅食任务。
+9. 独立湿度场景始终允许分配搬运；组合场景只在 `HUMIDITY_OBSERVATION` 分配新的搬运任务。
+10. 独立糖水场景始终允许分配觅食；组合场景只在 `SUGAR_FORAGING` 分配新的觅食任务。
+11. 与搬运分配使用同一阶段门控，更新湿度观察稳定计数与解锁状态。
+12. 组合场景在系统更新后由 `ScenarioDirector` 检查湿度／糖水完成条件并推进阶段。
+13. 校验栖息地、幼体搬运、糖水守恒与组合进度不变量。
+14. 每个成功 Tick 后，由控制器立即创建并交付一份新快照。
 
 系统结果不依赖场景树处理顺序、渲染帧率或墙钟时间。
 
@@ -277,16 +331,34 @@ IDLE
 
 快照包含显示和诊断所需的区域、任务进度、派生预订／携带关系、补水门控与待处理状态、生命周期模式、观察状态和结构化事件，但不携带任何内部模型引用。修改快照字段、事件对象、子对象或数组不会改变模拟。
 
-M3 不向 `ColonySnapshot` 平铺 `sugar_*` UI 状态。`ColonySnapshot` 只增加领域数组 `food_sources`，`AntSnapshot` 通过嵌套的 `ForagingTaskSnapshot` 表达觅食任务。`create_game_snapshot()` 返回：
+`ColonySnapshot` 不平铺 `sugar_*` 或五阶段 UI 状态；它只包含群落领域数据，`AntSnapshot` 通过嵌套的 `ForagingTaskSnapshot` 表达觅食任务。支持糖水的场景由 `create_game_snapshot()` 返回：
 
 - `GameSnapshot.simulation_tick`
 - `GameSnapshot.colony: ColonySnapshot`
 - `GameSnapshot.scenario: ForagingScenarioSnapshot`，保存场景阶段、巢室／放置区域和动作可用／待处理状态
 - `GameSnapshot.observations: ObservationJournalSnapshot`，深复制事件与已解锁卡片 ID
+- `GameSnapshot.sequence: ScenarioSequenceSnapshot`，保存五阶段、阶段进入／完成 Tick、稳定首工 ID、三张冻结观察卡 ID，以及继续命令的可用／待处理状态
 
-M2 兼容路径继续保留 `ColonySnapshot.observation_events`；M3 控制器读取独立观察快照。二者都不是命令入口。
+`sequence` 只在组合场景存在；独立糖水场景继续使用前三个组成部分。M2 兼容路径仍保留 `ColonySnapshot.observation_events`，独立糖水控制器继续读取 `ObservationJournalSnapshot`。任何快照都不是命令入口，也不能写回模拟。
+
+控制器在命令提交后可以创建同 Tick 新快照来展示待处理状态；只有成功推进到下一 Tick 后，快照中的权威湿度、阶段或食物源才反映命令效果。所有数组、事件和嵌套快照都重新创建或复制，修改快照不会改变 `ColonyState`。
 
 ## 10. 显示层
+
+### 默认组合显示层
+
+`CombinedHabitatView` 只读取完整 `GameSnapshot`：
+
+- 绘制育幼室、休息室、觅食区和连接通道；坐标、尺寸、颜色与糖水点击命中只存在于 View。
+- 维护稳定的 `entity_id -> AntView` 映射和独立 `QueenView`。
+- 首工从蛹转换为工蚁时沿用相同实体 ID，因此对已有 `AntView` 应用新阶段快照，不替换节点。
+- 根据 `WorkerTaskSnapshot`、`ForagingTaskSnapshot`、逻辑路线和阶段进度计算蚂蚁位置；不使用与模拟脱节的 Tween。
+- 相邻 Tick 间使用同一个 `SimulationClock` 的插值系数，暂停时冻结；同 Tick 快照只更新状态，不轮换插值端点。
+- 重复快照不创建重复节点；重开时 `reset_projection()` 清除旧端点、实体映射和临时糖水投影。
+
+`CombinedObservationController` 从 `ScenarioSequenceSnapshot` 投影五阶段标题、阶段按钮、三张观察卡和总结面板；从 `ColonySnapshot`、`ForagingScenarioSnapshot` 与 `ObservationJournalSnapshot` 投影对应的环境、工具和事件状态。UI 只组合快照，不能直接推进阶段或修改群落状态。
+
+### 独立湿度显示层
 
 `HabitatView`：
 
@@ -324,7 +396,7 @@ M2 兼容路径继续保留 `ColonySnapshot.observation_events`；M3 控制器�
 
 `SugarForagingController` 只协调时钟、无参数高层命令、快照、工具的临时“已启用”状态、身份面板与 F3。有效区域点击提交命令后，同 Tick 快照只显示 `place_action_pending`，食物源在下一 Tick 才出现。
 
-## 11. 独立生命周期调试
+## 11. 保留的独立调试与验证入口
 
 `scenes/debug/lifecycle_debug.tscn` 使用：
 
@@ -338,6 +410,13 @@ ColonyViewAdapter
 
 无栖息地配置时，`ColonySimulation` 保持原有产卵与卵 → 幼虫 → 蛹 → 工蚁流程。阶段中文显示映射位于 View 层的 `LifeStagePresenter`，核心 `AntModel` 不负责本地化。
 
+另外两条旧入口继续保留：
+
+- `scenes/main/main.tscn` 使用 `MainController + HabitatView`，独立验证双室湿度搬运和身份观察。
+- `scenes/foraging/sugar_foraging.tscn` 使用 `SugarForagingController + SugarForagingHabitatView`，独立验证三区域糖水觅食。
+
+这些场景各自创建独立会话，不使用五阶段 `ScenarioDirector`，用于保留原有回归与人工验证能力。默认 `project.godot` 主场景是 `scenes/main/combined_observation.tscn`。
+
 ## 12. 测试结构
 
 `tests/test_runner.gd` 只聚合独立套件：
@@ -347,6 +426,7 @@ ColonyViewAdapter
 - `tests/simulation/humidity_relocation_test_suite.gd`
 - `tests/simulation/brood_relocation_equivalence_test_suite.gd`
 - `tests/simulation/foraging_test_suite.gd`
+- `tests/simulation/combined_observation_test_suite.gd`
 - `tests/simulation/observation_event_test_suite.gd`
 - `tests/session/player_annotation_state_test_suite.gd`
 - `tests/view/view_adapter_test_suite.gd`
@@ -356,8 +436,9 @@ ColonyViewAdapter
 - `tests/scenes/humidity_main_scene_test_suite.gd`
 - `tests/scenes/worker_identity_scene_test_suite.gd`
 - `tests/scenes/sugar_foraging_scene_test_suite.gd`
+- `tests/scenes/combined_observation_scene_test_suite.gd`
 
-生命周期边界从 Resource 计算。湿度套件覆盖原有命令、搬运、所有权、节奏和 soak；黄金套件锁定 `BroodRelocationSystem` 拆分前后等价。糖水套件覆盖下一 Tick 命令、冻结配置、稳定选择、全部状态边界、软失效与返程恢复、份数守恒、快照隔离、三档速度、事件和 10,000 Tick soak。场景测试使用实际按钮和 Viewport 鼠标输入路径，不绑定完整中文文案。
+生命周期边界从 Resource 计算。湿度套件覆盖原有命令、搬运、所有权、节奏和 soak；黄金套件锁定 `BroodRelocationSystem` 拆分前后等价。糖水套件覆盖下一 Tick 命令、冻结配置、稳定选择、全部状态边界、软失效与返程恢复、份数守恒、快照隔离、三档速度、事件和 10,000 Tick soak。组合模拟套件覆盖五阶段顺序、稳定首工 ID、阶段门控、三类命令、冻结配置、精确线性拓扑、湿度闭环可完成性、快照隔离、重开和组合不变量；组合场景套件覆盖真实阶段按钮、快照卡片 ID、糖水落点、总结与 View 节点复用。场景测试使用实际按钮和 Viewport 鼠标输入路径，不绑定完整中文文案。
 
 标准命令：
 
@@ -372,8 +453,9 @@ ColonyViewAdapter
 ## 13. 当前限制
 
 - 湿度和行为数值是原型节奏参数，未经真实养蚁数据审校。
-- 湿度场景固定为两个区域；糖水场景固定为三个区域、三只工蚁和一份糖水。
-- 生命周期调试、默认湿度切片与糖水切片仍是三个独立入口，尚未进入 M4 的连续编排。
+- 默认组合场景固定为三个区域、一个接近羽化的晚期蛹、五个幼虫和一份糖水；五阶段按唯一顺序推进，不支持分支。
+- 当前冻结配置在无额外玩家停留时于 Tick 586 完成，技术上已形成连续流程，但尚未达到 12～15 分钟的外部试玩节奏目标；架构不会通过无信息等待补足时长。
+- 原有生命周期、双室湿度和三区域糖水场景仍作为独立调试／验证入口；它们不会与默认组合会话共享状态。
 - 名称、选择和个人记录只存在于当前会话，重开后不保留。
 - 糖水分享只解锁观察记录，不实现饥饿、能量、蛋白质或资源经济。
 - 没有镜头、直接个体命令、存档、随机行为、正式素材或外部插件。

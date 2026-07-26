@@ -160,6 +160,38 @@ static func canonical_game_snapshot(snapshot: GameSnapshot) -> String:
 			]
 		)
 
+	if snapshot.sequence != null:
+		lines.append(
+			(
+				"sequence|id=%s|phase=%d|entered=%d|first_worker=%d"
+				+ "|emerged=%d|humidity_done=%d|sugar_done=%d"
+				+ "|first_card=%s|humidity_card=%s|sugar_card=%s"
+				+ "|continue_available=%s|continue_pending=%s"
+				+ "|completed=%s"
+			)
+			% [
+				String(snapshot.sequence.scenario_id),
+				snapshot.sequence.phase,
+				snapshot.sequence.phase_entered_tick,
+				snapshot.sequence.first_worker_entity_id,
+				snapshot.sequence.first_worker_emerged_tick,
+				snapshot.sequence.humidity_observation_completed_tick,
+				snapshot.sequence.sugar_observation_completed_tick,
+				String(
+					snapshot.sequence.first_worker_observation_card_id
+				),
+				String(
+					snapshot.sequence.brood_humidity_observation_card_id
+				),
+				String(
+					snapshot.sequence.sugar_foraging_observation_card_id
+				),
+				str(snapshot.sequence.continue_action_available),
+				str(snapshot.sequence.continue_action_pending),
+				str(snapshot.sequence.completed),
+			]
+		)
+
 	if snapshot.colony != null:
 		var sources: Array[FoodSourceSnapshot] = []
 		sources.assign(snapshot.colony.food_sources)

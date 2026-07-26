@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="ScenarioSequenceData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/scenario_sequence_data.gd" id="1_sequence"]
+
+[resource]
+script = ExtResource("1_sequence")
+data_status = &"prototype_pacing_fixture"
+scientifically_validated = false
+first_worker_initial_pupa_age_ticks = 950
+first_worker_observation_card_id = &"first_worker_emerged"
+brood_humidity_observation_card_id = &"brood_humidity_response"
