@@ -9,6 +9,7 @@ var _worker_names: Dictionary[int, String] = {}
 var _recent_events_by_worker: Dictionary[int, Array] = {}
 var _last_consumed_event_id: int = 0
 var _has_event_gap: bool = false
+var _present_worker_ids: Dictionary[int, bool] = {}
 
 
 func reset_session() -> void:
@@ -17,22 +18,34 @@ func reset_session() -> void:
 	_recent_events_by_worker.clear()
 	_last_consumed_event_id = 0
 	_has_event_gap = false
+	_present_worker_ids.clear()
 
 
 func reconcile(snapshot: ColonySnapshot) -> void:
 	if snapshot == null:
 		return
 
-	var present_worker_ids: Dictionary[int, bool] = {}
+	reconcile_entities(snapshot)
+	consume_events(snapshot.observation_events)
+
+
+func reconcile_entities(snapshot: ColonySnapshot) -> void:
+	if snapshot == null:
+		return
+
+	_present_worker_ids.clear()
 	for ant: AntSnapshot in snapshot.ants:
 		if ant != null and ant.life_stage == AntModel.LifeStage.WORKER:
-			present_worker_ids[ant.entity_id] = true
+			_present_worker_ids[ant.entity_id] = true
 
-	if not present_worker_ids.has(_selected_worker_entity_id):
+	if not _present_worker_ids.has(_selected_worker_entity_id):
 		_selected_worker_entity_id = -1
 
-	_remove_missing_worker_annotations(present_worker_ids)
-	_consume_observation_events(snapshot.observation_events, present_worker_ids)
+	_remove_missing_worker_annotations(_present_worker_ids)
+
+
+func consume_events(events: Array[ObservationEvent]) -> void:
+	_consume_observation_events(events, _present_worker_ids)
 
 
 func select_worker(entity_id: int, snapshot: ColonySnapshot) -> bool:

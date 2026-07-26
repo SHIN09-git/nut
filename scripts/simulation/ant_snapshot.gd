@@ -17,6 +17,7 @@ var target_zone_id: StringName
 var carried_brood_id: int
 var task_elapsed_ticks: int
 var task_duration_ticks: int
+var foraging_task: ForagingTaskSnapshot
 
 
 func _init(
@@ -35,7 +36,8 @@ func _init(
 	new_target_zone_id: StringName = &"",
 	new_carried_brood_id: int = -1,
 	new_task_elapsed_ticks: int = 0,
-	new_task_duration_ticks: int = 0
+	new_task_duration_ticks: int = 0,
+	new_foraging_task: ForagingTaskSnapshot = null
 ) -> void:
 	entity_id = new_entity_id
 	life_stage = new_life_stage
@@ -53,6 +55,7 @@ func _init(
 	carried_brood_id = new_carried_brood_id
 	task_elapsed_ticks = new_task_elapsed_ticks
 	task_duration_ticks = new_task_duration_ticks
+	foraging_task = new_foraging_task
 
 
 func get_stage_progress() -> float:

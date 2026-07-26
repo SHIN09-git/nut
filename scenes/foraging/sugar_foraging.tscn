@@ -1,0 +1,451 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/sugar_foraging_controller.gd" id="1_controller"]
+[ext_resource type="PackedScene" path="res://scenes/habitat/sugar_foraging_habitat.tscn" id="2_habitat"]
+[ext_resource type="Script" path="res://scripts/view/worker_observation_panel.gd" id="3_worker_panel"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_header"]
+bg_color = Color(0.075, 0.095, 0.088, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.25, 0.31, 0.27, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_habitat"]
+bg_color = Color(0.055, 0.067, 0.063, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.20, 0.24, 0.21, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_side"]
+bg_color = Color(0.075, 0.087, 0.075, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.26, 0.28, 0.22, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_debug"]
+bg_color = Color(0.075, 0.095, 0.082, 0.98)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.45, 0.55, 0.45, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[node name="SugarForaging" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_controller")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.027, 0.035, 0.034, 1)
+
+[node name="SafeArea" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 16
+
+[node name="Content" type="VBoxContainer" parent="SafeArea"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="PanelContainer" parent="SafeArea/Content"]
+custom_minimum_size = Vector2(0, 66)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBox_header")
+
+[node name="Margin" type="MarginContainer" parent="SafeArea/Content/Header"]
+layout_mode = 2
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 8
+
+[node name="Row" type="HBoxContainer" parent="SafeArea/Content/Header/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TitleBlock" type="VBoxContainer" parent="SafeArea/Content/Header/Margin/Row"]
+custom_minimum_size = Vector2(350, 0)
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="Title" type="Label" parent="SafeArea/Content/Header/Margin/Row/TitleBlock"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
+theme_override_font_sizes/font_size = 23
+text = "玻璃蚁国 · 糖水观察"
+
+[node name="Subtitle" type="Label" parent="SafeArea/Content/Header/Margin/Row/TitleBlock"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.61, 0.69, 0.66, 1)
+theme_override_font_sizes/font_size = 13
+text = "改变环境，观察工蚁如何自主觅食与分享"
+
+[node name="Spacer" type="Control" parent="SafeArea/Content/Header/Margin/Row"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="StatusLabel" type="Label" parent="SafeArea/Content/Header/Margin/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.68, 0.82, 0.73, 1)
+text = "观察中 · 1×"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="PauseButton" type="Button" parent="SafeArea/Content/Header/Margin/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(66, 42)
+layout_mode = 2
+text = "暂停"
+
+[node name="Speed1xButton" type="Button" parent="SafeArea/Content/Header/Margin/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(48, 42)
+layout_mode = 2
+text = "1×"
+
+[node name="Speed4xButton" type="Button" parent="SafeArea/Content/Header/Margin/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(48, 42)
+layout_mode = 2
+text = "4×"
+
+[node name="Speed16xButton" type="Button" parent="SafeArea/Content/Header/Margin/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(54, 42)
+layout_mode = 2
+text = "16×"
+
+[node name="DebugToggleButton" type="Button" parent="SafeArea/Content/Header/Margin/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(82, 42)
+layout_mode = 2
+text = "F3 调试"
+
+[node name="Body" type="HBoxContainer" parent="SafeArea/Content"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="LeftColumn" type="VBoxContainer" parent="SafeArea/Content/Body"]
+custom_minimum_size = Vector2(760, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+
+[node name="HabitatFrame" type="PanelContainer" parent="SafeArea/Content/Body/LeftColumn"]
+custom_minimum_size = Vector2(0, 350)
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_styles/panel = SubResource("StyleBox_habitat")
+
+[node name="HabitatMargin" type="MarginContainer" parent="SafeArea/Content/Body/LeftColumn/HabitatFrame"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="SugarForagingHabitatView" parent="SafeArea/Content/Body/LeftColumn/HabitatFrame/HabitatMargin" instance=ExtResource("2_habitat")]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="WorkerIdentityPanel" type="PanelContainer" parent="SafeArea/Content/Body/LeftColumn"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 150)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBox_side")
+script = ExtResource("3_worker_panel")
+
+[node name="Margin" type="MarginContainer" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 10
+
+[node name="Content" type="HBoxContainer" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Summary" type="VBoxContainer" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content"]
+custom_minimum_size = Vector2(292, 0)
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Heading" type="Label" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/Summary"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
+theme_override_font_sizes/font_size = 17
+text = "个体观察"
+
+[node name="WorkerPromptLabel" type="Label" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/Summary"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(260, 0)
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.73, 0.77, 0.69, 1)
+text = "点击一只工蚁，持续观察它的行动。"
+vertical_alignment = 1
+autowrap_mode = 2
+
+[node name="SelectedWorkerContent" type="VBoxContainer" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/Summary"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="WorkerDisplayNameLabel" type="Label" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/Summary/SelectedWorkerContent"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.89, 0.83, 0.66, 1)
+theme_override_font_sizes/font_size = 16
+text = "未命名工蚁"
+
+[node name="WorkerCurrentBehaviorLabel" type="Label" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/Summary/SelectedWorkerContent"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(260, 22)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.73, 0.77, 0.69, 1)
+text = "正在巢室内停留"
+
+[node name="NamingRow" type="HBoxContainer" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/Summary/SelectedWorkerContent"]
+layout_mode = 2
+theme_override_constants/separation = 7
+
+[node name="WorkerNameEdit" type="LineEdit" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/Summary/SelectedWorkerContent/NamingRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(188, 32)
+layout_mode = 2
+size_flags_horizontal = 3
+max_length = 16
+placeholder_text = "可选：给它起个名字"
+
+[node name="WorkerNameButton" type="Button" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/Summary/SelectedWorkerContent/NamingRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(74, 32)
+layout_mode = 2
+text = "保存"
+
+[node name="Divider" type="VSeparator" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content"]
+layout_mode = 2
+
+[node name="History" type="VBoxContainer" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content"]
+custom_minimum_size = Vector2(350, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 5
+
+[node name="HistoryHeading" type="Label" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/History"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
+theme_override_font_sizes/font_size = 17
+text = "最近行动"
+
+[node name="WorkerHistoryLabel" type="Label" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/History"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.73, 0.77, 0.69, 1)
+theme_override_font_sizes/font_size = 12
+text = "选择工蚁后，这里会留下它最近的行动。"
+vertical_alignment = 1
+autowrap_mode = 2
+
+[node name="SidePanel" type="PanelContainer" parent="SafeArea/Content/Body"]
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBox_side")
+
+[node name="SideMargin" type="MarginContainer" parent="SafeArea/Content/Body/SidePanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 16
+
+[node name="SideContent" type="VBoxContainer" parent="SafeArea/Content/Body/SidePanel/SideMargin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="ObservationHeading" type="Label" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
+theme_override_font_sizes/font_size = 18
+text = "观察记录"
+
+[node name="ObservationLabel" type="Label" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(260, 80)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.73, 0.77, 0.69, 1)
+text = "观察记录尚未解锁\n先看看空闲工蚁分布在哪里。"
+autowrap_mode = 2
+
+[node name="Rule" type="HSeparator" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
+layout_mode = 2
+
+[node name="InstructionHeading" type="Label" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
+theme_override_font_sizes/font_size = 18
+text = "本次观察"
+
+[node name="InstructionLabel" type="Label" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(260, 76)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.73, 0.77, 0.69, 1)
+text = "准备一滴糖水，留意哪只工蚁最先改变行动。"
+autowrap_mode = 2
+
+[node name="ToolSpacer" type="Control" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="SugarControls" type="VBoxContainer" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 9
+
+[node name="SugarHeading" type="Label" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent/SugarControls"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
+theme_override_font_sizes/font_size = 18
+text = "糖水工具"
+
+[node name="SugarFeedbackLabel" type="Label" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent/SugarControls"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(260, 54)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.73, 0.77, 0.69, 1)
+text = "先启用糖水工具，再在右侧觅食区选择落点。"
+autowrap_mode = 2
+
+[node name="SugarToolButton" type="Button" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent/SugarControls"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+disabled = true
+text = "准备放置糖水"
+
+[node name="CompletionPanel" type="VBoxContainer" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 9
+
+[node name="CompletionHeading" type="Label" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent/CompletionPanel"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
+theme_override_font_sizes/font_size = 18
+text = "观察完成"
+
+[node name="CompletionLabel" type="Label" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent/CompletionPanel"]
+custom_minimum_size = Vector2(260, 54)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.73, 0.77, 0.69, 1)
+text = "已经记录工蚁发现、采集并分享糖水的过程。可以用同一组条件再次观察。"
+autowrap_mode = 2
+
+[node name="RestartButton" type="Button" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent/CompletionPanel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+text = "重新观察"
+
+[node name="Footer" type="Label" parent="SafeArea/Content"]
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.61, 0.69, 0.66, 1)
+theme_override_font_sizes/font_size = 12
+text = "F3 显示诊断层  ·  原型节奏参数不代表真实物种数据"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="DebugPanel" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+z_index = 30
+custom_minimum_size = Vector2(480, 0)
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -504.0
+offset_top = 96.0
+offset_right = -24.0
+offset_bottom = 690.0
+grow_horizontal = 0
+theme_override_styles/panel = SubResource("StyleBox_debug")
+
+[node name="Margin" type="MarginContainer" parent="DebugPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 14
+
+[node name="Content" type="VBoxContainer" parent="DebugPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 9
+
+[node name="Title" type="Label" parent="DebugPanel/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
+theme_override_font_sizes/font_size = 20
+text = "糖水觅食诊断"
+
+[node name="Rule" type="HSeparator" parent="DebugPanel/Margin/Content"]
+layout_mode = 2
+
+[node name="DebugLabel" type="Label" parent="DebugPanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.75, 0.81, 0.75, 1)
+theme_override_font_sizes/font_size = 13
+text = "等待第一份模拟快照……"
+autowrap_mode = 2

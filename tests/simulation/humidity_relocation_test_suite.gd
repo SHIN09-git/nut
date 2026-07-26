@@ -455,8 +455,8 @@ func _test_restart_clears_session_state_and_keeps_frozen_configuration() -> void
 		"restart fixture contains pending input before reset"
 	)
 
-	scenario.left_zone.initial_humidity = 0.90
-	scenario.right_zone.initial_humidity = 0.10
+	_find_zone_data(scenario, LEFT_ZONE_ID).initial_humidity = 0.90
+	_find_zone_data(scenario, RIGHT_ZONE_ID).initial_humidity = 0.10
 	scenario.initial_worker_count = 1
 	scenario.initial_brood_count = 1
 	scenario.initial_worker_zone_id = RIGHT_ZONE_ID
@@ -590,8 +590,8 @@ func _test_unsuitable_brood_zone_creates_relocation_tasks() -> void:
 
 func _test_no_meaningful_improvement_creates_no_task() -> void:
 	var scenario: HabitatScenarioData = _duplicate_scenario()
-	scenario.left_zone.initial_humidity = 0.50
-	scenario.right_zone.initial_humidity = 0.55
+	_find_zone_data(scenario, LEFT_ZONE_ID).initial_humidity = 0.50
+	_find_zone_data(scenario, RIGHT_ZONE_ID).initial_humidity = 0.55
 	var simulation: ColonySimulation = ColonySimulation.new(SPECIES_A_DATA, scenario)
 	_advance_to_tick(simulation, SPECIES_A_DATA.decision_interval_ticks * 3)
 	var snapshot: ColonySnapshot = simulation.create_snapshot()
@@ -1146,11 +1146,23 @@ func _create_simulation() -> ColonySimulation:
 
 func _duplicate_scenario() -> HabitatScenarioData:
 	var scenario: HabitatScenarioData = HUMIDITY_SCENARIO_DATA.duplicate(true) as HabitatScenarioData
-	if scenario.left_zone == HUMIDITY_SCENARIO_DATA.left_zone:
-		scenario.left_zone = HUMIDITY_SCENARIO_DATA.left_zone.duplicate(true) as HabitatZoneData
-	if scenario.right_zone == HUMIDITY_SCENARIO_DATA.right_zone:
-		scenario.right_zone = HUMIDITY_SCENARIO_DATA.right_zone.duplicate(true) as HabitatZoneData
+	var duplicated_zones: Array[HabitatZoneData] = []
+	for source_zone: HabitatZoneData in HUMIDITY_SCENARIO_DATA.zones:
+		duplicated_zones.append(
+			source_zone.duplicate(true) as HabitatZoneData
+		)
+	scenario.zones = duplicated_zones
 	return scenario
+
+
+func _find_zone_data(
+	scenario_data: HabitatScenarioData,
+	zone_id: StringName
+) -> HabitatZoneData:
+	for zone_data: HabitatZoneData in scenario_data.zones:
+		if zone_data != null and zone_data.zone_id == zone_id:
+			return zone_data
+	return null
 
 
 func _advance_to_tick(simulation: ColonySimulation, target_tick: int) -> bool:
@@ -1269,14 +1281,10 @@ func _apply_scenario_watering_actions(
 
 
 func _get_watering_action_count_to_reach_comfort() -> int:
-	var adjustment_zone: HabitatZoneData
-	for zone: HabitatZoneData in [
-		HUMIDITY_SCENARIO_DATA.left_zone,
-		HUMIDITY_SCENARIO_DATA.right_zone,
-	]:
-		if zone.zone_id == HUMIDITY_SCENARIO_DATA.humidity_adjustment_zone_id:
-			adjustment_zone = zone
-			break
+	var adjustment_zone: HabitatZoneData = _find_zone_data(
+		HUMIDITY_SCENARIO_DATA,
+		HUMIDITY_SCENARIO_DATA.humidity_adjustment_zone_id
+	)
 	if adjustment_zone == null:
 		return 0
 

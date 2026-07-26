@@ -15,6 +15,7 @@ var stage_age_ticks: int = 0
 var zone_id: StringName = &""
 var zone_entered_tick: int = 0
 var worker_task: WorkerTaskModel
+var foraging_task: ForagingTaskModel
 
 
 func _init(
@@ -37,6 +38,7 @@ func configure_brood(
 	zone_id = new_zone_id
 	zone_entered_tick = new_zone_entered_tick
 	worker_task = null
+	foraging_task = null
 
 
 func configure_worker(
@@ -48,3 +50,4 @@ func configure_worker(
 	zone_entered_tick = 0
 	worker_task = WorkerTaskModel.new()
 	worker_task.next_decision_tick = next_decision_tick
+	foraging_task = ForagingTaskModel.new()

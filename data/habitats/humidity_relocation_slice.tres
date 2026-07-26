@@ -20,10 +20,10 @@ available = true
 [resource]
 script = ExtResource("1_scenario")
 scenario_id = &"humidity_relocation_slice"
+scenario_kind = 0
 data_status = &"prototype_pacing_fixture"
 scientifically_validated = false
-left_zone = SubResource("Resource_left_zone")
-right_zone = SubResource("Resource_right_zone")
+zones = Array[ExtResource("2_zone")]([SubResource("Resource_left_zone"), SubResource("Resource_right_zone")])
 initial_worker_count = 3
 initial_brood_count = 6
 initial_brood_stage = 1

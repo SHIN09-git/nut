@@ -12,6 +12,9 @@ const HumidityRelocationTestSuiteScript: Script = preload(
 const BroodRelocationEquivalenceTestSuiteScript: Script = preload(
 	"res://tests/simulation/brood_relocation_equivalence_test_suite.gd"
 )
+const ForagingTestSuiteScript: Script = preload(
+	"res://tests/simulation/foraging_test_suite.gd"
+)
 const ObservationEventTestSuiteScript: Script = preload(
 	"res://tests/simulation/observation_event_test_suite.gd"
 )
@@ -36,6 +39,9 @@ const HumidityMainSceneTestSuiteScript: Script = preload(
 const WorkerIdentitySceneTestSuiteScript: Script = preload(
 	"res://tests/scenes/worker_identity_scene_test_suite.gd"
 )
+const SugarForagingSceneTestSuiteScript: Script = preload(
+	"res://tests/scenes/sugar_foraging_scene_test_suite.gd"
+)
 
 var _assertion_count: int = 0
 var _failure_count: int = 0
@@ -50,6 +56,7 @@ func _run_all_tests() -> void:
 	_run_lifecycle_test_suite()
 	_run_humidity_relocation_test_suite()
 	_run_brood_relocation_equivalence_test_suite()
+	_run_foraging_test_suite()
 	_run_observation_event_test_suite()
 	_run_player_annotation_state_test_suite()
 	_run_view_adapter_test_suite()
@@ -58,6 +65,7 @@ func _run_all_tests() -> void:
 	_run_lifecycle_debug_scene_test_suite()
 	_run_humidity_main_scene_test_suite()
 	_run_worker_identity_scene_test_suite()
+	_run_sugar_foraging_scene_test_suite()
 
 	if _failure_count == 0:
 		print("PASS: %d project assertions" % _assertion_count)
@@ -95,6 +103,12 @@ func _run_brood_relocation_equivalence_test_suite() -> void:
 	var suite: BroodRelocationEquivalenceTestSuite = (
 		BroodRelocationEquivalenceTestSuiteScript.new()
 	)
+	suite.run()
+	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
+
+
+func _run_foraging_test_suite() -> void:
+	var suite: ForagingTestSuite = ForagingTestSuiteScript.new()
 	suite.run()
 	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
 
@@ -152,6 +166,14 @@ func _run_humidity_main_scene_test_suite() -> void:
 func _run_worker_identity_scene_test_suite() -> void:
 	var suite: WorkerIdentitySceneTestSuite = (
 		WorkerIdentitySceneTestSuiteScript.new()
+	)
+	suite.run(root)
+	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
+
+
+func _run_sugar_foraging_scene_test_suite() -> void:
+	var suite: SugarForagingSceneTestSuite = (
+		SugarForagingSceneTestSuiteScript.new()
 	)
 	suite.run(root)
 	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())

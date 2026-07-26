@@ -6,6 +6,8 @@ const HUMIDITY_SCENARIO_DATA: HabitatScenarioData = preload(
 	"res://data/habitats/humidity_relocation_slice.tres"
 )
 const MAIN_SCENE: PackedScene = preload("res://scenes/main/main.tscn")
+const LEFT_ZONE_ID: StringName = &"left_chamber"
+const RIGHT_ZONE_ID: StringName = &"right_chamber"
 
 var _assertion_count: int = 0
 var _failure_count: int = 0
@@ -299,14 +301,12 @@ func _test_real_water_button_path_unlocks_observation() -> void:
 
 func _test_controller_freezes_runtime_resources() -> void:
 	var species_source: SpeciesData = SPECIES_A_DATA.duplicate(true) as SpeciesData
-	var scenario_source: HabitatScenarioData = (
-		HUMIDITY_SCENARIO_DATA.duplicate(true) as HabitatScenarioData
-	)
+	var scenario_source: HabitatScenarioData = _duplicate_scenario_data()
 	var original_target_zone_id: StringName = scenario_source.humidity_adjustment_zone_id
 	var alternate_zone_id: StringName = (
-		scenario_source.right_zone.zone_id
-		if scenario_source.right_zone.zone_id != original_target_zone_id
-		else scenario_source.left_zone.zone_id
+		RIGHT_ZONE_ID
+		if RIGHT_ZONE_ID != original_target_zone_id
+		else LEFT_ZONE_ID
 	)
 	var original_amount: float = scenario_source.humidity_adjustment_amount
 	var expected_action_count: int = _get_commands_to_reach_comfort_from_data(
@@ -391,14 +391,18 @@ func _test_controller_freezes_runtime_resources() -> void:
 
 func _test_completed_session_can_restart_twice_from_frozen_config() -> void:
 	var species_source: SpeciesData = SPECIES_A_DATA.duplicate(true) as SpeciesData
-	var scenario_source: HabitatScenarioData = (
-		HUMIDITY_SCENARIO_DATA.duplicate(true) as HabitatScenarioData
-	)
-	var original_left_zone_id: StringName = scenario_source.left_zone.zone_id
-	var original_right_zone_id: StringName = scenario_source.right_zone.zone_id
+	var scenario_source: HabitatScenarioData = _duplicate_scenario_data()
+	var original_left_zone_id: StringName = LEFT_ZONE_ID
+	var original_right_zone_id: StringName = RIGHT_ZONE_ID
 	var original_target_zone_id: StringName = scenario_source.humidity_adjustment_zone_id
-	var original_left_humidity: float = scenario_source.left_zone.initial_humidity
-	var original_right_humidity: float = scenario_source.right_zone.initial_humidity
+	var original_left_humidity: float = _find_zone_data(
+		scenario_source,
+		original_left_zone_id
+	).initial_humidity
+	var original_right_humidity: float = _find_zone_data(
+		scenario_source,
+		original_right_zone_id
+	).initial_humidity
 	var original_water_amount: float = scenario_source.humidity_adjustment_amount
 	var expected_entity_count: int = (
 		scenario_source.initial_worker_count
@@ -466,8 +470,14 @@ func _test_completed_session_can_restart_twice_from_frozen_config() -> void:
 	)
 	scenario_source.humidity_adjustment_amount = 0.37
 	scenario_source.observation_stable_ticks = 1
-	scenario_source.left_zone.initial_humidity = 0.88
-	scenario_source.right_zone.initial_humidity = 0.12
+	_find_zone_data(
+		scenario_source,
+		original_left_zone_id
+	).initial_humidity = 0.88
+	_find_zone_data(
+		scenario_source,
+		original_right_zone_id
+	).initial_humidity = 0.12
 	species_source.brood_humidity_min = 0.90
 	species_source.brood_humidity_max = 0.95
 
@@ -913,6 +923,29 @@ func _complete_session_through_player_controls(
 	return controller._latest_snapshot.brood_humidity_observation_unlocked
 
 
+func _duplicate_scenario_data() -> HabitatScenarioData:
+	var scenario_copy: HabitatScenarioData = (
+		HUMIDITY_SCENARIO_DATA.duplicate(true) as HabitatScenarioData
+	)
+	var duplicated_zones: Array[HabitatZoneData] = []
+	for source_zone: HabitatZoneData in HUMIDITY_SCENARIO_DATA.zones:
+		duplicated_zones.append(
+			source_zone.duplicate(true) as HabitatZoneData
+		)
+	scenario_copy.zones = duplicated_zones
+	return scenario_copy
+
+
+func _find_zone_data(
+	scenario_data: HabitatScenarioData,
+	zone_id: StringName
+) -> HabitatZoneData:
+	for zone_data: HabitatZoneData in scenario_data.zones:
+		if zone_data != null and zone_data.zone_id == zone_id:
+			return zone_data
+	return null
+
+
 func _create_controller(
 	species_source: SpeciesData = null,
 	scenario_source: HabitatScenarioData = null
@@ -1045,12 +1078,12 @@ func _get_commands_to_reach_comfort_from_data(
 	species_data: SpeciesData,
 	scenario_data: HabitatScenarioData
 ) -> int:
-	var initial_zone: HabitatZoneData = (
-		scenario_data.left_zone
-		if scenario_data.left_zone.zone_id
-			== scenario_data.humidity_adjustment_zone_id
-		else scenario_data.right_zone
+	var initial_zone: HabitatZoneData = _find_zone_data(
+		scenario_data,
+		scenario_data.humidity_adjustment_zone_id
 	)
+	if initial_zone == null:
+		return 0
 	var humidity_gap: float = maxf(
 		species_data.brood_humidity_min - initial_zone.initial_humidity,
 		0.0

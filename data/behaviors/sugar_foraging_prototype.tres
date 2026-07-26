@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ForagingData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/foraging_data.gd" id="1_foraging"]
+
+[resource]
+script = ExtResource("1_foraging")
+data_status = &"prototype_pacing_fixture"
+scientifically_validated = false
+discovery_delay_ticks = 20
+outbound_travel_duration_ticks = 40
+collection_duration_ticks = 20
+return_travel_duration_ticks = 40
+sharing_duration_ticks = 25

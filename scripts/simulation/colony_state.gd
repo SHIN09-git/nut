@@ -8,10 +8,14 @@ var simulation_tick: int = 0
 var queen: QueenModel
 var ants: Array[AntModel] = []
 var zones: Array[HabitatZoneState] = []
+var food_sources: Array[FoodSourceState] = []
 var humidity_adjustment_count: int = 0
 var water_action_unlocked: bool = false
 var observation_stable_ticks: int = 0
 var brood_humidity_observation_unlocked: bool = false
+var shared_sugar_portions: int = 0
+var total_sugar_portions_placed: int = 0
+var unlocked_observation_card_ids: Dictionary[StringName, bool] = {}
 var _next_entity_id: int = 1
 var _next_observation_event_id: int = 1
 var _observation_events: Array[ObservationEvent] = []
@@ -78,6 +82,51 @@ func get_zone(zone_id: StringName) -> HabitatZoneState:
 		if zone.zone_id == zone_id:
 			return zone
 	return null
+
+
+func create_food_source(
+	zone_id: StringName,
+	portion_count: int,
+	food_type: FoodSourceState.FoodType
+) -> FoodSourceState:
+	if get_zone(zone_id) == null or portion_count <= 0:
+		return null
+	var source: FoodSourceState = FoodSourceState.new(
+		_next_entity_id,
+		zone_id,
+		portion_count,
+		food_type
+	)
+	_next_entity_id += 1
+	food_sources.append(source)
+	return source
+
+
+func get_food_source(food_source_id: int) -> FoodSourceState:
+	for source: FoodSourceState in food_sources:
+		if source.entity_id == food_source_id:
+			return source
+	return null
+
+
+func remove_food_source(food_source_id: int) -> bool:
+	var source: FoodSourceState = get_food_source(food_source_id)
+	if source == null or not source.available:
+		return false
+	# Keep a tombstone so removal cannot silently erase conserved portions.
+	source.available = false
+	return true
+
+
+func copy_unlocked_observation_card_ids() -> Array[StringName]:
+	var card_ids: Array[StringName] = []
+	for card_id: StringName in unlocked_observation_card_ids:
+		card_ids.append(card_id)
+	card_ids.sort_custom(
+		func(first: StringName, second: StringName) -> bool:
+			return String(first) < String(second)
+	)
+	return card_ids
 
 
 func record_observation_event(

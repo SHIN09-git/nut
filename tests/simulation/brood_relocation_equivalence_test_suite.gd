@@ -293,10 +293,7 @@ func _expected_water_action_count() -> int:
 
 
 func _find_water_target_zone() -> HabitatZoneData:
-	for zone: HabitatZoneData in [
-		HUMIDITY_SCENARIO_DATA.left_zone,
-		HUMIDITY_SCENARIO_DATA.right_zone,
-	]:
+	for zone: HabitatZoneData in HUMIDITY_SCENARIO_DATA.zones:
 		if (
 			zone != null
 			and zone.zone_id

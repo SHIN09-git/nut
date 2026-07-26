@@ -1,0 +1,72 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/view/sugar_foraging_habitat_view.gd" id="1_habitat"]
+[ext_resource type="Script" path="res://scripts/view/queen_view.gd" id="2_queen"]
+
+[node name="SugarForagingHabitat" type="Control"]
+custom_minimum_size = Vector2(720, 350)
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+clip_contents = true
+script = ExtResource("1_habitat")
+
+[node name="EntityLayer" type="Node2D" parent="."]
+unique_name_in_owner = true
+
+[node name="QueenView" type="Node2D" parent="EntityLayer"]
+unique_name_in_owner = true
+script = ExtResource("2_queen")
+
+[node name="OverlayLayer" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="NestZoneLabel" type="Label" parent="OverlayLayer"]
+unique_name_in_owner = true
+offset_right = 96.0
+offset_bottom = 24.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.83, 0.75, 0.57, 0.82)
+theme_override_font_sizes/font_size = 14
+text = "巢室"
+
+[node name="EntranceZoneLabel" type="Label" parent="OverlayLayer"]
+unique_name_in_owner = true
+offset_right = 96.0
+offset_bottom = 24.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.70, 0.68, 0.56, 0.76)
+theme_override_font_sizes/font_size = 13
+text = "出入口"
+horizontal_alignment = 1
+
+[node name="ForagingZoneLabel" type="Label" parent="OverlayLayer"]
+unique_name_in_owner = true
+offset_right = 116.0
+offset_bottom = 24.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.71, 0.82, 0.68, 0.86)
+theme_override_font_sizes/font_size = 14
+text = "觅食区"
+
+[node name="PlacementHint" type="Label" parent="OverlayLayer"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(172, 28)
+offset_right = 172.0
+offset_bottom = 28.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.96, 0.84, 0.55, 0.94)
+theme_override_font_sizes/font_size = 13
+text = "点击觅食区放置糖水"
+horizontal_alignment = 1

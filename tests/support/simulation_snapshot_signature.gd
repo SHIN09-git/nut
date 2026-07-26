@@ -130,6 +130,121 @@ static func event_history_digest(
 	return canonical_event_history(events).sha256_text()
 
 
+static func canonical_game_snapshot(snapshot: GameSnapshot) -> String:
+	if snapshot == null:
+		return "<null-game-snapshot>"
+
+	var lines: PackedStringArray = [
+		"game|tick=%d" % snapshot.simulation_tick,
+		"colony-begin",
+		canonical_snapshot(snapshot.colony),
+		"colony-end",
+	]
+
+	if snapshot.scenario == null:
+		lines.append("scenario|null")
+	else:
+		lines.append(
+			(
+				"scenario|id=%s|phase=%d|nest=%s|placement=%s"
+				+ "|action_available=%s|action_pending=%s|action_count=%d"
+			)
+			% [
+				String(snapshot.scenario.scenario_id),
+				snapshot.scenario.phase,
+				String(snapshot.scenario.nest_zone_id),
+				String(snapshot.scenario.placement_zone_id),
+				str(snapshot.scenario.place_action_available),
+				str(snapshot.scenario.place_action_pending),
+				snapshot.scenario.place_action_count,
+			]
+		)
+
+	if snapshot.colony != null:
+		var sources: Array[FoodSourceSnapshot] = []
+		sources.assign(snapshot.colony.food_sources)
+		sources.sort_custom(
+			func(first: FoodSourceSnapshot, second: FoodSourceSnapshot) -> bool:
+				return first.food_source_id < second.food_source_id
+		)
+		for source: FoodSourceSnapshot in sources:
+			if source == null:
+				lines.append("food|null")
+				continue
+			lines.append(
+				(
+					"food|id=%d|zone=%s|type=%d|remaining=%d"
+					+ "|available=%s|reserved_by=%d|carrier=%d"
+				)
+				% [
+					source.food_source_id,
+					String(source.zone_id),
+					source.food_type,
+					source.remaining_portions,
+					str(source.available),
+					source.reserved_by_worker_id,
+					source.carrier_worker_id,
+				]
+			)
+
+		var ants: Array[AntSnapshot] = []
+		ants.assign(snapshot.colony.ants)
+		ants.sort_custom(
+			func(first: AntSnapshot, second: AntSnapshot) -> bool:
+				return first.entity_id < second.entity_id
+		)
+		for ant: AntSnapshot in ants:
+			if ant == null:
+				lines.append("foraging-task|null-ant")
+				continue
+			var task: ForagingTaskSnapshot = ant.foraging_task
+			if task == null:
+				lines.append(
+					"foraging-task|worker=%d|null" % ant.entity_id
+				)
+				continue
+			var route_zone_ids: PackedStringArray = []
+			for route_zone_id: StringName in task.route_zone_ids:
+				route_zone_ids.append(String(route_zone_id))
+			lines.append(
+				(
+					"foraging-task|worker=%d|state=%d|source=%d"
+					+ "|origin=%s|target=%s|nest=%s|route=%s"
+					+ "|carried=%d|elapsed=%d|duration=%d"
+				)
+				% [
+					ant.entity_id,
+					task.state,
+					task.target_food_source_id,
+					String(task.origin_zone_id),
+					String(task.target_zone_id),
+					String(task.nest_zone_id),
+					",".join(route_zone_ids),
+					task.carried_portions,
+					task.elapsed_ticks,
+					task.duration_ticks,
+				]
+			)
+
+	if snapshot.observations == null:
+		lines.append("observations|null")
+	else:
+		var card_ids: PackedStringArray = []
+		for card_id: StringName in snapshot.observations.unlocked_card_ids:
+			card_ids.append(String(card_id))
+		card_ids.sort()
+		lines.append("cards|%s" % ",".join(card_ids))
+		lines.append("journal-events-begin")
+		lines.append(canonical_event_history(snapshot.observations.events))
+		lines.append("journal-events-end")
+
+	return "\n".join(lines)
+
+
+static func game_snapshot_digest(snapshot: GameSnapshot) -> String:
+	return canonical_game_snapshot(snapshot).sha256_text()
+
+
 static func roll_digest(previous_digest: String, record: String) -> String:
 	return ("%s\n%s" % [previous_digest, record]).sha256_text()
 

@@ -10,6 +10,7 @@ var next_egg_tick: int = -1
 var ants: Array[AntSnapshot] = []
 var scenario_id: StringName = &""
 var zones: Array[HabitatZoneSnapshot] = []
+var food_sources: Array[FoodSourceSnapshot] = []
 var humidity_adjustment_count: int = 0
 var water_action_unlocked: bool = false
 var water_action_available: bool = false
@@ -40,6 +41,13 @@ func find_ant(entity_id: int) -> AntSnapshot:
 	for ant: AntSnapshot in ants:
 		if ant.entity_id == entity_id:
 			return ant
+	return null
+
+
+func find_food_source(food_source_id: int) -> FoodSourceSnapshot:
+	for source: FoodSourceSnapshot in food_sources:
+		if source.food_source_id == food_source_id:
+			return source
 	return null
 
 

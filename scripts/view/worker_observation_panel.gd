@@ -56,7 +56,7 @@ func apply_selection(
 		else UNNAMED_WORKER_TEXT
 	)
 	_worker_current_behavior_label.text = _describe_current_behavior(
-		worker_snapshot.worker_task_state
+		worker_snapshot
 	)
 	if selection_changed or name_changed:
 		_worker_name_edit.text = normalized_display_name
@@ -119,8 +119,25 @@ func _apply_event_history(events: Array) -> void:
 	)
 
 
-func _describe_current_behavior(state: int) -> String:
-	match state:
+func _describe_current_behavior(worker_snapshot: AntSnapshot) -> String:
+	if (
+		worker_snapshot.foraging_task != null
+		and worker_snapshot.foraging_task.state
+			!= ForagingTaskSnapshot.State.IDLE
+	):
+		match worker_snapshot.foraging_task.state:
+			ForagingTaskSnapshot.State.SEEKING_FOOD:
+				return "这只工蚁似乎察觉到了巢外的食物。"
+			ForagingTaskSnapshot.State.MOVING_TO_FOOD:
+				return "这只工蚁正在穿过出入口，前往糖水。"
+			ForagingTaskSnapshot.State.COLLECTING:
+				return "这只工蚁正在采集糖水。"
+			ForagingTaskSnapshot.State.RETURNING_TO_NEST:
+				return "这只工蚁正携带糖水返回巢室。"
+			ForagingTaskSnapshot.State.SHARING:
+				return "这只工蚁正在巢内与同伴分享糖水。"
+
+	match worker_snapshot.worker_task_state:
 		WorkerTaskModel.State.IDLE:
 			return "这只工蚁正在巢室里休整。"
 		WorkerTaskModel.State.MOVING_TO_BROOD:
@@ -147,6 +164,20 @@ func _describe_event(event_type: ObservationEvent.Type) -> String:
 			return "把一只幼体安置在新的位置。"
 		ObservationEvent.Type.BROOD_HUMIDITY_OBSERVATION_COMPLETED:
 			return "群落的湿度观察已经完成。"
+		ObservationEvent.Type.FOOD_SEEK_STARTED:
+			return "察觉到巢外出现了食物。"
+		ObservationEvent.Type.FOOD_TRAVEL_STARTED:
+			return "出发前往觅食区。"
+		ObservationEvent.Type.SUGAR_COLLECTED:
+			return "从糖水滴中采集了一份食物。"
+		ObservationEvent.Type.SUGAR_RETURN_STARTED:
+			return "携带糖水开始返回巢室。"
+		ObservationEvent.Type.SUGAR_SHARED:
+			return "在巢内把糖水分享给了同伴。"
+		ObservationEvent.Type.SUGAR_OBSERVATION_COMPLETED:
+			return "群落的糖水觅食观察已经完成。"
+		ObservationEvent.Type.FORAGING_TASK_CANCELLED:
+			return "环境变化后放弃了这次觅食。"
 		_:
 			return "发生了一次新的行为。"
 

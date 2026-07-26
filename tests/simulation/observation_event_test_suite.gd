@@ -442,12 +442,17 @@ func _count_event_type(
 
 
 func _get_water_action_count_to_reach_comfort() -> int:
-	var target_zone: HabitatZoneData = (
-		HUMIDITY_SCENARIO_DATA.left_zone
-		if HUMIDITY_SCENARIO_DATA.left_zone.zone_id
-			== HUMIDITY_SCENARIO_DATA.humidity_adjustment_zone_id
-		else HUMIDITY_SCENARIO_DATA.right_zone
-	)
+	var target_zone: HabitatZoneData
+	for zone_data: HabitatZoneData in HUMIDITY_SCENARIO_DATA.zones:
+		if (
+			zone_data != null
+			and zone_data.zone_id
+				== HUMIDITY_SCENARIO_DATA.humidity_adjustment_zone_id
+		):
+			target_zone = zone_data
+			break
+	if target_zone == null:
+		return 0
 	var humidity_gap: float = maxf(
 		SPECIES_A_DATA.brood_humidity_min - target_zone.initial_humidity,
 		0.0
