@@ -22,6 +22,7 @@ var lifecycle_active: bool
 var nutrition_config: NutritionConfig
 var protein_placement_zone_id: StringName
 var protein_portions: int
+var founding_care_config: FoundingCareConfig
 
 
 static func from_data(
@@ -75,6 +76,12 @@ static func from_data(
 		scenario_data.protein_placement_zone_id
 	)
 	config.protein_portions = scenario_data.protein_portions
+	if scenario_data.founding_care_data != null:
+		config.founding_care_config = FoundingCareConfig.from_data(
+			scenario_data.founding_care_data
+		)
+		if config.founding_care_config == null:
+			return null
 	return config
 
 
@@ -106,6 +113,17 @@ func is_nutrition_growth() -> bool:
 	)
 
 
+func is_act1_test_tube() -> bool:
+	return (
+		scenario_kind
+		== HabitatScenarioData.ScenarioKind.ACT1_TEST_TUBE
+	)
+
+
+func supports_nutrition_growth() -> bool:
+	return is_nutrition_growth() or is_act1_test_tube()
+
+
 func supports_humidity_relocation() -> bool:
 	return is_humidity_relocation() or is_combined_observation()
 
@@ -115,4 +133,5 @@ func supports_sugar_foraging() -> bool:
 		is_sugar_foraging()
 		or is_combined_observation()
 		or is_nutrition_growth()
+		or is_act1_test_tube()
 	)

@@ -8,6 +8,7 @@ var observations: ObservationJournalSnapshot
 var sequence: ScenarioSequenceSnapshot
 var campaign: CampaignSnapshot
 var nutrition: NutritionSnapshot
+var act1: Act1Snapshot
 
 
 func _init(
@@ -17,7 +18,8 @@ func _init(
 	new_observations: ObservationJournalSnapshot = null,
 	new_sequence: ScenarioSequenceSnapshot = null,
 	new_campaign: CampaignSnapshot = null,
-	new_nutrition: NutritionSnapshot = null
+	new_nutrition: NutritionSnapshot = null,
+	new_act1: Act1Snapshot = null
 ) -> void:
 	simulation_tick = new_simulation_tick
 	colony = new_colony
@@ -26,3 +28,4 @@ func _init(
 	sequence = new_sequence
 	campaign = new_campaign
 	nutrition = new_nutrition
+	act1 = new_act1

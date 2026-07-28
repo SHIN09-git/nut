@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="FoundingCareData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/founding_care_data.gd" id="1_care"]
+
+[resource]
+script = ExtResource("1_care")
+data_status = &"prototype_pacing_fixture"
+scientifically_validated = false
+rest_duration_ticks = 30
+gathering_duration_ticks = 25
+brood_care_duration_ticks = 35
+pupa_observation_ticks = 40
+first_worker_initial_pupa_age_ticks = 700
+queen_care_observation_card_id = &"queen_brood_care"
+pupa_observation_card_id = &"first_pupa_stable"
+first_worker_observation_card_id = &"first_worker_emerged"
+worker_care_observation_card_id = &"first_worker_brood_care"

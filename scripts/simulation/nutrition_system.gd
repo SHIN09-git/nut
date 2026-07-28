@@ -20,7 +20,7 @@ func is_ready() -> bool:
 	return (
 		_config != null
 		and _scenario_config != null
-		and _scenario_config.is_nutrition_growth()
+		and _scenario_config.supports_nutrition_growth()
 		and not _nest_zone_id.is_empty()
 	)
 

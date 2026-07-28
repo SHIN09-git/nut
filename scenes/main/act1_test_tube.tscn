@@ -1,0 +1,689 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/act1_test_tube_controller.gd" id="1_controller"]
+[ext_resource type="PackedScene" path="res://scenes/habitat/act1_test_tube_habitat.tscn" id="2_habitat"]
+
+[sub_resource type="StyleBoxFlat" id="Style_panel"]
+bg_color = Color(0.065, 0.083, 0.078, 0.98)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.32, 0.39, 0.32, 0.9)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+
+[sub_resource type="StyleBoxFlat" id="Style_card"]
+bg_color = Color(0.09, 0.115, 0.105, 0.96)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.27, 0.34, 0.28, 0.85)
+corner_radius_top_left = 9
+corner_radius_top_right = 9
+corner_radius_bottom_right = 9
+corner_radius_bottom_left = 9
+content_margin_left = 12.0
+content_margin_top = 10.0
+content_margin_right = 12.0
+content_margin_bottom = 10.0
+
+[sub_resource type="StyleBoxFlat" id="Style_overlay"]
+bg_color = Color(0.025, 0.035, 0.033, 0.97)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.55, 0.48, 0.30, 0.9)
+corner_radius_top_left = 16
+corner_radius_top_right = 16
+corner_radius_bottom_right = 16
+corner_radius_bottom_left = 16
+
+[sub_resource type="StyleBoxFlat" id="Style_header"]
+bg_color = Color(0.052, 0.069, 0.064, 1)
+border_width_bottom = 1
+border_color = Color(0.32, 0.38, 0.31, 0.8)
+
+[node name="Act1TestTube" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_controller")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.025, 0.035, 0.033, 1)
+
+[node name="Main" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = 16.0
+offset_right = -20.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="PanelContainer" parent="Main"]
+custom_minimum_size = Vector2(0, 70)
+layout_mode = 2
+theme_override_styles/panel = SubResource("Style_header")
+
+[node name="HeaderMargin" type="MarginContainer" parent="Main/Header"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 8
+
+[node name="HeaderRow" type="HBoxContainer" parent="Main/Header/HeaderMargin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TitleBlock" type="VBoxContainer" parent="Main/Header/HeaderMargin/HeaderRow"]
+custom_minimum_size = Vector2(390, 0)
+layout_mode = 2
+theme_override_constants/separation = 1
+
+[node name="Title" type="Label" parent="Main/Header/HeaderMargin/HeaderRow/TitleBlock"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.93, 0.84, 0.62, 1)
+theme_override_font_sizes/font_size = 24
+text = "玻璃蚁国 · 试管建群"
+
+[node name="ChapterLabel" type="Label" parent="Main/Header/HeaderMargin/HeaderRow/TitleBlock"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.64, 0.76, 0.69, 1)
+text = "第 1 章 · 孤后建群"
+
+[node name="Spacer" type="Control" parent="Main/Header/HeaderMargin/HeaderRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="StatusLabel" type="Label" parent="Main/Header/HeaderMargin/HeaderRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(116, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.68, 0.86, 0.72, 1)
+text = "观察中 · 1×"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="PauseButton" type="Button" parent="Main/Header/HeaderMargin/HeaderRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(66, 42)
+layout_mode = 2
+text = "暂停"
+
+[node name="Speed1xButton" type="Button" parent="Main/Header/HeaderMargin/HeaderRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(50, 42)
+layout_mode = 2
+toggle_mode = true
+text = "1×"
+
+[node name="Speed4xButton" type="Button" parent="Main/Header/HeaderMargin/HeaderRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(50, 42)
+layout_mode = 2
+toggle_mode = true
+text = "4×"
+
+[node name="Speed16xButton" type="Button" parent="Main/Header/HeaderMargin/HeaderRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(56, 42)
+layout_mode = 2
+toggle_mode = true
+text = "16×"
+
+[node name="Body" type="HBoxContainer" parent="Main"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+
+[node name="HabitatPanel" type="PanelContainer" parent="Main/Body"]
+custom_minimum_size = Vector2(760, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("Style_panel")
+
+[node name="HabitatMargin" type="MarginContainer" parent="Main/Body/HabitatPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="Act1TestTubeView" parent="Main/Body/HabitatPanel/HabitatMargin" instance=ExtResource("2_habitat")]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="SidePanel" type="PanelContainer" parent="Main/Body"]
+custom_minimum_size = Vector2(360, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("Style_panel")
+
+[node name="SideMargin" type="MarginContainer" parent="Main/Body/SidePanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="SideContent" type="VBoxContainer" parent="Main/Body/SidePanel/SideMargin"]
+custom_minimum_size = Vector2(330, 0)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ObjectiveHeading" type="Label" parent="Main/Body/SidePanel/SideMargin/SideContent"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.91, 0.80, 0.56, 1)
+theme_override_font_sizes/font_size = 18
+text = "本章目标"
+
+[node name="ObjectiveCard" type="PanelContainer" parent="Main/Body/SidePanel/SideMargin/SideContent"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("Style_card")
+
+[node name="ObjectiveLabel" type="Label" parent="Main/Body/SidePanel/SideMargin/SideContent/ObjectiveCard"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(306, 0)
+layout_mode = 2
+text = "○ 安装遮光套\n○ 观察蚁后护理\n○ 记录首枚蛹"
+autowrap_mode = 2
+
+[node name="EvidenceHeading" type="Label" parent="Main/Body/SidePanel/SideMargin/SideContent"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.77, 0.69, 1)
+theme_override_font_sizes/font_size = 17
+text = "已记录线索"
+
+[node name="EvidenceCard" type="PanelContainer" parent="Main/Body/SidePanel/SideMargin/SideContent"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_styles/panel = SubResource("Style_card")
+
+[node name="EvidenceLabel" type="Label" parent="Main/Body/SidePanel/SideMargin/SideContent/EvidenceCard"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(306, 0)
+layout_mode = 2
+size_flags_vertical = 3
+text = "• 继续观察画面中的变化"
+autowrap_mode = 2
+
+[node name="GuidanceLabel" type="Label" parent="Main/Body/SidePanel/SideMargin/SideContent"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(330, 52)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.82, 0.74, 0.55, 1)
+text = "先为试管安装遮光套，观察蚁后如何回应。"
+autowrap_mode = 2
+vertical_alignment = 1
+
+[node name="JournalButton" type="Button" parent="Main/Body/SidePanel/SideMargin/SideContent"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+text = "打开观察手册"
+
+[node name="InspectPanel" type="PanelContainer" parent="Main/Body/SidePanel/SideMargin/SideContent"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_styles/panel = SubResource("Style_card")
+
+[node name="InspectLabel" type="Label" parent="Main/Body/SidePanel/SideMargin/SideContent/InspectPanel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(306, 0)
+layout_mode = 2
+text = "放大观察"
+autowrap_mode = 2
+
+[node name="ToolBar" type="PanelContainer" parent="Main"]
+custom_minimum_size = Vector2(0, 72)
+layout_mode = 2
+theme_override_styles/panel = SubResource("Style_panel")
+
+[node name="ToolMargin" type="MarginContainer" parent="Main/ToolBar"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 8
+
+[node name="ToolRow" type="HBoxContainer" parent="Main/ToolBar/ToolMargin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ToolLabel" type="Label" parent="Main/ToolBar/ToolMargin/ToolRow"]
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.63, 0.72, 0.67, 1)
+text = "设施与工具"
+vertical_alignment = 1
+
+[node name="CoverButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(170, 48)
+layout_mode = 2
+text = "安装遮光套"
+
+[node name="MagnifierButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(155, 48)
+layout_mode = 2
+toggle_mode = true
+text = "放大镜观察"
+
+[node name="SugarButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolRow"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(180, 48)
+layout_mode = 2
+text = "在喂食口滴糖水"
+
+[node name="ToolSpacer" type="Control" parent="Main/ToolBar/ToolMargin/ToolRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="PrototypeLabel" type="Label" parent="Main/ToolBar/ToolMargin/ToolRow"]
+custom_minimum_size = Vector2(230, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.54, 0.50, 1)
+theme_override_font_sizes/font_size = 12
+text = "原型节奏；并非真实物种护理建议"
+horizontal_alignment = 2
+vertical_alignment = 1
+autowrap_mode = 2
+
+[node name="PreparationGate" type="Control" parent="."]
+unique_name_in_owner = true
+z_index = 20
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Dim" type="ColorRect" parent="PreparationGate"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.01, 0.015, 0.014, 0.86)
+
+[node name="Center" type="CenterContainer" parent="PreparationGate"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="PreparationGate/Center"]
+custom_minimum_size = Vector2(620, 330)
+layout_mode = 2
+theme_override_styles/panel = SubResource("Style_overlay")
+
+[node name="Margin" type="MarginContainer" parent="PreparationGate/Center/Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 30
+theme_override_constants/margin_top = 26
+theme_override_constants/margin_right = 30
+theme_override_constants/margin_bottom = 26
+
+[node name="Content" type="VBoxContainer" parent="PreparationGate/Center/Panel/Margin"]
+custom_minimum_size = Vector2(556, 0)
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="PreparationHeading" type="Label" parent="PreparationGate/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.84, 0.61, 1)
+theme_override_font_sizes/font_size = 28
+text = "第一幕 · 试管中的新群落"
+horizontal_alignment = 1
+
+[node name="PreparationBody" type="Label" parent="PreparationGate/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(556, 0)
+layout_mode = 2
+size_flags_vertical = 3
+text = "你不会直接命令蚂蚁。布置设施，观察群落怎样回应，再把证据写入手册。"
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 2
+
+[node name="StartObservationButton" type="Button" parent="PreparationGate/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+text = "开始观察"
+
+[node name="JournalPanel" type="Control" parent="."]
+unique_name_in_owner = true
+visible = false
+z_index = 30
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Dim" type="ColorRect" parent="JournalPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.01, 0.015, 0.014, 0.8)
+
+[node name="Center" type="CenterContainer" parent="JournalPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="JournalPanel/Center"]
+custom_minimum_size = Vector2(760, 620)
+layout_mode = 2
+theme_override_styles/panel = SubResource("Style_overlay")
+
+[node name="Margin" type="MarginContainer" parent="JournalPanel/Center/Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 20
+
+[node name="Content" type="VBoxContainer" parent="JournalPanel/Center/Panel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="JournalHeading" type="Label" parent="JournalPanel/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.84, 0.61, 1)
+theme_override_font_sizes/font_size = 24
+text = "观察手册"
+
+[node name="JournalChapterLabel" type="Label" parent="JournalPanel/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 19
+text = "第 1 章"
+
+[node name="JournalStatusLabel" type="Label" parent="JournalPanel/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.78, 0.70, 1)
+text = "收集证据中"
+
+[node name="Scroll" type="ScrollContainer" parent="JournalPanel/Center/Panel/Margin/Content"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="ScrollContent" type="VBoxContainer" parent="JournalPanel/Center/Panel/Margin/Content/Scroll"]
+custom_minimum_size = Vector2(690, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="JournalObjectiveLabel" type="Label" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(690, 0)
+layout_mode = 2
+text = "目标"
+autowrap_mode = 2
+
+[node name="JournalEvidenceLabel" type="Label" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(690, 0)
+layout_mode = 2
+text = "证据"
+autowrap_mode = 2
+
+[node name="JournalHintLabel" type="Label" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(690, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.84, 0.75, 0.55, 1)
+text = "提示"
+autowrap_mode = 2
+
+[node name="InferenceButton1" type="Button" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(690, 50)
+layout_mode = 2
+text = "推论一"
+autowrap_mode = 2
+
+[node name="InferenceButton2" type="Button" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(690, 50)
+layout_mode = 2
+text = "推论二"
+autowrap_mode = 2
+
+[node name="InferenceButton3" type="Button" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(690, 50)
+layout_mode = 2
+text = "推论三"
+autowrap_mode = 2
+
+[node name="JournalCloseButton" type="Button" parent="JournalPanel/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+text = "返回观察"
+
+[node name="CompletionPanel" type="Control" parent="."]
+unique_name_in_owner = true
+visible = false
+z_index = 25
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Center" type="CenterContainer" parent="CompletionPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="CompletionPanel/Center"]
+custom_minimum_size = Vector2(590, 290)
+layout_mode = 2
+theme_override_styles/panel = SubResource("Style_overlay")
+
+[node name="Margin" type="MarginContainer" parent="CompletionPanel/Center/Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 28
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 28
+theme_override_constants/margin_bottom = 24
+
+[node name="Content" type="VBoxContainer" parent="CompletionPanel/Center/Panel/Margin"]
+custom_minimum_size = Vector2(534, 0)
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="CompletionHeading" type="Label" parent="CompletionPanel/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.84, 0.61, 1)
+theme_override_font_sizes/font_size = 27
+text = "第一幕完成"
+horizontal_alignment = 1
+
+[node name="CompletionBody" type="Label" parent="CompletionPanel/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(534, 0)
+layout_mode = 2
+size_flags_vertical = 3
+text = "群落拥有第一只工蚁，并完成了第一次可见的护理与营养交换。"
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 2
+
+[node name="ContinueFreeplayButton" type="Button" parent="CompletionPanel/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+text = "继续自由观察"
+
+[node name="PauseMenu" type="Control" parent="."]
+unique_name_in_owner = true
+visible = false
+z_index = 40
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Dim" type="ColorRect" parent="PauseMenu"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.01, 0.015, 0.014, 0.84)
+
+[node name="Center" type="CenterContainer" parent="PauseMenu"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="PauseMenu/Center"]
+custom_minimum_size = Vector2(460, 440)
+layout_mode = 2
+theme_override_styles/panel = SubResource("Style_overlay")
+
+[node name="Margin" type="MarginContainer" parent="PauseMenu/Center/Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 26
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 26
+theme_override_constants/margin_bottom = 24
+
+[node name="Content" type="VBoxContainer" parent="PauseMenu/Center/Panel/Margin"]
+custom_minimum_size = Vector2(408, 0)
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="PauseHeading" type="Label" parent="PauseMenu/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.84, 0.61, 1)
+theme_override_font_sizes/font_size = 26
+text = "观察已暂停"
+horizontal_alignment = 1
+
+[node name="ResumeButton" type="Button" parent="PauseMenu/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+text = "继续观察"
+
+[node name="SaveGameButton" type="Button" parent="PauseMenu/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+text = "保存游戏"
+
+[node name="ReturnToTitleButton" type="Button" parent="PauseMenu/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+text = "保存并返回标题"
+
+[node name="RestartButton" type="Button" parent="PauseMenu/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+text = "重新开始本章"
+
+[node name="ExitButton" type="Button" parent="PauseMenu/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+text = "退出"
+
+[node name="SaveStatus" type="Label" parent="PauseMenu/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "已保存"
+horizontal_alignment = 1
+
+[node name="DebugPanel" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+z_index = 50
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -430.0
+offset_top = 92.0
+offset_right = -24.0
+offset_bottom = 618.0
+grow_horizontal = 0
+theme_override_styles/panel = SubResource("Style_overlay")
+
+[node name="Margin" type="MarginContainer" parent="DebugPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 14
+
+[node name="DebugLabel" type="Label" parent="DebugPanel/Margin"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "R6 Debug"
+autowrap_mode = 2

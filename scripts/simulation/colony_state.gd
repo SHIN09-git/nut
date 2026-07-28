@@ -19,6 +19,7 @@ var unlocked_observation_card_ids: Dictionary[StringName, bool] = {}
 var scenario_progress: ScenarioProgressState
 var campaign_state: CampaignState
 var nutrition_state: ColonyNutritionState
+var act1_state: Act1State
 var _next_entity_id: int = 1
 var _next_observation_event_id: int = 1
 var _observation_events: Array[ObservationEvent] = []
@@ -52,7 +53,7 @@ func initialize_habitat(
 	for zone: HabitatZoneState in config.zones:
 		zones.append(zone.duplicate_state())
 
-	if config.is_nutrition_growth():
+	if config.supports_nutrition_growth():
 		if config.nutrition_config == null or not config.lifecycle_active:
 			return false
 		nutrition_state = ColonyNutritionState.new(
@@ -60,14 +61,22 @@ func initialize_habitat(
 			config.nutrition_config.initial_protein_reserve_portions
 		)
 
-	if config.is_combined_observation():
+	if config.is_combined_observation() or config.is_act1_test_tube():
+		var first_worker_initial_pupa_age_ticks: int = -1
+		if config.is_combined_observation() and config.sequence_config != null:
+			first_worker_initial_pupa_age_ticks = (
+				config.sequence_config.first_worker_initial_pupa_age_ticks
+			)
+		elif config.is_act1_test_tube() and config.founding_care_config != null:
+			first_worker_initial_pupa_age_ticks = (
+				config.founding_care_config
+					.first_worker_initial_pupa_age_ticks
+			)
 		if (
 			lifecycle_config == null
-			or config.sequence_config == null
-			or (
-				config.sequence_config.first_worker_initial_pupa_age_ticks
+			or first_worker_initial_pupa_age_ticks <= 0
+			or first_worker_initial_pupa_age_ticks
 				>= lifecycle_config.pupa_duration_ticks
-			)
 		):
 			return false
 		var first_worker_pupa: AntModel = AntModel.new(
@@ -80,15 +89,22 @@ func initialize_habitat(
 			-brood_care_config.minimum_zone_dwell_ticks
 		)
 		first_worker_pupa.stage_age_ticks = (
-			config.sequence_config.first_worker_initial_pupa_age_ticks
+			first_worker_initial_pupa_age_ticks
 		)
 		first_worker_pupa.total_age_ticks = first_worker_pupa.stage_age_ticks
 		ants.append(first_worker_pupa)
-		scenario_progress = ScenarioProgressState.new()
-		scenario_progress.first_worker_entity_id = (
-			first_worker_pupa.entity_id
-		)
-		campaign_state = CampaignState.new()
+		if config.is_combined_observation():
+			scenario_progress = ScenarioProgressState.new()
+			scenario_progress.first_worker_entity_id = (
+				first_worker_pupa.entity_id
+			)
+			campaign_state = CampaignState.new()
+		else:
+			act1_state = Act1State.new()
+			act1_state.first_worker_entity_id = first_worker_pupa.entity_id
+			campaign_state = CampaignState.new(
+				CampaignState.Chapter.ACT1_FOUNDING
+			)
 
 	for worker_index: int in config.initial_worker_count:
 		var worker: AntModel = AntModel.new(
@@ -96,7 +112,7 @@ func initialize_habitat(
 			AntModel.LifeStage.WORKER
 		)
 		_next_entity_id += 1
-		if config.is_nutrition_growth():
+		if config.supports_nutrition_growth():
 			worker.configure_nutrition_worker(
 				config.initial_worker_zone_id,
 				config.nutrition_config.feeding_decision_interval_ticks
@@ -122,6 +138,11 @@ func initialize_habitat(
 			-brood_care_config.minimum_zone_dwell_ticks
 		)
 		ants.append(brood)
+
+	if config.is_act1_test_tube():
+		# The chapter opens after these brood were already laid. Counting them
+		# prevents the lifecycle system from inventing a second founding batch.
+		queen.laid_egg_count = ants.size()
 
 	return true
 

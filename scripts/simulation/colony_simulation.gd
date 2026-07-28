@@ -17,6 +17,7 @@ enum PendingCommandType {
 	CONTINUE_OBSERVATION_ACTION,
 	SELECT_CAMPAIGN_INFERENCE_ACTION,
 	PLACE_PROTEIN_ACTION,
+	APPLY_LIGHT_COVER_ACTION,
 }
 
 var _lifecycle_config: LifecycleConfig
@@ -27,6 +28,8 @@ var _foraging_system: ForagingSystem
 var _nutrition_system: NutritionSystem
 var _scenario_director: ScenarioDirector
 var _campaign_director: CampaignDirector
+var _act1_campaign_director: Act1CampaignDirector
+var _founding_care_system: FoundingCareSystem
 var _state: ColonyState
 var _pending_commands: Array[PendingSimulationCommand] = []
 var _next_pending_command_sequence_id: int = 1
@@ -86,7 +89,7 @@ func _init(
 				"ColonySimulation could not initialize foraging"
 			)
 			return
-	if _habitat_config.is_nutrition_growth():
+	if _habitat_config.supports_nutrition_growth():
 		_nutrition_system = NutritionSystem.new(
 			_habitat_config.nutrition_config,
 			_habitat_config
@@ -94,6 +97,16 @@ func _init(
 		if not _nutrition_system.is_ready():
 			_configuration_error = (
 				"ColonySimulation could not initialize nutrition"
+			)
+			return
+	if _habitat_config.is_act1_test_tube():
+		_founding_care_system = FoundingCareSystem.new(
+			_habitat_config.founding_care_config,
+			_habitat_config
+		)
+		if not _founding_care_system.is_ready():
+			_configuration_error = (
+				"ColonySimulation could not initialize founding care"
 			)
 			return
 
@@ -128,6 +141,17 @@ func _init(
 			)
 			return
 		_campaign_director.update_after_systems(_state)
+	elif _habitat_config.is_act1_test_tube():
+		_act1_campaign_director = Act1CampaignDirector.new(
+			_habitat_config
+		)
+		if not _act1_campaign_director.is_ready():
+			_configuration_error = (
+				"ColonySimulation could not initialize Act 1 campaign"
+			)
+			return
+		_founding_care_system.advance(_state)
+		_act1_campaign_director.update_after_systems(_state)
 	if not has_valid_habitat_ownership():
 		_configuration_error = "Initial habitat ownership is invalid"
 
@@ -166,6 +190,13 @@ func submit_place_protein_action() -> bool:
 	if not _is_place_protein_action_available():
 		return false
 	_queue_pending_command(PendingCommandType.PLACE_PROTEIN_ACTION)
+	return true
+
+
+func submit_apply_light_cover_action() -> bool:
+	if not _is_light_cover_action_available():
+		return false
+	_queue_pending_command(PendingCommandType.APPLY_LIGHT_COVER_ACTION)
 	return true
 
 
@@ -264,8 +295,12 @@ func advance_tick(tick_index: int) -> bool:
 		_update_observation_record()
 	if _scenario_director != null:
 		_scenario_director.update_after_systems(_state)
+	if _founding_care_system != null:
+		_founding_care_system.advance(_state)
 	if _campaign_director != null:
 		_campaign_director.update_after_systems(_state)
+	if _act1_campaign_director != null:
+		_act1_campaign_director.update_after_systems(_state)
 	if not has_valid_habitat_ownership():
 		_configuration_error = (
 			"Habitat ownership invariant failed at Tick %d"
@@ -464,7 +499,14 @@ func create_game_snapshot() -> GameSnapshot:
 			_has_pending_command(
 				PendingCommandType.SELECT_CAMPAIGN_INFERENCE_ACTION
 			)
+		)
+	elif _act1_campaign_director != null:
+		campaign_snapshot = _act1_campaign_director.create_snapshot(
+			_state,
+			_has_pending_command(
+				PendingCommandType.SELECT_CAMPAIGN_INFERENCE_ACTION
 			)
+		)
 	var nutrition_snapshot: NutritionSnapshot
 	if _nutrition_system != null and _state.nutrition_state != null:
 		var nutrition: ColonyNutritionState = _state.nutrition_state
@@ -523,6 +565,14 @@ func create_game_snapshot() -> GameSnapshot:
 		nutrition_snapshot.protein_action_available = (
 			_is_place_protein_action_available()
 		)
+	var act1_snapshot: Act1Snapshot
+	if _founding_care_system != null:
+		act1_snapshot = _founding_care_system.create_snapshot(
+			_state,
+			_has_pending_command(
+				PendingCommandType.APPLY_LIGHT_COVER_ACTION
+			)
+		)
 	return GameSnapshot.new(
 		_state.simulation_tick,
 		create_snapshot(),
@@ -530,7 +580,8 @@ func create_game_snapshot() -> GameSnapshot:
 		observation_snapshot,
 		sequence_snapshot,
 		campaign_snapshot,
-		nutrition_snapshot
+		nutrition_snapshot,
+		act1_snapshot
 	)
 
 
@@ -604,6 +655,16 @@ func _has_valid_habitat_ownership(state: ColonyState) -> bool:
 		and not _campaign_director.has_valid_state(state)
 	):
 		return false
+	if (
+		_founding_care_system != null
+		and not _founding_care_system.has_valid_state(state)
+	):
+		return false
+	if (
+		_act1_campaign_director != null
+		and not _act1_campaign_director.has_valid_state(state)
+	):
+		return false
 	return true
 
 
@@ -635,6 +696,14 @@ func _apply_pending_commands() -> void:
 						_state,
 						command.argument_id
 					)
+				elif _act1_campaign_director != null:
+					_act1_campaign_director.apply_inference_action(
+						_state,
+						command.argument_id
+					)
+			PendingCommandType.APPLY_LIGHT_COVER_ACTION:
+				if _founding_care_system != null:
+					_founding_care_system.apply_light_cover(_state)
 
 
 func _apply_water_action() -> void:
@@ -731,7 +800,7 @@ func _supports_nutrition_growth() -> bool:
 	return (
 		is_ready()
 		and has_habitat()
-		and _habitat_config.is_nutrition_growth()
+		and _habitat_config.supports_nutrition_growth()
 		and _nutrition_system != null
 	)
 
@@ -759,7 +828,17 @@ func _should_assign_foraging() -> bool:
 	if _is_sugar_foraging_scenario():
 		return _foraging_system != null
 	if _supports_nutrition_growth():
-		return _foraging_system != null
+		return (
+			_foraging_system != null
+			and (
+				not _habitat_config.is_act1_test_tube()
+				or (
+					_act1_campaign_director != null
+					and _act1_campaign_director
+						.is_sugar_action_active(_state)
+				)
+			)
+		)
 	return (
 		_foraging_system != null
 		and _scenario_director != null
@@ -818,6 +897,14 @@ func _is_place_sugar_action_available() -> bool:
 		)
 		or _has_pending_command(PendingCommandType.PLACE_SUGAR_ACTION)
 		or (
+			_habitat_config.is_act1_test_tube()
+			and (
+				_act1_campaign_director == null
+				or not _act1_campaign_director
+					.is_sugar_action_active(_state)
+			)
+		)
+		or (
 			not _supports_nutrition_growth()
 			and (
 				_state.total_sugar_portions_placed > 0
@@ -844,6 +931,7 @@ func _is_place_sugar_action_available() -> bool:
 func _is_place_protein_action_available() -> bool:
 	if (
 		not _supports_nutrition_growth()
+		or _habitat_config.is_act1_test_tube()
 		or _foraging_system == null
 		or _has_pending_command(PendingCommandType.PLACE_PROTEIN_ACTION)
 		or _foraging_system.has_available_source_type(
@@ -874,13 +962,36 @@ func _is_campaign_inference_action_available(
 ) -> bool:
 	return (
 		is_ready()
-		and _campaign_director != null
+		and (
+			_campaign_director != null
+			or _act1_campaign_director != null
+		)
 		and not _has_pending_command(
 			PendingCommandType.SELECT_CAMPAIGN_INFERENCE_ACTION
 		)
-		and _campaign_director.is_inference_action_available(
-			_state,
-			inference_id
+		and (
+			_campaign_director != null
+			and _campaign_director.is_inference_action_available(
+				_state,
+				inference_id
+			)
+			or _act1_campaign_director != null
+			and _act1_campaign_director.is_inference_action_available(
+				_state,
+				inference_id
+			)
+		)
+	)
+
+
+func _is_light_cover_action_available() -> bool:
+	return (
+		is_ready()
+		and _founding_care_system != null
+		and _state.act1_state != null
+		and not _state.act1_state.light_cover_applied
+		and not _has_pending_command(
+			PendingCommandType.APPLY_LIGHT_COVER_ACTION
 		)
 	)
 

@@ -80,7 +80,7 @@ func apply_configured_protein_placement(
 		state == null
 		or not is_ready()
 		or state.nutrition_state == null
-		or not _scenario_config.is_nutrition_growth()
+		or not _scenario_config.supports_nutrition_growth()
 		or has_available_source_type(
 			state,
 			FoodSourceState.FoodType.PROTEIN

@@ -1,7 +1,8 @@
 class_name SimulationStateCodec
 extends RefCounted
 
-const CURRENT_SCHEMA_ID: String = "r5.authority.v3"
+const CURRENT_SCHEMA_ID: String = "r6.authority.v4"
+const R5_SCHEMA_ID: String = "r5.authority.v3"
 const R4_SCHEMA_ID: String = "r4.authority.v2"
 const PREVIOUS_SCHEMA_ID: String = "r2.authority.v1"
 const LEGACY_SCHEMA_ID: String = "r2.authority.v0"
@@ -180,6 +181,13 @@ static func _encode_habitat(config: HabitatScenarioConfig) -> Dictionary:
 		"protein_placement_zone_id":
 			String(config.protein_placement_zone_id),
 		"protein_portions": config.protein_portions,
+		"founding_care_config": (
+			null
+			if config.founding_care_config == null
+			else _encode_founding_care_config(
+				config.founding_care_config
+			)
+		),
 	}
 
 
@@ -232,6 +240,9 @@ static func _encode_state(state: ColonyState) -> Dictionary:
 	var nutrition: Variant = null
 	if state.nutrition_state != null:
 		nutrition = _encode_nutrition_state(state.nutrition_state)
+	var act1: Variant = null
+	if state.act1_state != null:
+		act1 = _encode_act1_state(state.act1_state)
 	return {
 		"simulation_tick": state.simulation_tick,
 		"queen": {
@@ -256,6 +267,7 @@ static func _encode_state(state: ColonyState) -> Dictionary:
 		"scenario_progress": progress,
 		"campaign": campaign,
 		"nutrition": nutrition,
+		"act1": act1,
 		"observation_events": events,
 	}
 
@@ -304,6 +316,27 @@ static func _encode_nutrition_config(
 	}
 
 
+static func _encode_founding_care_config(
+	config: FoundingCareConfig
+) -> Dictionary:
+	return {
+		"rest_duration_ticks": config.rest_duration_ticks,
+		"gathering_duration_ticks": config.gathering_duration_ticks,
+		"brood_care_duration_ticks": config.brood_care_duration_ticks,
+		"pupa_observation_ticks": config.pupa_observation_ticks,
+		"first_worker_initial_pupa_age_ticks":
+			config.first_worker_initial_pupa_age_ticks,
+		"queen_care_observation_card_id":
+			String(config.queen_care_observation_card_id),
+		"pupa_observation_card_id":
+			String(config.pupa_observation_card_id),
+		"first_worker_observation_card_id":
+			String(config.first_worker_observation_card_id),
+		"worker_care_observation_card_id":
+			String(config.worker_care_observation_card_id),
+	}
+
+
 static func _encode_nutrition_state(
 	nutrition: ColonyNutritionState
 ) -> Dictionary:
@@ -325,6 +358,24 @@ static func _encode_nutrition_state(
 		"delivered_protein_portions":
 			nutrition.delivered_protein_portions,
 		"completed_feeding_count": nutrition.completed_feeding_count,
+	}
+
+
+static func _encode_act1_state(act1: Act1State) -> Dictionary:
+	return {
+		"light_cover_applied": act1.light_cover_applied,
+		"light_cover_action_count": act1.light_cover_action_count,
+		"queen_care_state": act1.queen_care_state,
+		"queen_care_elapsed_ticks": act1.queen_care_elapsed_ticks,
+		"queen_care_target_brood_id":
+			act1.queen_care_target_brood_id,
+		"completed_queen_care_count":
+			act1.completed_queen_care_count,
+		"pupa_stable_ticks": act1.pupa_stable_ticks,
+		"first_worker_entity_id": act1.first_worker_entity_id,
+		"first_worker_emerged_tick": act1.first_worker_emerged_tick,
+		"first_worker_care_recorded":
+			act1.first_worker_care_recorded,
 	}
 
 
@@ -546,6 +597,7 @@ static func _decode_habitat_data(value: Variant) -> Dictionary:
 		"nutrition_config",
 		"protein_placement_zone_id",
 		"protein_portions",
+		"founding_care_config",
 	]
 	if not _is_dictionary_with_keys(value, keys):
 		return _failure("Habitat configuration is invalid")
@@ -638,6 +690,12 @@ static func _decode_habitat_data(value: Variant) -> Dictionary:
 	if not nutrition_result.get("ok", false):
 		return nutrition_result
 	habitat.nutrition_data = nutrition_result["nutrition_data"]
+	var founding_result: Dictionary = _decode_founding_care_data(
+		value["founding_care_config"]
+	)
+	if not founding_result.get("ok", false):
+		return founding_result
+	habitat.founding_care_data = founding_result["founding_care_data"]
 	if not habitat.is_valid():
 		return _failure("Frozen habitat configuration is not valid")
 	return {"ok": true, "error": "", "habitat_data": habitat}
@@ -792,6 +850,74 @@ static func _decode_nutrition_data(value: Variant) -> Dictionary:
 	return {"ok": true, "error": "", "nutrition_data": data}
 
 
+static func _decode_founding_care_data(value: Variant) -> Dictionary:
+	if value == null:
+		return {
+			"ok": true,
+			"error": "",
+			"founding_care_data": null,
+		}
+	var int_keys: Array[String] = [
+		"rest_duration_ticks",
+		"gathering_duration_ticks",
+		"brood_care_duration_ticks",
+		"pupa_observation_ticks",
+		"first_worker_initial_pupa_age_ticks",
+	]
+	var id_keys: Array[String] = [
+		"queen_care_observation_card_id",
+		"pupa_observation_card_id",
+		"first_worker_observation_card_id",
+		"worker_care_observation_card_id",
+	]
+	var keys: Array[String] = []
+	keys.append_array(int_keys)
+	keys.append_array(id_keys)
+	if not _is_dictionary_with_keys(value, keys):
+		return _failure("Founding-care configuration is invalid")
+	for key: String in int_keys:
+		if not _is_integral_number(value[key]):
+			return _failure(
+				"Founding-care configuration contains a non-integer"
+			)
+	for key: String in id_keys:
+		if typeof(value[key]) != TYPE_STRING:
+			return _failure(
+				"Founding-care configuration contains a non-string ID"
+			)
+	var data: FoundingCareData = FoundingCareData.new()
+	data.data_status = &"prototype_pacing_fixture"
+	data.scientifically_validated = false
+	data.rest_duration_ticks = int(value["rest_duration_ticks"])
+	data.gathering_duration_ticks = int(value["gathering_duration_ticks"])
+	data.brood_care_duration_ticks = int(
+		value["brood_care_duration_ticks"]
+	)
+	data.pupa_observation_ticks = int(value["pupa_observation_ticks"])
+	data.first_worker_initial_pupa_age_ticks = int(
+		value["first_worker_initial_pupa_age_ticks"]
+	)
+	data.queen_care_observation_card_id = StringName(
+		value["queen_care_observation_card_id"]
+	)
+	data.pupa_observation_card_id = StringName(
+		value["pupa_observation_card_id"]
+	)
+	data.first_worker_observation_card_id = StringName(
+		value["first_worker_observation_card_id"]
+	)
+	data.worker_care_observation_card_id = StringName(
+		value["worker_care_observation_card_id"]
+	)
+	if not data.is_valid():
+		return _failure("Frozen founding-care configuration is not valid")
+	return {
+		"ok": true,
+		"error": "",
+		"founding_care_data": data,
+	}
+
+
 static func _decode_state(
 	payload: Dictionary,
 	next_ids: Dictionary
@@ -814,6 +940,7 @@ static func _decode_state(
 			"scenario_progress",
 			"campaign",
 			"nutrition",
+			"act1",
 			"observation_events",
 		]
 	):
@@ -923,6 +1050,10 @@ static func _decode_state(
 	if not nutrition_result.get("ok", false):
 		return nutrition_result
 	state.nutrition_state = nutrition_result["nutrition"]
+	var act1_result: Dictionary = _decode_act1_state(payload["act1"])
+	if not act1_result.get("ok", false):
+		return act1_result
+	state.act1_state = act1_result["act1"]
 	state._observation_events.clear()
 	for event_value: Variant in payload["observation_events"]:
 		var event_result: Dictionary = _decode_event(event_value)
@@ -934,6 +1065,64 @@ static func _decode_state(
 		next_ids["observation_event_id"]
 	)
 	return {"ok": true, "error": "", "state": state}
+
+
+static func _decode_act1_state(value: Variant) -> Dictionary:
+	if value == null:
+		return {"ok": true, "error": "", "act1": null}
+	var keys: Array[String] = [
+		"light_cover_applied",
+		"light_cover_action_count",
+		"queen_care_state",
+		"queen_care_elapsed_ticks",
+		"queen_care_target_brood_id",
+		"completed_queen_care_count",
+		"pupa_stable_ticks",
+		"first_worker_entity_id",
+		"first_worker_emerged_tick",
+		"first_worker_care_recorded",
+	]
+	if not _is_dictionary_with_keys(value, keys):
+		return _failure("Act 1 state is invalid")
+	for key: String in [
+		"light_cover_action_count",
+		"queen_care_state",
+		"queen_care_elapsed_ticks",
+		"queen_care_target_brood_id",
+		"completed_queen_care_count",
+		"pupa_stable_ticks",
+		"first_worker_entity_id",
+		"first_worker_emerged_tick",
+	]:
+		if not _is_integral_number(value[key]):
+			return _failure("Act 1 state contains a non-integer")
+	if (
+		typeof(value["light_cover_applied"]) != TYPE_BOOL
+		or typeof(value["first_worker_care_recorded"]) != TYPE_BOOL
+	):
+		return _failure("Act 1 state contains an invalid flag")
+	var act1: Act1State = Act1State.new()
+	act1.light_cover_applied = bool(value["light_cover_applied"])
+	act1.light_cover_action_count = int(value["light_cover_action_count"])
+	act1.queen_care_state = int(value["queen_care_state"])
+	act1.queen_care_elapsed_ticks = int(
+		value["queen_care_elapsed_ticks"]
+	)
+	act1.queen_care_target_brood_id = int(
+		value["queen_care_target_brood_id"]
+	)
+	act1.completed_queen_care_count = int(
+		value["completed_queen_care_count"]
+	)
+	act1.pupa_stable_ticks = int(value["pupa_stable_ticks"])
+	act1.first_worker_entity_id = int(value["first_worker_entity_id"])
+	act1.first_worker_emerged_tick = int(
+		value["first_worker_emerged_tick"]
+	)
+	act1.first_worker_care_recorded = bool(
+		value["first_worker_care_recorded"]
+	)
+	return {"ok": true, "error": "", "act1": act1}
 
 
 static func _decode_nutrition_state(value: Variant) -> Dictionary:
@@ -1404,7 +1593,7 @@ static func _decode_event(value: Variant) -> Dictionary:
 		or int(value["tick"]) < 0
 		or int(value["event_type"]) < ObservationEvent.Type.RELOCATION_STARTED
 		or int(value["event_type"])
-			> ObservationEvent.Type.BROOD_FED
+			> ObservationEvent.Type.FIRST_PUPA_OBSERVED
 		or typeof(value["source_zone_id"]) != TYPE_STRING
 		or typeof(value["target_zone_id"]) != TYPE_STRING
 	):
@@ -1453,7 +1642,7 @@ static func _decode_pending_commands(
 			or command_type < ColonySimulation.PendingCommandType.WATER_ACTION
 			or command_type
 				> ColonySimulation.PendingCommandType
-					.PLACE_PROTEIN_ACTION
+					.APPLY_LIGHT_COVER_ACTION
 		):
 			return _failure("Pending command ordering or type is invalid")
 		commands.append(PendingSimulationCommand.new(
@@ -1575,6 +1764,7 @@ static func _has_valid_core_state(simulation: ColonySimulation) -> bool:
 			and state.scenario_progress == null
 			and state.campaign_state == null
 			and state.nutrition_state == null
+			and state.act1_state == null
 			and state.humidity_adjustment_count == 0
 			and state.observation_stable_ticks == 0
 			and state.shared_sugar_portions == 0
@@ -1584,7 +1774,16 @@ static func _has_valid_core_state(simulation: ColonySimulation) -> bool:
 	if not _state_graph_matches_frozen_config(simulation):
 		return false
 	if simulation._supports_nutrition_growth():
-		if (
+		if simulation._habitat_config.is_act1_test_tube():
+			var initial_act1_brood_count: int = (
+				simulation._habitat_config.initial_brood_count + 1
+			)
+			if (
+				state.queen.laid_egg_count != initial_act1_brood_count
+				or state.ants.size() != initial_act1_brood_count
+			):
+				return false
+		elif (
 			state.queen.laid_egg_count < 0
 			or state.queen.laid_egg_count
 				> simulation._lifecycle_config.max_first_generation_brood
@@ -1594,7 +1793,11 @@ static func _has_valid_core_state(simulation: ColonySimulation) -> bool:
 					+ state.queen.laid_egg_count
 		):
 			return false
-	elif state.queen.laid_egg_count != 0 or state.nutrition_state != null:
+	elif (
+		state.queen.laid_egg_count != 0
+		or state.nutrition_state != null
+		or state.act1_state != null
+	):
 		return false
 	return simulation.has_valid_habitat_ownership()
 
@@ -1731,12 +1934,16 @@ static func _state_graph_matches_frozen_config(
 			!= (state.scenario_progress != null)
 		)
 		or (
-			config.is_combined_observation()
+			(config.is_combined_observation() or config.is_act1_test_tube())
 			!= (state.campaign_state != null)
 		)
 		or (
-			config.is_nutrition_growth()
+			config.supports_nutrition_growth()
 			!= (state.nutrition_state != null)
+		)
+		or (
+			config.is_act1_test_tube()
+			!= (state.act1_state != null)
 		)
 	):
 		return false
@@ -1784,18 +1991,38 @@ static func _has_valid_pending_commands(
 			ColonySimulation.PendingCommandType.SELECT_CAMPAIGN_INFERENCE_ACTION:
 				if (
 					command.argument_id.is_empty()
-					or simulation._campaign_director == null
-					or not simulation._campaign_director
-						.is_inference_action_available(
-							simulation._state,
-							command.argument_id
-						)
+					or (
+						simulation._campaign_director == null
+						and simulation._act1_campaign_director == null
+					)
+					or not (
+						simulation._campaign_director != null
+						and simulation._campaign_director
+							.is_inference_action_available(
+								simulation._state,
+								command.argument_id
+							)
+						or simulation._act1_campaign_director != null
+						and simulation._act1_campaign_director
+							.is_inference_action_available(
+								simulation._state,
+								command.argument_id
+							)
+					)
 				):
 					return false
 			ColonySimulation.PendingCommandType.PLACE_PROTEIN_ACTION:
 				if (
 					not command.argument_id.is_empty()
 					or not _can_restore_protein_command(simulation)
+				):
+					return false
+			ColonySimulation.PendingCommandType.APPLY_LIGHT_COVER_ACTION:
+				if (
+					not command.argument_id.is_empty()
+					or simulation._founding_care_system == null
+					or simulation._state.act1_state == null
+					or simulation._state.act1_state.light_cover_applied
 				):
 					return false
 			_:
@@ -1830,6 +2057,14 @@ static func _can_restore_sugar_command(
 	if (
 		not simulation._supports_sugar_foraging()
 		or (
+			simulation._habitat_config.is_act1_test_tube()
+			and (
+				simulation._act1_campaign_director == null
+				or not simulation._act1_campaign_director
+					.is_sugar_action_active(simulation._state)
+			)
+		)
+		or (
 			simulation._scenario_director != null
 			and not simulation._scenario_director
 				.is_foraging_phase_active(simulation._state)
@@ -1858,7 +2093,10 @@ static func _can_restore_sugar_command(
 static func _can_restore_protein_command(
 	simulation: ColonySimulation
 ) -> bool:
-	if not simulation._supports_nutrition_growth():
+	if (
+		not simulation._supports_nutrition_growth()
+		or simulation._habitat_config.is_act1_test_tube()
+	):
 		return false
 	var zone: HabitatZoneState = simulation._state.get_zone(
 		simulation._habitat_config.protein_placement_zone_id

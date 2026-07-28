@@ -323,6 +323,7 @@ func _test_pending_inference_save_and_previous_schema_migration() -> void:
 	previous["state_schema_id"] = SimulationStateCodec.PREVIOUS_SCHEMA_ID
 	previous["state_payload"].erase("campaign")
 	previous["state_payload"].erase("nutrition")
+	previous["state_payload"].erase("act1")
 	for ant: Dictionary in previous["state_payload"]["ants"]:
 		ant.erase("protein_supported_growth_ticks")
 		ant.erase("feeding_task")
@@ -333,6 +334,7 @@ func _test_pending_inference_save_and_previous_schema_migration() -> void:
 	previous_habitat.erase("nutrition_config")
 	previous_habitat.erase("protein_placement_zone_id")
 	previous_habitat.erase("protein_portions")
+	previous_habitat.erase("founding_care_config")
 	previous["frozen_config_hash"] = CanonicalSaveJson.sha256(
 		previous["frozen_config_bundle"]
 	)

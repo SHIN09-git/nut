@@ -1,0 +1,349 @@
+class_name Act1TestTubeSceneTestSuite
+extends RefCounted
+
+const ACT1_SCENE: PackedScene = preload(
+	"res://scenes/main/act1_test_tube.tscn"
+)
+
+var _assertion_count: int = 0
+var _failure_count: int = 0
+var _scene_root: Node
+
+
+func run(scene_root: Node) -> void:
+	_scene_root = scene_root
+	_test_real_controls_complete_both_chapters()
+	_test_pause_and_f3_boundaries()
+	_test_supported_viewport_layouts()
+
+
+func get_assertion_count() -> int:
+	return _assertion_count
+
+
+func get_failure_count() -> int:
+	return _failure_count
+
+
+func _test_real_controls_complete_both_chapters() -> void:
+	var controller: Act1TestTubeController = _create_controller(
+		Vector2(1280, 720)
+	)
+	var start: Button = controller.get_node(
+		"%StartObservationButton"
+	) as Button
+	var cover: Button = controller.get_node("%CoverButton") as Button
+	var sugar: Button = controller.get_node("%SugarButton") as Button
+	var journal: Button = controller.get_node("%JournalButton") as Button
+	var close_journal: Button = controller.get_node(
+		"%JournalCloseButton"
+	) as Button
+	start.pressed.emit()
+	_expect_true(not cover.disabled, "real UI exposes the cover facility")
+
+	var before_cover: GameSnapshot = controller.get_latest_snapshot()
+	cover.pressed.emit()
+	var submitted: GameSnapshot = controller.get_latest_snapshot()
+	_expect_true(
+		submitted.act1.queen_care.light_cover_action_pending,
+		"cover button submits a queued simulation command"
+	)
+	_expect_true(
+		not submitted.act1.queen_care.light_cover_applied,
+		"cover button does not mutate the same Tick"
+	)
+	controller._process(SimulationClock.FIXED_STEP_SECONDS)
+	_expect_int(
+		controller.get_latest_snapshot().simulation_tick,
+		before_cover.simulation_tick + 1,
+		"cover command applies at the next fixed Tick"
+	)
+	_expect_true(
+		controller.get_latest_snapshot().act1.queen_care
+			.light_cover_applied,
+		"cover becomes authoritative after the Tick"
+	)
+
+	_expect_true(
+		_process_until(
+			controller,
+			func(snapshot: GameSnapshot) -> bool:
+				return (
+					snapshot.campaign.status
+					== CampaignState.Status.AWAITING_INFERENCE
+				),
+			250
+		),
+		"real observation path reaches the founding inference"
+	)
+	var view: Act1TestTubeView = controller.get_node(
+		"%Act1TestTubeView"
+	) as Act1TestTubeView
+	var first_pupa_view: AntView = view.get_ant_view(1)
+	_expect_true(
+		first_pupa_view != null,
+		"first-worker entity has a visible stable node before emergence"
+	)
+	journal.pressed.emit()
+	var queen_inference: Button = _find_inference_button(
+		controller,
+		CampaignState.INFERENCE_QUEEN_CARE
+	)
+	_expect_true(
+		queen_inference != null and not queen_inference.disabled,
+		"journal exposes the evidence-backed queen-care inference"
+	)
+	if queen_inference == null:
+		_destroy_controller(controller)
+		return
+	queen_inference.pressed.emit()
+	_expect_true(
+		controller.get_latest_snapshot().campaign.inference_action_pending,
+		"inference button also uses the next-Tick command boundary"
+	)
+	close_journal.pressed.emit()
+	controller._process(SimulationClock.FIXED_STEP_SECONDS)
+	_expect_int(
+		controller.get_latest_snapshot().campaign.chapter,
+		CampaignState.Chapter.ACT1_FIRST_WORKERS,
+		"correct inference enters Chapter 2 through real controls"
+	)
+
+	_expect_true(
+		_process_until(
+			controller,
+			func(snapshot: GameSnapshot) -> bool:
+				return (
+					snapshot.act1.first_worker_emerged_tick >= 0
+					and snapshot.nutrition.sugar_action_available
+				),
+			1000
+		),
+		"real path reaches first-worker emergence and sugar placement"
+	)
+	_expect_true(
+		view.get_ant_view(1) == first_pupa_view,
+		"the first pupa becomes a worker on the same AntView instance"
+	)
+	_expect_true(
+		sugar.visible and not sugar.disabled,
+		"micro feeding-port sugar action is visible and enabled"
+	)
+	var sugar_before: int = (
+		controller.get_latest_snapshot()
+			.nutrition.total_sugar_portions_supplied
+	)
+	sugar.pressed.emit()
+	_expect_true(
+		controller.get_latest_snapshot().nutrition.sugar_action_pending,
+		"sugar button queues one high-level action"
+	)
+	_expect_int(
+		controller.get_latest_snapshot()
+			.nutrition.total_sugar_portions_supplied,
+		sugar_before,
+		"sugar is not supplied in the submission Tick"
+	)
+	controller._process(SimulationClock.FIXED_STEP_SECONDS)
+	_expect_int(
+		controller.get_latest_snapshot()
+			.nutrition.total_sugar_portions_supplied,
+		sugar_before + 1,
+		"next Tick uses the frozen one-portion sugar action"
+	)
+	_expect_true(
+		_process_until(
+			controller,
+			func(snapshot: GameSnapshot) -> bool:
+				return (
+					snapshot.campaign.status
+					== CampaignState.Status.AWAITING_INFERENCE
+					and snapshot.campaign.chapter
+						== CampaignState.Chapter.ACT1_FIRST_WORKERS
+				),
+			1800
+		),
+		"real UI path reaches worker care and nutrient exchange"
+	)
+	journal.pressed.emit()
+	var worker_inference: Button = _find_inference_button(
+		controller,
+		CampaignState.INFERENCE_WORKER_NUTRITION
+	)
+	_expect_true(
+		worker_inference != null and not worker_inference.disabled,
+		"journal exposes the final worker-care inference"
+	)
+	if worker_inference != null:
+		worker_inference.pressed.emit()
+		close_journal.pressed.emit()
+		controller._process(SimulationClock.FIXED_STEP_SECONDS)
+	_expect_true(
+		controller.get_latest_snapshot().campaign.completed,
+		"real buttons complete the two-chapter Act 1 path"
+	)
+	_expect_true(
+		(controller.get_node("%CompletionPanel") as Control).visible,
+		"completion is clearly visible in the player scene"
+	)
+	(controller.get_node("%ContinueFreeplayButton") as Button).pressed.emit()
+	controller._process(SimulationClock.FIXED_STEP_SECONDS)
+	_expect_true(
+		not (controller.get_node("%CompletionPanel") as Control).visible,
+		"continuing observation keeps the completed overlay dismissed"
+	)
+	_destroy_controller(controller)
+
+
+func _test_pause_and_f3_boundaries() -> void:
+	var controller: Act1TestTubeController = _create_controller(
+		Vector2(1280, 720)
+	)
+	(controller.get_node("%StartObservationButton") as Button).pressed.emit()
+	controller._process(SimulationClock.FIXED_STEP_SECONDS)
+	(controller.get_node("%PauseButton") as Button).pressed.emit()
+	var paused_tick: int = controller.get_simulation_tick()
+	var view: Act1TestTubeView = controller.get_node(
+		"%Act1TestTubeView"
+	) as Act1TestTubeView
+	var alpha_before: float = view._interpolation_alpha
+	controller._process(1.0)
+	_expect_int(
+		controller.get_simulation_tick(),
+		paused_tick,
+		"pause stops authoritative simulation progress"
+	)
+	_expect_true(
+		view.are_visuals_paused()
+			and is_equal_approx(view._interpolation_alpha, alpha_before),
+		"pause also freezes view interpolation"
+	)
+	var debug_panel: Control = controller.get_node("%DebugPanel") as Control
+	var f3: InputEventKey = InputEventKey.new()
+	f3.keycode = KEY_F3
+	f3.pressed = true
+	controller._unhandled_input(f3)
+	_expect_true(debug_panel.visible, "F3 reveals the Act 1 debug layer")
+	controller._unhandled_input(f3)
+	_expect_true(not debug_panel.visible, "F3 hides the debug layer")
+	_destroy_controller(controller)
+
+
+func _test_supported_viewport_layouts() -> void:
+	for viewport_size: Vector2 in [
+		Vector2(1280, 720),
+		Vector2(1920, 1080),
+	]:
+		var controller: Act1TestTubeController = _create_controller(
+			viewport_size
+		)
+		_settle_container_layout(controller)
+		var viewport_rect: Rect2 = controller.get_global_rect()
+		for node_path: String in [
+			"%StartObservationButton",
+			"%CoverButton",
+			"%JournalButton",
+		]:
+			var control: Control = controller.get_node(node_path) as Control
+			_expect_true(
+				viewport_rect.encloses(control.get_global_rect()),
+				"%s remains inside %dx%d (actual %s)"
+					% [
+						node_path,
+						int(viewport_size.x),
+						int(viewport_size.y),
+						str(control.get_global_rect()),
+					]
+			)
+		_destroy_controller(controller)
+
+
+func _find_inference_button(
+	controller: Act1TestTubeController,
+	inference_id: StringName
+) -> Button:
+	for button_path: String in [
+		"%InferenceButton1",
+		"%InferenceButton2",
+		"%InferenceButton3",
+	]:
+		var button: Button = controller.get_node(button_path) as Button
+		if StringName(button.get_meta(&"inference_id", &"")) == inference_id:
+			return button
+	return null
+
+
+func _process_until(
+	controller: Act1TestTubeController,
+	predicate: Callable,
+	maximum_ticks: int
+) -> bool:
+	if predicate.call(controller.get_latest_snapshot()):
+		return true
+	for unused_tick: int in maximum_ticks:
+		controller._process(SimulationClock.FIXED_STEP_SECONDS)
+		if predicate.call(controller.get_latest_snapshot()):
+			return true
+	return false
+
+
+func _create_controller(
+	viewport_size: Vector2
+) -> Act1TestTubeController:
+	var controller: Act1TestTubeController = (
+		ACT1_SCENE.instantiate() as Act1TestTubeController
+	)
+	controller.provided_settings_state = DemoSettingsState.new(
+		"zh_CN",
+		Vector2i(int(viewport_size.x), int(viewport_size.y)),
+		false,
+		1.0,
+		false
+	)
+	controller.exit_application_on_request = false
+	_scene_root.add_child(controller)
+	controller.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	controller.position = Vector2.ZERO
+	controller.size = viewport_size
+	_settle_container_layout(controller)
+	return controller
+
+
+func _destroy_controller(controller: Act1TestTubeController) -> void:
+	_scene_root.remove_child(controller)
+	controller.free()
+
+
+func _force_container_layout(node: Node) -> void:
+	for child: Node in node.get_children():
+		_force_container_layout(child)
+	if node is Container:
+		node.notification(Container.NOTIFICATION_SORT_CHILDREN)
+
+
+func _settle_container_layout(node: Node) -> void:
+	for pass_index: int in 4:
+		_force_container_layout(node)
+
+
+func _expect_true(actual: bool, message: String) -> void:
+	_assertion_count += 1
+	if actual:
+		return
+	_record_failure(message, "true", "false")
+
+
+func _expect_int(actual: int, expected: int, message: String) -> void:
+	_assertion_count += 1
+	if actual == expected:
+		return
+	_record_failure(message, str(expected), str(actual))
+
+
+func _record_failure(
+	message: String,
+	expected: String,
+	actual: String
+) -> void:
+	_failure_count += 1
+	printerr("  %s - expected %s, got %s" % [message, expected, actual])

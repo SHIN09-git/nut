@@ -24,6 +24,9 @@ const CampaignJournalTestSuiteScript: Script = preload(
 const NutritionGrowthTestSuiteScript: Script = preload(
 	"res://tests/simulation/nutrition_growth_test_suite.gd"
 )
+const Act1TestTubeTestSuiteScript: Script = preload(
+	"res://tests/simulation/act1_test_tube_test_suite.gd"
+)
 const ObservationEventTestSuiteScript: Script = preload(
 	"res://tests/simulation/observation_event_test_suite.gd"
 )
@@ -81,6 +84,9 @@ const DemoShellSceneTestSuiteScript: Script = preload(
 const GameShellSceneTestSuiteScript: Script = preload(
 	"res://tests/scenes/game_shell_scene_test_suite.gd"
 )
+const Act1TestTubeSceneTestSuiteScript: Script = preload(
+	"res://tests/scenes/act1_test_tube_scene_test_suite.gd"
+)
 
 var _assertion_count: int = 0
 var _failure_count: int = 0
@@ -107,6 +113,7 @@ func _run_all_tests() -> void:
 	_run_combined_observation_test_suite()
 	_run_campaign_journal_test_suite()
 	_run_nutrition_growth_test_suite()
+	_run_act1_test_tube_test_suite()
 	_run_observation_event_test_suite()
 	_run_save_core_test_suite()
 	_run_profile_store_test_suite()
@@ -126,6 +133,7 @@ func _run_all_tests() -> void:
 	_run_campaign_journal_scene_test_suite()
 	_run_demo_shell_scene_test_suite()
 	_run_game_shell_scene_test_suite()
+	_run_act1_test_tube_scene_test_suite()
 
 	if _failure_count == 0:
 		print("PASS: %d project assertions" % _assertion_count)
@@ -149,6 +157,7 @@ func _validate_suite_scripts() -> bool:
 		CombinedObservationTestSuiteScript,
 		CampaignJournalTestSuiteScript,
 		NutritionGrowthTestSuiteScript,
+		Act1TestTubeTestSuiteScript,
 		ObservationEventTestSuiteScript,
 		SaveCoreTestSuiteScript,
 		ProfileStoreTestSuiteScript,
@@ -168,6 +177,7 @@ func _validate_suite_scripts() -> bool:
 		CampaignJournalSceneTestSuiteScript,
 		DemoShellSceneTestSuiteScript,
 		GameShellSceneTestSuiteScript,
+		Act1TestTubeSceneTestSuiteScript,
 	]
 	var all_valid: bool = true
 	for suite_script: Script in suite_scripts:
@@ -229,6 +239,12 @@ func _run_campaign_journal_test_suite() -> void:
 
 func _run_nutrition_growth_test_suite() -> void:
 	var suite: NutritionGrowthTestSuite = NutritionGrowthTestSuiteScript.new()
+	suite.run()
+	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
+
+
+func _run_act1_test_tube_test_suite() -> void:
+	var suite: Act1TestTubeTestSuite = Act1TestTubeTestSuiteScript.new()
 	suite.run()
 	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
 
@@ -361,6 +377,14 @@ func _run_demo_shell_scene_test_suite() -> void:
 
 func _run_game_shell_scene_test_suite() -> void:
 	var suite: GameShellSceneTestSuite = GameShellSceneTestSuiteScript.new()
+	suite.run(root)
+	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
+
+
+func _run_act1_test_tube_scene_test_suite() -> void:
+	var suite: Act1TestTubeSceneTestSuite = (
+		Act1TestTubeSceneTestSuiteScript.new()
+	)
 	suite.run(root)
 	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
 

@@ -6,6 +6,12 @@ const SHELL_SCENE: PackedScene = preload(
 )
 const TEST_PROFILE_PATH: String = "user://r3_shell_tests/profile.json"
 const TEST_SETTINGS_PATH: String = "user://r3_shell_tests/settings.json"
+const SPECIES_A_DATA: SpeciesData = preload(
+	"res://data/species/species_a.tres"
+)
+const LEGACY_SCENARIO_DATA: HabitatScenarioData = preload(
+	"res://data/habitats/combined_observation_slice.tres"
+)
 
 var _assertion_count: int = 0
 var _failure_count: int = 0
@@ -21,6 +27,7 @@ func run(scene_root: Node) -> void:
 	_cleanup()
 	TranslationServer.set_locale("zh_CN")
 	_test_title_new_save_return_and_continue_path()
+	_test_legacy_profile_uses_legacy_scene()
 	_test_profile_delete_requires_confirmation()
 	_test_settings_persist_outside_the_profile()
 	_test_game_settings_stay_synchronized_with_the_shell()
@@ -57,7 +64,9 @@ func _test_title_new_save_return_and_continue_path() -> void:
 	)
 
 	(shell.get_node("%NewGameButton") as Button).pressed.emit()
-	var game: CombinedObservationController = shell.get_game_controller()
+	var game: Act1TestTubeController = (
+		shell.get_game_controller() as Act1TestTubeController
+	)
 	_expect_true(game != null, "New Game creates the observation session")
 	_expect_true(
 		not (shell.get_node("%ShellOverlay") as Control).visible,
@@ -94,7 +103,9 @@ func _test_title_new_save_return_and_continue_path() -> void:
 		"Continue becomes available after a successful save"
 	)
 	(shell.get_node("%ContinueButton") as Button).pressed.emit()
-	var restored_game: CombinedObservationController = shell.get_game_controller()
+	var restored_game: Act1TestTubeController = (
+		shell.get_game_controller() as Act1TestTubeController
+	)
 	_expect_true(restored_game != null, "Continue restores a game controller")
 	if restored_game != null:
 		_expect_int(
@@ -110,6 +121,39 @@ func _test_title_new_save_return_and_continue_path() -> void:
 			restored_game.is_pause_menu_open(),
 			"paused save restores to a visible pause menu"
 		)
+	_destroy_shell(shell)
+
+
+func _test_legacy_profile_uses_legacy_scene() -> void:
+	_cleanup()
+	var simulation: ColonySimulation = ColonySimulation.new(
+		SPECIES_A_DATA,
+		LEGACY_SCENARIO_DATA
+	)
+	var clock: SimulationClock = SimulationClock.new()
+	var envelope: Dictionary = SaveGameService.new().create_envelope(
+		simulation,
+		clock,
+		ProfileStore.MAIN_SLOT_ID,
+		"2026-07-28T00:00:00Z"
+	)
+	_expect_true(
+		not envelope.is_empty(),
+		"legacy combined scenario creates a valid profile envelope"
+	)
+	var save_result: Dictionary = ProfileStore.new(
+		TEST_PROFILE_PATH
+	).save_envelope(envelope)
+	_expect_true(
+		save_result.get("ok", false),
+		"legacy combined profile is written for shell routing"
+	)
+	var shell: GameShellController = _create_shell(Vector2(1280, 720))
+	(shell.get_node("%ContinueButton") as Button).pressed.emit()
+	_expect_true(
+		shell.get_game_controller() is CombinedObservationController,
+		"Continue routes an existing combined profile to its legacy scene"
+	)
 	_destroy_shell(shell)
 
 
@@ -214,28 +258,40 @@ func _test_settings_persist_outside_the_profile() -> void:
 
 func _test_game_settings_stay_synchronized_with_the_shell() -> void:
 	var shell: GameShellController = _create_shell(Vector2(1280, 720))
+	(shell.get_node("%SettingsButton") as Button).pressed.emit()
+	var shell_scale: OptionButton = shell.get_node(
+		"%ShellUIScaleOption"
+	) as OptionButton
+	shell_scale.select(2)
+	shell_scale.item_selected.emit(2)
+	var reduced_motion: CheckButton = shell.get_node(
+		"%ShellReducedMotionCheck"
+	) as CheckButton
+	reduced_motion.set_pressed_no_signal(true)
+	reduced_motion.toggled.emit(true)
+	var escape: InputEventKey = InputEventKey.new()
+	escape.keycode = KEY_ESCAPE
+	escape.pressed = true
+	shell._unhandled_input(escape)
 	(shell.get_node("%NewGameButton") as Button).pressed.emit()
-	var game: CombinedObservationController = shell.get_game_controller()
+	var game: Act1TestTubeController = (
+		shell.get_game_controller() as Act1TestTubeController
+	)
 	_expect_true(game != null, "New Game exposes the shared settings state")
 	if game == null:
 		_destroy_shell(shell)
 		return
-	var game_scale: OptionButton = game.get_node("%UIScaleOption") as OptionButton
-	game_scale.select(2)
-	game_scale.item_selected.emit(2)
 	_expect_float(
 		shell.get_settings_state().get_ui_scale_factor(),
 		1.5,
-		"game settings update the shell-owned settings state"
+		"shell-selected UI scale remains authoritative in game"
 	)
-	var shell_scale: OptionButton = shell.get_node(
-		"%ShellUIScaleOption"
-	) as OptionButton
-	_expect_int(
-		shell_scale.selected,
-		2,
-		"game settings immediately refresh the shell control selection"
+	_expect_true(
+		(game.get_node("%Act1TestTubeView") as Act1TestTubeView)
+			.is_reduced_motion(),
+		"new game receives the shell-owned reduced-motion setting"
 	)
+	(game.get_node("%StartObservationButton") as Button).pressed.emit()
 	(game.get_node("%PauseButton") as Button).pressed.emit()
 	(game.get_node("%ReturnToTitleButton") as Button).pressed.emit()
 	(shell.get_node("%SettingsButton") as Button).pressed.emit()

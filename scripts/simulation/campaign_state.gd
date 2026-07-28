@@ -4,6 +4,8 @@ extends RefCounted
 enum Chapter {
 	FOUNDING_OBSERVATION,
 	ENVIRONMENTAL_CARE,
+	ACT1_FOUNDING,
+	ACT1_FIRST_WORKERS,
 }
 
 enum Status {
@@ -17,6 +19,14 @@ const EVIDENCE_HUMIDITY_RELOCATION: StringName = (
 	&"brood_humidity_relocation"
 )
 const EVIDENCE_SUGAR_SHARING: StringName = &"sugar_foraging_complete"
+const EVIDENCE_QUEEN_CARE: StringName = &"queen_brood_care"
+const EVIDENCE_FIRST_PUPA: StringName = &"first_pupa_stable"
+const EVIDENCE_FIRST_WORKER_CARE: StringName = (
+	&"first_worker_brood_care"
+)
+const EVIDENCE_FIRST_NUTRIENT_EXCHANGE: StringName = (
+	&"first_nutrient_exchange"
+)
 
 const INFERENCE_FIRST_WORKER: StringName = &"brood_develops_into_workers"
 const INFERENCE_FIRST_WORKER_RANDOM: StringName = &"worker_change_is_random"
@@ -32,11 +42,28 @@ const INFERENCE_ENVIRONMENT_IGNORED: StringName = (
 const INFERENCE_ENVIRONMENT_DIRECTED: StringName = (
 	&"player_directs_each_worker"
 )
+const INFERENCE_QUEEN_CARE: StringName = &"queen_cares_for_brood"
+const INFERENCE_QUEEN_CARE_RANDOM: StringName = (
+	&"queen_movement_is_random"
+)
+const INFERENCE_QUEEN_CARE_DIRECTED: StringName = (
+	&"player_directs_queen_care"
+)
+const INFERENCE_WORKER_NUTRITION: StringName = (
+	&"workers_share_nutrition_and_care"
+)
+const INFERENCE_WORKER_NUTRITION_RANDOM: StringName = (
+	&"worker_feeding_is_random"
+)
+const INFERENCE_WORKER_NUTRITION_DIRECTED: StringName = (
+	&"player_directs_each_feeding"
+)
 
 const FACILITY_TEST_TUBE_NEST: StringName = &"test_tube_nest"
 const FACILITY_LIGHT_COVER: StringName = &"light_cover"
 const FACILITY_MICRO_FEEDING_PORT: StringName = &"micro_feeding_port"
 const FACILITY_SMALL_FORAGING_BOX: StringName = &"small_foraging_box"
+const FACILITY_MAGNIFIER: StringName = &"magnifier"
 
 var chapter: Chapter = Chapter.FOUNDING_OBSERVATION
 var status: Status = Status.ACTIVE
@@ -47,10 +74,17 @@ var hint_tier: int = 0
 var campaign_completed_tick: int = -1
 var collected_evidence_ids: Dictionary[StringName, bool] = {}
 var confirmed_inference_ids: Dictionary[StringName, bool] = {}
-var unlocked_facility_type_ids: Dictionary[StringName, bool] = {
-	FACILITY_TEST_TUBE_NEST: true,
-	FACILITY_LIGHT_COVER: true,
-}
+var unlocked_facility_type_ids: Dictionary[StringName, bool] = {}
+
+
+func _init(
+	initial_chapter: Chapter = Chapter.FOUNDING_OBSERVATION
+) -> void:
+	chapter = initial_chapter
+	unlocked_facility_type_ids[FACILITY_TEST_TUBE_NEST] = true
+	unlocked_facility_type_ids[FACILITY_LIGHT_COVER] = true
+	if initial_chapter == Chapter.ACT1_FOUNDING:
+		unlocked_facility_type_ids[FACILITY_MAGNIFIER] = true
 
 
 func collect_evidence(evidence_id: StringName) -> bool:

@@ -1,0 +1,51 @@
+[gd_resource type="Resource" script_class="HabitatScenarioData" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/habitat_scenario_data.gd" id="1_scenario"]
+[ext_resource type="Script" path="res://scripts/core/habitat_zone_data.gd" id="2_zone"]
+[ext_resource type="Resource" path="res://data/behaviors/sugar_foraging_prototype.tres" id="3_foraging"]
+[ext_resource type="Resource" path="res://data/behaviors/act1_nutrition_prototype.tres" id="4_nutrition"]
+[ext_resource type="Resource" path="res://data/behaviors/founding_care_prototype.tres" id="6_care"]
+
+[sub_resource type="Resource" id="Resource_nest_zone"]
+script = ExtResource("2_zone")
+zone_id = &"test_tube_nest"
+initial_humidity = 0.66
+connected_zone_ids = Array[StringName]([&"tube_passage"])
+available = true
+
+[sub_resource type="Resource" id="Resource_passage_zone"]
+script = ExtResource("2_zone")
+zone_id = &"tube_passage"
+initial_humidity = 0.54
+connected_zone_ids = Array[StringName]([&"test_tube_nest", &"micro_feeding_port"])
+available = true
+
+[sub_resource type="Resource" id="Resource_feeding_zone"]
+script = ExtResource("2_zone")
+zone_id = &"micro_feeding_port"
+initial_humidity = 0.48
+connected_zone_ids = Array[StringName]([&"tube_passage"])
+available = true
+
+[resource]
+script = ExtResource("1_scenario")
+scenario_id = &"act1_test_tube"
+scenario_kind = 4
+data_status = &"prototype_pacing_fixture"
+scientifically_validated = false
+zones = Array[ExtResource("2_zone")]([SubResource("Resource_nest_zone"), SubResource("Resource_passage_zone"), SubResource("Resource_feeding_zone")])
+initial_worker_count = 0
+initial_brood_count = 2
+initial_brood_stage = 0
+initial_worker_zone_id = &"test_tube_nest"
+initial_brood_zone_id = &"test_tube_nest"
+foraging_data = ExtResource("3_foraging")
+nest_zone_id = &"test_tube_nest"
+sugar_placement_zone_id = &"micro_feeding_port"
+sugar_portions = 1
+foraging_observation_card_id = &"first_nutrient_exchange"
+lifecycle_active = true
+nutrition_data = ExtResource("4_nutrition")
+protein_placement_zone_id = &"micro_feeding_port"
+protein_portions = 2
+founding_care_data = ExtResource("6_care")

@@ -3,9 +3,13 @@ extends Control
 
 signal application_exit_requested
 
-const GAME_SCENE: PackedScene = preload(
+const LEGACY_GAME_SCENE: PackedScene = preload(
 	"res://scenes/main/combined_observation.tscn"
 )
+const ACT1_GAME_SCENE: PackedScene = preload(
+	"res://scenes/main/act1_test_tube.tscn"
+)
+const ACT1_SCENARIO_ID: StringName = &"act1_test_tube"
 
 enum ConfirmAction {
 	NONE,
@@ -21,7 +25,7 @@ var exit_application_on_request: bool = true
 var _profile_store: ProfileStore
 var _settings_store: SettingsStore
 var _settings: DemoSettingsState
-var _game_controller: CombinedObservationController
+var _game_controller: Node
 var _active_page: Control
 var _confirm_action: ConfirmAction = ConfirmAction.NONE
 var _ui_scale_theme: Theme
@@ -265,7 +269,7 @@ func _begin_new_profile() -> void:
 			true
 		)
 		return
-	_create_game_controller()
+	_create_game_controller(ACT1_SCENARIO_ID)
 	_shell_overlay.visible = false
 
 
@@ -278,11 +282,15 @@ func _on_continue_pressed() -> void:
 		)
 		_refresh_profile_summary()
 		return
-	_create_game_controller()
-	if not _game_controller.restore_loaded_session(
-		load_result["simulation"],
+	var restored_simulation: ColonySimulation = load_result["simulation"]
+	_create_game_controller(
+		restored_simulation.create_snapshot().scenario_id
+	)
+	if not bool(_game_controller.call(
+		&"restore_loaded_session",
+		restored_simulation,
 		load_result["clock"]
-	):
+	)):
 		_destroy_game_controller()
 		_show_status(
 			tr("SHELL_RESTORE_SESSION_FAILED"),
@@ -297,25 +305,40 @@ func _on_continue_pressed() -> void:
 		)
 
 
-func _create_game_controller() -> void:
+func _create_game_controller(scenario_id: StringName) -> void:
 	_destroy_game_controller()
-	_game_controller = GAME_SCENE.instantiate() as CombinedObservationController
-	_game_controller.provided_settings_state = _settings
-	_game_controller.shell_managed = true
-	_game_controller.exit_application_on_request = false
-	_game_controller.save_profile_requested.connect(_save_active_profile)
-	_game_controller.return_to_title_requested.connect(
+	var scene: PackedScene = (
+		ACT1_GAME_SCENE
+		if scenario_id == ACT1_SCENARIO_ID
+		else LEGACY_GAME_SCENE
+	)
+	_game_controller = scene.instantiate()
+	_game_controller.set(&"provided_settings_state", _settings)
+	_game_controller.set(&"shell_managed", true)
+	_game_controller.set(&"exit_application_on_request", false)
+	_game_controller.connect(
+		&"save_profile_requested",
+		_save_active_profile
+	)
+	_game_controller.connect(
+		&"return_to_title_requested",
 		_on_return_to_title_requested
 	)
-	_game_controller.settings_changed.connect(_on_game_settings_changed)
-	_game_controller.application_exit_requested.connect(_on_exit_pressed)
+	_game_controller.connect(
+		&"settings_changed",
+		_on_game_settings_changed
+	)
+	_game_controller.connect(
+		&"application_exit_requested",
+		_on_exit_pressed
+	)
 	_game_host.add_child(_game_controller)
 
 
 func _destroy_game_controller() -> void:
 	if _game_controller == null:
 		return
-	var old_controller: CombinedObservationController = _game_controller
+	var old_controller: Node = _game_controller
 	_game_controller = null
 	old_controller.visible = false
 	old_controller.process_mode = Node.PROCESS_MODE_DISABLED
@@ -328,13 +351,15 @@ func _destroy_game_controller() -> void:
 func _save_active_profile() -> bool:
 	if _game_controller == null:
 		return false
-	var envelope: Dictionary = _game_controller.create_profile_envelope()
+	var envelope: Dictionary = _game_controller.call(
+		&"create_profile_envelope"
+	)
 	if envelope.is_empty():
-		_game_controller.report_profile_save_result(false)
+		_game_controller.call(&"report_profile_save_result", false)
 		return false
 	var result: Dictionary = _profile_store.save_envelope(envelope)
 	var success: bool = bool(result.get("ok", false))
-	_game_controller.report_profile_save_result(success)
+	_game_controller.call(&"report_profile_save_result", success)
 	_refresh_profile_summary()
 	return success
 
@@ -467,7 +492,7 @@ func _apply_settings(persist: bool) -> void:
 		if volume > 0.0001:
 			AudioServer.set_bus_volume_db(bus_index, linear_to_db(volume))
 	if _game_controller != null:
-		_game_controller.apply_external_settings(_settings)
+		_game_controller.call(&"apply_external_settings", _settings)
 	if persist:
 		var result: Dictionary = _settings_store.save(_settings)
 		if not result.get("ok", false):
@@ -520,6 +545,10 @@ func _campaign_chapter_name(chapter: int, completed: bool) -> String:
 			return tr("CAMPAIGN_CHAPTER_FOUNDING")
 		CampaignState.Chapter.ENVIRONMENTAL_CARE:
 			return tr("CAMPAIGN_CHAPTER_ENVIRONMENT")
+		CampaignState.Chapter.ACT1_FOUNDING:
+			return tr("ACT1_CHAPTER_FOUNDING")
+		CampaignState.Chapter.ACT1_FIRST_WORKERS:
+			return tr("ACT1_CHAPTER_FIRST_WORKERS")
 		_:
 			return _phase_name(-1)
 
@@ -532,6 +561,14 @@ func _observation_name(observation_id: String) -> String:
 			return tr("SHELL_OBSERVATION_HUMIDITY")
 		"sugar_foraging_complete":
 			return tr("SHELL_OBSERVATION_SUGAR")
+		"queen_brood_care":
+			return tr("ACT1_EVIDENCE_QUEEN_CARE")
+		"first_pupa_stable":
+			return tr("ACT1_EVIDENCE_FIRST_PUPA")
+		"first_worker_brood_care":
+			return tr("ACT1_EVIDENCE_WORKER_CARE")
+		"first_nutrient_exchange":
+			return tr("ACT1_EVIDENCE_NUTRIENT")
 		"":
 			return tr("SHELL_OBSERVATION_NONE")
 		_:
@@ -557,7 +594,7 @@ func get_active_page_name() -> StringName:
 	return _active_page.name if _active_page != null else &""
 
 
-func get_game_controller() -> CombinedObservationController:
+func get_game_controller() -> Node:
 	return _game_controller
 
 
