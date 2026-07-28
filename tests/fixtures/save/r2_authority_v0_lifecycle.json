@@ -1,0 +1,49 @@
+{
+  "clock_paused": false,
+  "clock_speed": 1,
+  "content_manifest_id": "colony-under-glass.r2-base.1",
+  "format_version": 1,
+  "frozen_config_bundle": {
+    "brood_care": null,
+    "habitat": null,
+    "lifecycle": {
+      "egg_duration_ticks": 800,
+      "egg_laying_interval_ticks": 300,
+      "first_egg_delay_ticks": 1200,
+      "larva_duration_ticks": 1000,
+      "max_first_generation_brood": 3,
+      "pupa_duration_ticks": 1000
+    }
+  },
+  "frozen_config_hash": "ee367d59034f92e988599570c6438d469a2d3664f453f9fcc2916c06cf44bad3",
+  "game_version": "0.2.0-demo",
+  "next_ids": {
+    "entity_id": 1,
+    "observation_event_id": 1
+  },
+  "pending_commands": [],
+  "save_checksum": "8547ccdd426488b4de4a7e09af7e7c0d41f071e3c34b62632b9aaab55047db5d",
+  "saved_at_utc": "2026-07-28T00:00:00Z",
+  "simulation_tick": 0,
+  "slot_id": "legacy_lifecycle",
+  "state_payload": {
+    "ants": [],
+    "brood_humidity_observation_unlocked": false,
+    "food_sources": [],
+    "humidity_adjustment_count": 0,
+    "observation_events": [],
+    "observation_stable_ticks": 0,
+    "queen": {
+      "entity_id": 0,
+      "laid_egg_count": 0
+    },
+    "scenario_progress": null,
+    "shared_sugar_portions": 0,
+    "simulation_tick": 0,
+    "total_sugar_portions_placed": 0,
+    "unlocked_observation_card_ids": [],
+    "water_action_unlocked": false,
+    "zones": []
+  },
+  "state_schema_id": "r2.authority.v0"
+}

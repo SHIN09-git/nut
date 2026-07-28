@@ -1,7 +1,7 @@
 # Colony Under Glass · 路线图
 
-> 状态：v0.2 M5 Windows Demo 候选已推送；v1 R1 生产规格正在 `docs/v1-production-plan` 锁定，外部 Gate 未通过但已被用户明确豁免为前置条件
-> 当前推进点：提交并推送 R1；随后进入 R2 版本化存档核心
+> 状态：v0.2 M5 与 v1 R1 已推送；v1 R2 版本化存档核心正在 `feat/v1-save-core` 收口，外部 Gate 未通过但已被用户明确豁免为前置条件
+> 当前推进点：完成 R2 验证、提交并推送；随后进入 R3 档案与设置外壳
 > 当前产品边界：把生命周期、身份、湿度搬运和糖水觅食组合为同一局连续观察；不增加第三套模拟机制。
 
 第 1～8 节保留 v0.1 的已完成基线和交付纪律；第 9 节记录 v0.2 进度。v0.2 的逐里程碑要求仍以 `CODEX_V0_2_MASTER_PLAN.md` 为准；`GDD.md` 与 `ARCHITECTURE.md` 只描述已经实现的能力。
@@ -258,7 +258,7 @@
 
 ### 下一停止点
 
-M5 分支已经完成验证并推送。R1 生产规格锁定在 `docs/v1-production-plan` 执行；其交付索引见 `docs/V1_PRODUCTION_SPEC_INDEX.md`。R1 提交并推送后进入 R2 版本化存档核心。外部 Gate 保留为未完成风险，不再阻塞开发；合并 `main`、创建 Tag、发布 GitHub Release 或商店发布仍需另行明确授权。
+M5 与 R1 分支已经完成验证并推送。R2 在 `feat/v1-save-core` 实现版本化权威状态、冻结配置、合法 Tick 捕获、checksum、迁移、备份恢复和故障注入；不接入档案 UI。R2 提交并推送后进入 R3 档案与设置外壳。外部 Gate 保留为未完成风险，不再阻塞开发；合并 `main`、创建 Tag、发布 GitHub Release 或商店发布仍需另行明确授权。
 
 ## 10. v1.0 完整游戏规划
 

@@ -82,6 +82,27 @@ func reset() -> void:
 	_paused = false
 
 
+func restore_save_boundary(
+	simulation_tick: int,
+	speed_multiplier: int,
+	paused: bool
+) -> bool:
+	if (
+		simulation_tick < 0
+		or (
+			speed_multiplier != NORMAL_SPEED
+			and speed_multiplier != FAST_SPEED
+			and speed_multiplier != VERY_FAST_SPEED
+		)
+	):
+		return false
+	_accumulator_seconds = 0.0
+	_tick_index = simulation_tick
+	_speed_multiplier = speed_multiplier
+	_paused = paused
+	return true
+
+
 func get_tick_index() -> int:
 	return _tick_index
 

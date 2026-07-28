@@ -24,8 +24,10 @@ var _brood_relocation_system: BroodRelocationSystem
 var _foraging_system: ForagingSystem
 var _scenario_director: ScenarioDirector
 var _state: ColonyState
-var _pending_commands: Array[int] = []
+var _pending_commands: Array[PendingSimulationCommand] = []
+var _next_pending_command_sequence_id: int = 1
 var _configuration_error: String = ""
+var _tick_in_progress: bool = false
 
 
 func _init(
@@ -118,26 +120,28 @@ func get_configuration_error() -> String:
 	return _configuration_error
 
 
+func can_capture_save_boundary() -> bool:
+	return is_ready() and not _tick_in_progress
+
+
 func submit_water_action() -> bool:
 	if not _is_water_action_available():
 		return false
-	_pending_commands.append(PendingCommandType.WATER_ACTION)
+	_queue_pending_command(PendingCommandType.WATER_ACTION)
 	return true
 
 
 func submit_place_sugar_action() -> bool:
 	if not _is_place_sugar_action_available():
 		return false
-	_pending_commands.append(PendingCommandType.PLACE_SUGAR_ACTION)
+	_queue_pending_command(PendingCommandType.PLACE_SUGAR_ACTION)
 	return true
 
 
 func submit_continue_observation_action() -> bool:
 	if not _is_continue_observation_action_available():
 		return false
-	_pending_commands.append(
-		PendingCommandType.CONTINUE_OBSERVATION_ACTION
-	)
+	_queue_pending_command(PendingCommandType.CONTINUE_OBSERVATION_ACTION)
 	return true
 
 
@@ -158,17 +162,24 @@ func restart_session() -> bool:
 
 	_state = initial_state
 	_pending_commands.clear()
+	_next_pending_command_sequence_id = 1
 	return true
 
 
 func advance_tick(tick_index: int) -> bool:
-	if not is_ready() or tick_index != _state.simulation_tick + 1:
+	if (
+		not is_ready()
+		or _tick_in_progress
+		or tick_index != _state.simulation_tick + 1
+	):
 		return false
 
+	_tick_in_progress = true
 	_state.simulation_tick = tick_index
 	if not has_habitat():
 		_update_existing_ants()
 		_try_lay_egg()
+		_tick_in_progress = false
 		return true
 
 	_apply_pending_commands()
@@ -203,7 +214,9 @@ func advance_tick(tick_index: int) -> bool:
 			"Habitat ownership invariant failed at Tick %d"
 			% _state.simulation_tick
 		)
+		_tick_in_progress = false
 		return false
+	_tick_in_progress = false
 	return true
 
 
@@ -455,10 +468,10 @@ func _has_valid_habitat_ownership(state: ColonyState) -> bool:
 
 
 func _apply_pending_commands() -> void:
-	var commands_to_apply: Array[int] = _pending_commands
+	var commands_to_apply: Array[PendingSimulationCommand] = _pending_commands
 	_pending_commands = []
-	for command_type: int in commands_to_apply:
-		match command_type:
+	for command: PendingSimulationCommand in commands_to_apply:
+		match command.command_type:
 			PendingCommandType.WATER_ACTION:
 				_apply_water_action()
 			PendingCommandType.PLACE_SUGAR_ACTION:
@@ -652,7 +665,18 @@ func _is_continue_observation_action_available() -> bool:
 
 
 func _has_pending_command(command_type: int) -> bool:
-	return _pending_commands.has(command_type)
+	for command: PendingSimulationCommand in _pending_commands:
+		if command.command_type == command_type:
+			return true
+	return false
+
+
+func _queue_pending_command(command_type: PendingCommandType) -> void:
+	_pending_commands.append(PendingSimulationCommand.new(
+		_next_pending_command_sequence_id,
+		command_type
+	))
+	_next_pending_command_sequence_id += 1
 
 
 func _has_viable_combined_humidity_loop() -> bool:

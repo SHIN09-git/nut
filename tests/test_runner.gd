@@ -21,6 +21,9 @@ const CombinedObservationTestSuiteScript: Script = preload(
 const ObservationEventTestSuiteScript: Script = preload(
 	"res://tests/simulation/observation_event_test_suite.gd"
 )
+const SaveCoreTestSuiteScript: Script = preload(
+	"res://tests/save/save_core_test_suite.gd"
+)
 const PlayerAnnotationStateTestSuiteScript: Script = preload(
 	"res://tests/session/player_annotation_state_test_suite.gd"
 )
@@ -75,6 +78,7 @@ func _run_all_tests() -> void:
 	_run_foraging_test_suite()
 	_run_combined_observation_test_suite()
 	_run_observation_event_test_suite()
+	_run_save_core_test_suite()
 	_run_player_annotation_state_test_suite()
 	_run_demo_settings_state_test_suite()
 	_run_demo_localization_test_suite()
@@ -144,6 +148,12 @@ func _run_combined_observation_test_suite() -> void:
 
 func _run_observation_event_test_suite() -> void:
 	var suite: ObservationEventTestSuite = ObservationEventTestSuiteScript.new()
+	suite.run()
+	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
+
+
+func _run_save_core_test_suite() -> void:
+	var suite: SaveCoreTestSuite = SaveCoreTestSuiteScript.new()
 	suite.run()
 	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
 

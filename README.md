@@ -18,6 +18,7 @@
 - 支持暂停、1×、4×、16×；倍速只改变现实时间内处理的 Tick 数，不改变单 Tick 语义。标题栏“菜单”或 `Esc` 打开暂停菜单，可继续、重新开始或退出。
 - 暂停菜单支持 1280×720、1920×1080、窗口／全屏切换，以及简体中文／临时英文即时切换。界面设置属于当前程序会话，不写入存档；英文仍需最终人工校对。
 - 完成后可立即重新开始；重开会清除旧命令、阶段、资源、观察卡、名称、选择、事件游标和视觉映射，并返回 Tick 0 准备门。
+- R2 已提供尚未接入 UI 的版本化存档核心：保存权威状态、冻结配置、暂停／倍速和有序待处理命令；支持 checksum、严格加载校验、旧 schema 迁移、临时文件提交与备份恢复。
 - 旧的双室湿度切片、独立糖水切片和完整生命周期试管场景仍可单独启动，用于回归与调试。
 
 当前所有物种、湿度和行为参数都是 `prototype_pacing_fixture`，未经科学验证。影响当前连续体验的配置事实来源包括：
@@ -79,7 +80,7 @@
 
 ## 测试
 
-`tests/test_runner.gd` 是唯一顶层入口，聚合固定时钟、生命周期、湿度搬运、糖水觅食、连续场景编排、结构化事件、会话注释、快照隔离、View 映射、真实 UI 路径、暂停菜单、显示设置和翻译资源测试：
+`tests/test_runner.gd` 是唯一顶层入口，聚合固定时钟、生命周期、湿度搬运、糖水觅食、连续场景编排、结构化事件、版本化存档、会话注释、快照隔离、View 映射、真实 UI 路径、暂停菜单、显示设置和翻译资源测试：
 
 ```powershell
 & '.\Godot_v4.7.1-stable_win64_console.exe' `
@@ -116,10 +117,10 @@ New-Item -ItemType Directory -Force -Path '.\builds\windows'
 - v0.2 计划要求的 7 名有效首次接触测试者数据尚未取得，因此外部理解度 Gate 没有通过。用户于 2026-07-28 明确决定豁免该前置条件并继续 M5；这不是测试结果，也不能作为外部可理解性证据。
 - 连续场景只受控推进一只晚期蛹；完整卵、幼虫、蛹、工蚁生命周期仍只在独立调试场景运行。
 - 名称、选择、个人行动记录和显示设置不会跨“重新开始”或跨程序会话保存。
-- 尚无蛋白质、饥饿、能量、资源经济、多食物点、自由地图、设施建造、镜头跟随、存档、Steam、正式素材、音频或第三方插件。
+- 当前存档核心尚未接入新游戏／继续／档案／保存／恢复 UI；程序不会自动写盘。尚无蛋白质、饥饿、能量、资源经济、多食物点、自由地图、设施建造、镜头跟随、Steam、正式素材、音频或第三方插件。
 
-v0.1 发布基线见 `docs/validation/v0.1_baseline_001.md`；M2 身份验证见 `docs/validation/worker_identity_001.md`；M3 糖水验证见 `docs/validation/sugar_foraging_001.md`；M4 连续体验验证见 `docs/validation/v0_2_combined_001.md`；R0-A 证据有效性修正见 `docs/validation/v0_2_m4_evidence_validity_001.md`；R0-B 冻结外测候选见 `docs/validation/v0_2_m4_evidence_candidate_001.md`；M5 演示候选见 `docs/validation/v0_2_m5_demo_candidate_001.md`。
+v0.1 发布基线见 `docs/validation/v0.1_baseline_001.md`；M2 身份验证见 `docs/validation/worker_identity_001.md`；M3 糖水验证见 `docs/validation/sugar_foraging_001.md`；M4 连续体验验证见 `docs/validation/v0_2_combined_001.md`；R0-A 证据有效性修正见 `docs/validation/v0_2_m4_evidence_validity_001.md`；R0-B 冻结外测候选见 `docs/validation/v0_2_m4_evidence_candidate_001.md`；M5 演示候选见 `docs/validation/v0_2_m5_demo_candidate_001.md`；R1 规格锁定见 `docs/validation/v1_r1_production_spec_001.md`；R2 存档核心见 `docs/validation/v1_r2_save_core_001.md`。
 
-未来 3～4 小时完整独立游戏的章节、存档、设施、UI、音画、验证与发行路线见 `CODEX_V1_MASTER_PLAN.md`；R1 生产规格索引见 `docs/V1_PRODUCTION_SPEC_INDEX.md`。这些计划不表示未来能力已经实现；当前可运行事实仍以本 README、`GDD.md` 和 `ARCHITECTURE.md` 为准。
+未来 3～4 小时完整独立游戏的章节、档案、设施、UI、音画、验证与发行路线见 `CODEX_V1_MASTER_PLAN.md`；R1 生产规格索引见 `docs/V1_PRODUCTION_SPEC_INDEX.md`，R2 存档 schema 见 `docs/architecture/SAVE_SCHEMA_R2.md`。这些计划不表示未来能力已经实现；当前可运行事实仍以本 README、`GDD.md` 和 `ARCHITECTURE.md` 为准。
 
 开始修改前请阅读 `AGENTS.md`、`GDD.md` 和 `ARCHITECTURE.md`。`sucai/` 仅作内部观察参考，授权确认前不得作为发行素材。
