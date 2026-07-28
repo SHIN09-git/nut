@@ -1,6 +1,8 @@
 class_name CombinedObservationController
 extends Control
 
+signal application_exit_requested
+
 const SPECIES_A_DATA: SpeciesData = preload(
 	"res://data/species/species_a.tres"
 )
@@ -14,7 +16,6 @@ const COPY_ROLE_NEUTRAL_PLACEHOLDER: StringName = &"neutral_placeholder"
 const COPY_ROLE_POST_EVENT_CONCLUSION: StringName = &"post_event_conclusion"
 const COPY_ROLE_SYSTEM_STATUS: StringName = &"system_status"
 const COPY_ROLE_ERROR: StringName = &"error"
-const LOCKED_CARD_TEXT: String = "○  尚未记录"
 
 var _simulation_clock: SimulationClock
 var _colony_simulation: ColonySimulation
@@ -23,6 +24,9 @@ var _player_annotation_state: PlayerAnnotationState
 var _sugar_tool_armed: bool = false
 var _fatal_simulation_error: String = ""
 var _preparation_gate_active: bool = true
+var _pause_menu_open: bool = false
+var _paused_before_menu: bool = true
+var _demo_settings_state: DemoSettingsState
 
 # Tests may replace these before _ready(). Both Resources are consumed only
 # while ColonySimulation freezes the configuration at session construction.
@@ -30,7 +34,9 @@ var species_data_source: SpeciesData = SPECIES_A_DATA
 var habitat_scenario_data_source: HabitatScenarioData = (
 	COMBINED_SCENARIO_DATA
 )
+var exit_application_on_request: bool = true
 
+@onready var _title_label: Label = %Title
 @onready var _status_label: Label = %StatusLabel
 @onready var _phase_label: Label = %PhaseLabel
 @onready var _habitat_view: CombinedHabitatView = %CombinedHabitatView
@@ -56,9 +62,27 @@ var habitat_scenario_data_source: HabitatScenarioData = (
 @onready var _speed_16x_button: Button = %Speed16xButton
 @onready var _preparation_gate: Control = %PreparationGate
 @onready var _start_observation_button: Button = %StartObservationButton
+@onready var _observation_heading: Label = %ObservationHeading
+@onready var _completion_heading: Label = %CompletionHeading
+@onready var _footer_label: Label = %Footer
+@onready var _debug_title: Label = %DebugTitle
+@onready var _preparation_heading: Label = %PreparationHeading
+@onready var _preparation_description: Label = %PreparationDescription
+@onready var _pause_menu: Control = %PauseMenu
+@onready var _pause_heading: Label = %PauseHeading
+@onready var _resume_button: Button = %ResumeButton
+@onready var _pause_restart_button: Button = %PauseRestartButton
+@onready var _display_heading: Label = %DisplayHeading
+@onready var _resolution_label: Label = %ResolutionLabel
+@onready var _resolution_option: OptionButton = %ResolutionOption
+@onready var _fullscreen_check: CheckButton = %FullscreenCheck
+@onready var _language_label: Label = %LanguageLabel
+@onready var _language_option: OptionButton = %LanguageOption
+@onready var _exit_button: Button = %ExitButton
 
 
 func _ready() -> void:
+	_initialize_demo_settings()
 	_simulation_clock = SimulationClock.new()
 	_player_annotation_state = PlayerAnnotationState.new()
 	_colony_simulation = ColonySimulation.new(
@@ -85,6 +109,16 @@ func _ready() -> void:
 		_on_worker_name_commit_requested
 	)
 	_pause_button.pressed.connect(_on_pause_button_pressed)
+	_resume_button.pressed.connect(_on_resume_button_pressed)
+	_pause_restart_button.pressed.connect(
+		_on_pause_restart_button_pressed
+	)
+	_resolution_option.item_selected.connect(
+		_on_resolution_selected
+	)
+	_fullscreen_check.toggled.connect(_on_fullscreen_toggled)
+	_language_option.item_selected.connect(_on_language_selected)
+	_exit_button.pressed.connect(_on_exit_button_pressed)
 	_stage_action_button.pressed.connect(_on_stage_action_button_pressed)
 	_restart_button.pressed.connect(_on_restart_button_pressed)
 	_start_observation_button.pressed.connect(
@@ -100,9 +134,15 @@ func _ready() -> void:
 		_on_speed_button_pressed.bind(SimulationClock.VERY_FAST_SPEED)
 	)
 
+	_refresh_localized_ui()
 	_simulation_clock.set_paused(true)
 	_apply_game_snapshot()
 	_enter_preparation_gate()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_TRANSLATION_CHANGED and is_node_ready():
+		_refresh_localized_ui()
 
 
 func _process(delta: float) -> void:
@@ -124,8 +164,13 @@ func _input(event: InputEvent) -> void:
 	if key_event.keycode == KEY_F3 and _debug_controls_available():
 		_toggle_debug_panel()
 		get_viewport().set_input_as_handled()
-	elif key_event.keycode == KEY_ESCAPE and _sugar_tool_armed:
-		_cancel_sugar_tool("已取消放置糖水。")
+	elif key_event.keycode == KEY_ESCAPE:
+		if _pause_menu_open:
+			_close_pause_menu(false)
+		elif _sugar_tool_armed:
+			_cancel_sugar_tool(tr("FEEDBACK_SUGAR_CANCELLED"))
+		else:
+			_open_pause_menu()
 		get_viewport().set_input_as_handled()
 
 
@@ -135,21 +180,49 @@ func _on_simulation_tick_requested(
 ) -> void:
 	if not _colony_simulation.advance_tick(tick_index):
 		_set_fatal_simulation_error(
-			"模拟拒绝了非连续 Tick %d，观察已暂停。" % tick_index
+			tr("ERROR_NONCONTIGUOUS_TICK") % tick_index
 		)
 		return
 	_apply_game_snapshot()
 
 
 func _on_pause_button_pressed() -> void:
-	if _preparation_gate_active:
+	_open_pause_menu()
+
+
+func _on_resume_button_pressed() -> void:
+	_close_pause_menu(true)
+
+
+func _on_pause_restart_button_pressed() -> void:
+	_pause_menu_open = false
+	_pause_menu.visible = false
+	_restart_session()
+
+
+func _on_resolution_selected(index: int) -> void:
+	if not _demo_settings_state.select_resolution(index):
 		return
-	var paused: bool = _simulation_clock.toggle_paused()
-	if paused and _sugar_tool_armed:
-		_cancel_sugar_tool("观察已暂停，放置操作已取消。")
-	_habitat_view.set_visuals_paused(paused)
-	_update_control_state()
-	_update_debug_panel()
+	if not _demo_settings_state.is_fullscreen_requested():
+		_apply_windowed_resolution()
+
+
+func _on_fullscreen_toggled(enabled: bool) -> void:
+	_demo_settings_state.set_fullscreen_requested(enabled)
+	_apply_fullscreen_mode()
+
+
+func _on_language_selected(index: int) -> void:
+	if not _demo_settings_state.select_locale(index):
+		return
+	TranslationServer.set_locale(_demo_settings_state.get_locale_code())
+	_refresh_localized_ui()
+
+
+func _on_exit_button_pressed() -> void:
+	application_exit_requested.emit()
+	if exit_application_on_request:
+		get_tree().quit()
 
 
 func _on_stage_action_button_pressed() -> void:
@@ -165,7 +238,7 @@ func _on_stage_action_button_pressed() -> void:
 				_apply_game_snapshot()
 				_set_copy(
 					_feedback_label,
-					"观察动作已提交，将在下一次更新时生效。",
+					tr("FEEDBACK_CONTINUE_SUBMITTED"),
 					COPY_ROLE_ACTION_AFFORDANCE
 				)
 		ScenarioSequenceSnapshot.Phase.HUMIDITY_OBSERVATION:
@@ -173,17 +246,17 @@ func _on_stage_action_button_pressed() -> void:
 				_apply_game_snapshot()
 				_set_copy(
 					_feedback_label,
-					"补水动作已提交，将在下一次更新时生效。",
+					tr("FEEDBACK_WATER_SUBMITTED"),
 					COPY_ROLE_ACTION_AFFORDANCE
 				)
 		ScenarioSequenceSnapshot.Phase.SUGAR_FORAGING:
 			if _sugar_tool_armed:
-				_cancel_sugar_tool("已取消放置糖水。")
+				_cancel_sugar_tool(tr("FEEDBACK_SUGAR_CANCELLED"))
 			elif _can_arm_sugar_tool():
 				_set_sugar_tool_armed(true)
 				_set_copy(
 					_feedback_label,
-					"在右侧觅食区选择落点；按 Esc 可以取消。",
+					tr("FEEDBACK_SUGAR_AIM"),
 					COPY_ROLE_ACTION_AFFORDANCE
 				)
 				_update_control_state()
@@ -196,20 +269,20 @@ func _on_sugar_drop_requested() -> void:
 		or not _latest_snapshot.scenario.place_action_available
 		or not _colony_simulation.submit_place_sugar_action()
 	):
-		_cancel_sugar_tool("当前无法放置糖水，请继续观察。")
+		_cancel_sugar_tool(tr("FEEDBACK_SUGAR_UNAVAILABLE"))
 		return
 	_set_sugar_tool_armed(false)
 	_apply_game_snapshot()
 	_set_copy(
 		_feedback_label,
-		"糖水放置动作已提交，将在下一次更新时生效。",
+		tr("FEEDBACK_SUGAR_SUBMITTED"),
 		COPY_ROLE_ACTION_AFFORDANCE
 	)
 
 
 func _on_sugar_tool_cancel_requested() -> void:
 	if _sugar_tool_armed:
-		_cancel_sugar_tool("这里只能观察；糖水需要放在右侧觅食区。")
+		_cancel_sugar_tool(tr("FEEDBACK_SUGAR_WRONG_ZONE"))
 
 
 func _on_worker_selection_requested(entity_id: int) -> void:
@@ -247,6 +320,7 @@ func _on_restart_button_pressed() -> void:
 func _on_start_observation_button_pressed() -> void:
 	if (
 		not _preparation_gate_active
+		or _pause_menu_open
 		or not _fatal_simulation_error.is_empty()
 		or _simulation_clock == null
 	):
@@ -262,7 +336,7 @@ func _on_start_observation_button_pressed() -> void:
 
 
 func _on_speed_button_pressed(multiplier: int) -> void:
-	if _preparation_gate_active:
+	if _preparation_gate_active or _pause_menu_open:
 		return
 	_simulation_clock.set_speed_multiplier(multiplier)
 	_update_control_state()
@@ -288,7 +362,7 @@ func _apply_game_snapshot() -> void:
 		or _latest_snapshot.sequence == null
 	):
 		_set_fatal_simulation_error(
-			"模拟未能提供完整的连续观察快照，观察已暂停。"
+			tr("ERROR_INCOMPLETE_SNAPSHOT")
 		)
 		return
 
@@ -297,7 +371,7 @@ func _apply_game_snapshot() -> void:
 		_latest_snapshot.observations.events
 	)
 	if not _habitat_view.apply_snapshot(_latest_snapshot):
-		_set_fatal_simulation_error("栖息地视图拒绝了模拟快照，观察已暂停。")
+		_set_fatal_simulation_error(tr("ERROR_VIEW_REJECTED"))
 		return
 	_habitat_view.set_selected_worker_id(
 		_player_annotation_state.get_selected_worker_id()
@@ -344,21 +418,21 @@ func _update_observation_cards() -> void:
 		_latest_snapshot.observations.has_card(
 			_latest_snapshot.sequence.first_worker_observation_card_id
 		),
-		"第一只工蚁羽化"
+		"UI_CARD_FIRST_WORKER"
 	)
 	_set_card_copy(
 		_humidity_card_label,
 		_latest_snapshot.observations.has_card(
 			_latest_snapshot.sequence.brood_humidity_observation_card_id
 		),
-		"工蚁把幼体搬向更合适的湿度"
+		"UI_CARD_HUMIDITY"
 	)
 	_set_card_copy(
 		_sugar_card_label,
 		_latest_snapshot.observations.has_card(
 			_latest_snapshot.sequence.sugar_foraging_observation_card_id
 		),
-		"工蚁把糖水带回巢内分享"
+		"UI_CARD_SUGAR"
 	)
 
 
@@ -373,99 +447,99 @@ func _update_player_guidance() -> void:
 
 	match phase:
 		ScenarioSequenceSnapshot.Phase.FOUNDING_PRELUDE:
-			_tool_heading.text = "建群序幕"
+			_tool_heading.text = tr("TOOL_FOUNDING")
 			_set_copy(
 				_instruction_label,
-				"观察蚁后身旁的晚期蛹，比较它和其他幼体的轮廓。",
+				tr("GUIDE_FOUNDING_INSTRUCTION"),
 				COPY_ROLE_OBSERVATION_CUE
 			)
 			_set_copy(
 				_feedback_label,
-				"画面中的变化会随着观察推进。",
+				tr("GUIDE_FOUNDING_FEEDBACK"),
 				COPY_ROLE_OBSERVATION_CUE
 			)
 		ScenarioSequenceSnapshot.Phase.IDENTITY_OBSERVATION:
-			_tool_heading.text = "认识个体"
+			_tool_heading.text = tr("TOOL_IDENTITY")
 			_set_copy(
 				_instruction_label,
-				"留意新出现的个体与周围幼体在轮廓和行动上的差异。",
+				tr("GUIDE_IDENTITY_INSTRUCTION"),
 				COPY_ROLE_OBSERVATION_CUE
 			)
 			_set_copy(
 				_feedback_label,
-				"个体观察区会保留你主动选择的对象。",
+				tr("GUIDE_IDENTITY_FEEDBACK"),
 				COPY_ROLE_OBSERVATION_CUE
 			)
 		ScenarioSequenceSnapshot.Phase.HUMIDITY_OBSERVATION:
-			_tool_heading.text = "巢室环境"
+			_tool_heading.text = tr("TOOL_HUMIDITY")
 			if not _latest_snapshot.colony.water_action_unlocked:
 				_set_copy(
 					_instruction_label,
-					"比较两个巢室的凝水、幼体分布和工蚁行动。",
+					tr("GUIDE_HUMIDITY_LOCKED_INSTRUCTION"),
 					COPY_ROLE_OBSERVATION_CUE
 				)
 				_set_copy(
 					_feedback_label,
-					"持续观察同一批幼体的位置变化。",
+					tr("GUIDE_HUMIDITY_LOCKED_FEEDBACK"),
 					COPY_ROLE_OBSERVATION_CUE
 				)
 			elif _latest_snapshot.colony.water_target_comfortable:
 				_set_copy(
 					_instruction_label,
-					"比较补水前后的凝水、幼体位置与工蚁路线。",
+					tr("GUIDE_HUMIDITY_COMFORTABLE_INSTRUCTION"),
 					COPY_ROLE_OBSERVATION_CUE
 				)
 				_set_copy(
 					_feedback_label,
-					"继续观察，直到画面中的搬运停止。",
+					tr("GUIDE_HUMIDITY_COMFORTABLE_FEEDBACK"),
 					COPY_ROLE_OBSERVATION_CUE
 				)
 			else:
 				_set_copy(
 					_instruction_label,
-					"比较育幼室与相邻巢室的凝水和幼体分布。",
+					tr("GUIDE_HUMIDITY_ACTION_INSTRUCTION"),
 					COPY_ROLE_OBSERVATION_CUE
 				)
 				_set_copy(
 					_feedback_label,
-					"你可以少量补水，再观察工蚁行动是否变化。",
+					tr("GUIDE_HUMIDITY_ACTION_FEEDBACK"),
 					COPY_ROLE_ACTION_AFFORDANCE
 				)
 		ScenarioSequenceSnapshot.Phase.SUGAR_FORAGING:
-			_tool_heading.text = "糖水觅食"
+			_tool_heading.text = tr("TOOL_SUGAR")
 			if _latest_snapshot.scenario.place_action_count == 0:
 				_set_copy(
 					_instruction_label,
-					"观察巢室与右侧觅食区，寻找可干预的落点。",
+					tr("GUIDE_SUGAR_EMPTY_INSTRUCTION"),
 					COPY_ROLE_OBSERVATION_CUE
 				)
 				if not _sugar_tool_armed:
 					_set_copy(
 						_feedback_label,
-						"启用工具后，可以在觅食区选择落点。",
+						tr("GUIDE_SUGAR_EMPTY_FEEDBACK"),
 						COPY_ROLE_ACTION_AFFORDANCE
 					)
 			else:
 				_set_copy(
 					_instruction_label,
-					"糖水已经出现在觅食区，留意工蚁的路线和停留位置。",
+					tr("GUIDE_SUGAR_PLACED_INSTRUCTION"),
 					COPY_ROLE_OBSERVATION_CUE
 				)
 				_set_copy(
 					_feedback_label,
-					"观察卡会在证据充分后解锁。",
+					tr("GUIDE_SUGAR_PLACED_FEEDBACK"),
 					COPY_ROLE_OBSERVATION_CUE
 				)
 		ScenarioSequenceSnapshot.Phase.OBSERVATION_SUMMARY:
-			_tool_heading.text = "观察总结"
+			_tool_heading.text = tr("TOOL_SUMMARY")
 			_set_copy(
 				_instruction_label,
-				"同一只工蚁经历了羽化、幼体搬运与糖水觅食。",
+				tr("GUIDE_SUMMARY_INSTRUCTION"),
 				COPY_ROLE_POST_EVENT_CONCLUSION
 			)
 			_set_copy(
 				_feedback_label,
-				"三条因果线索已经记录完成。",
+				tr("GUIDE_SUMMARY_FEEDBACK"),
 				COPY_ROLE_POST_EVENT_CONCLUSION
 			)
 			_completion_label.text = _build_completion_summary()
@@ -473,7 +547,7 @@ func _update_player_guidance() -> void:
 
 func _update_control_state() -> void:
 	if not _fatal_simulation_error.is_empty():
-		_status_label.text = "模拟错误 · 已暂停"
+		_status_label.text = tr("STATUS_ERROR")
 		for button: Button in [
 			_pause_button,
 			_stage_action_button,
@@ -493,12 +567,11 @@ func _update_control_state() -> void:
 	if _preparation_gate_active:
 		_set_copy(
 			_status_label,
-			"准备观察 · 1×",
+			tr("STATUS_PREPARING"),
 			COPY_ROLE_SYSTEM_STATUS
 		)
-		_pause_button.text = "暂停"
+		_pause_button.text = tr("UI_MENU")
 		for gated_button: Button in [
-			_pause_button,
 			_stage_action_button,
 			_restart_button,
 			_speed_1x_button,
@@ -506,56 +579,73 @@ func _update_control_state() -> void:
 			_speed_16x_button,
 		]:
 			gated_button.disabled = true
-		_start_observation_button.disabled = false
+		_pause_button.disabled = _pause_menu_open
+		_pause_restart_button.disabled = true
+		_start_observation_button.disabled = _pause_menu_open
 		return
 	_set_copy(
 		_status_label,
 		(
-			"已暂停 · %d×" % speed_multiplier
+			tr("STATUS_PAUSED") % speed_multiplier
 			if paused
 			else (
-				"观察完成 · %d×" % speed_multiplier
+				tr("STATUS_COMPLETE") % speed_multiplier
 				if completed
-				else "观察中 · %d×" % speed_multiplier
+				else tr("STATUS_OBSERVING") % speed_multiplier
 			)
 		),
 		COPY_ROLE_SYSTEM_STATUS
 	)
-	_pause_button.text = "继续" if paused else "暂停"
-	_pause_button.disabled = false
-	_speed_1x_button.disabled = speed_multiplier == SimulationClock.NORMAL_SPEED
-	_speed_4x_button.disabled = speed_multiplier == SimulationClock.FAST_SPEED
-	_speed_16x_button.disabled = speed_multiplier == SimulationClock.VERY_FAST_SPEED
+	_pause_button.text = tr("UI_MENU")
+	_pause_button.disabled = _pause_menu_open
+	_pause_restart_button.disabled = false
+	_speed_1x_button.disabled = (
+		_pause_menu_open
+		or speed_multiplier == SimulationClock.NORMAL_SPEED
+	)
+	_speed_4x_button.disabled = (
+		_pause_menu_open
+		or speed_multiplier == SimulationClock.FAST_SPEED
+	)
+	_speed_16x_button.disabled = (
+		_pause_menu_open
+		or speed_multiplier == SimulationClock.VERY_FAST_SPEED
+	)
 
 	match _latest_snapshot.sequence.phase:
 		ScenarioSequenceSnapshot.Phase.FOUNDING_PRELUDE:
-			_stage_action_button.text = "等待第一只工蚁羽化"
+			_stage_action_button.text = tr("ACTION_WAIT_FIRST_WORKER")
 			_stage_action_button.disabled = true
 		ScenarioSequenceSnapshot.Phase.IDENTITY_OBSERVATION:
-			_stage_action_button.text = "继续观察环境"
+			_stage_action_button.text = tr("ACTION_CONTINUE_ENVIRONMENT")
 			_stage_action_button.disabled = (
-				paused
+				paused or _pause_menu_open
 				or not _latest_snapshot.sequence.continue_action_available
 			)
 		ScenarioSequenceSnapshot.Phase.HUMIDITY_OBSERVATION:
 			_stage_action_button.text = (
-				"补水正在渗入"
+				tr("ACTION_WATER_PENDING")
 				if _latest_snapshot.colony.water_action_pending
 				else (
-					"继续观察搬运"
+					tr("ACTION_CONTINUE_RELOCATION")
 					if _latest_snapshot.colony.water_target_comfortable
-					else "给育幼室少量补水"
+					else tr("ACTION_WATER_NURSERY")
 				)
 			)
 			_stage_action_button.disabled = (
-				paused or not _latest_snapshot.colony.water_action_available
+				paused
+				or _pause_menu_open
+				or not _latest_snapshot.colony.water_action_available
 			)
 		ScenarioSequenceSnapshot.Phase.SUGAR_FORAGING:
 			_stage_action_button.text = (
-				"取消放置" if _sugar_tool_armed else "准备放置糖水"
+				tr("ACTION_CANCEL_PLACEMENT")
+				if _sugar_tool_armed
+				else tr("ACTION_PREPARE_SUGAR")
 			)
 			_stage_action_button.disabled = (
 				paused
+				or _pause_menu_open
 				or (
 					not _sugar_tool_armed
 					and not _can_arm_sugar_tool()
@@ -565,6 +655,119 @@ func _update_control_state() -> void:
 			_stage_action_button.disabled = true
 
 	_restart_button.disabled = not completed
+
+
+func _initialize_demo_settings() -> void:
+	var initial_window_size: Vector2i = Vector2i(1280, 720)
+	var initial_fullscreen: bool = false
+	if DisplayServer.get_name().to_lower() != "headless":
+		initial_window_size = DisplayServer.window_get_size()
+		var window_mode: DisplayServer.WindowMode = (
+			DisplayServer.window_get_mode()
+		)
+		initial_fullscreen = window_mode in [
+			DisplayServer.WINDOW_MODE_FULLSCREEN,
+			DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN,
+		]
+	_demo_settings_state = DemoSettingsState.new(
+		TranslationServer.get_locale(),
+		initial_window_size,
+		initial_fullscreen
+	)
+	TranslationServer.set_locale(_demo_settings_state.get_locale_code())
+	_resolution_option.clear()
+	_resolution_option.add_item("1280 × 720")
+	_resolution_option.add_item("1920 × 1080")
+	_resolution_option.select(_demo_settings_state.get_resolution_index())
+	_language_option.clear()
+	_language_option.add_item("")
+	_language_option.add_item("")
+	_language_option.select(_demo_settings_state.get_locale_index())
+	_fullscreen_check.set_pressed_no_signal(initial_fullscreen)
+
+
+func _refresh_localized_ui() -> void:
+	_title_label.text = tr("UI_TITLE")
+	_observation_heading.text = tr("UI_OBSERVATION_CARDS")
+	_completion_heading.text = tr("UI_COMPLETION_HEADING")
+	_completion_label.text = tr("UI_COMPLETION_DEFAULT")
+	_restart_button.text = tr("UI_RESTART_OBSERVATION")
+	_footer_label.text = tr("UI_FOOTER_PROTOTYPE")
+	_debug_title.text = tr("UI_DEBUG_HEADING")
+	_preparation_heading.text = tr("UI_PREPARATION_HEADING")
+	_preparation_description.text = tr("UI_PREPARATION_DESCRIPTION")
+	_start_observation_button.text = tr("UI_START_OBSERVATION")
+	_pause_heading.text = tr("UI_PAUSE_HEADING")
+	_resume_button.text = tr("UI_RESUME")
+	_pause_restart_button.text = tr("UI_RESTART")
+	_display_heading.text = tr("UI_DISPLAY_HEADING")
+	_resolution_label.text = tr("UI_RESOLUTION")
+	_fullscreen_check.text = tr("UI_FULLSCREEN")
+	_language_label.text = tr("UI_LANGUAGE")
+	_exit_button.text = tr("UI_EXIT")
+	if _resolution_option.item_count >= 2:
+		_resolution_option.set_item_text(0, tr("UI_RESOLUTION_1280"))
+		_resolution_option.set_item_text(1, tr("UI_RESOLUTION_1920"))
+	if _language_option.item_count >= 2:
+		_language_option.set_item_text(0, tr("UI_LANGUAGE_ZH"))
+		_language_option.set_item_text(1, tr("UI_LANGUAGE_EN"))
+	if _latest_snapshot == null:
+		_debug_label.text = tr("UI_DEBUG_WAITING")
+	if _latest_snapshot != null:
+		_update_worker_observation_panel()
+		_update_observation_cards()
+		_update_player_guidance()
+		_update_control_state()
+
+
+func _open_pause_menu() -> void:
+	if _pause_menu_open or _simulation_clock == null:
+		return
+	if _sugar_tool_armed:
+		_cancel_sugar_tool(tr("FEEDBACK_PAUSED_CANCELLED"))
+	_paused_before_menu = _simulation_clock.is_paused()
+	_pause_menu_open = true
+	_pause_menu.visible = true
+	_simulation_clock.set_paused(true)
+	_habitat_view.set_visuals_paused(true)
+	_update_control_state()
+	_update_debug_panel()
+	_resume_button.grab_focus()
+
+
+func _close_pause_menu(force_resume: bool) -> void:
+	if not _pause_menu_open or _simulation_clock == null:
+		return
+	_pause_menu_open = false
+	_pause_menu.visible = false
+	var paused: bool = (
+		true
+		if _preparation_gate_active
+			or not _fatal_simulation_error.is_empty()
+		else (false if force_resume else _paused_before_menu)
+	)
+	_simulation_clock.set_paused(paused)
+	_habitat_view.set_visuals_paused(paused)
+	_update_control_state()
+	_update_debug_panel()
+
+
+func _apply_windowed_resolution() -> void:
+	if DisplayServer.get_name().to_lower() == "headless":
+		return
+	DisplayServer.window_set_size(
+		_demo_settings_state.get_windowed_resolution()
+	)
+
+
+func _apply_fullscreen_mode() -> void:
+	if DisplayServer.get_name().to_lower() == "headless":
+		return
+	if _demo_settings_state.is_fullscreen_requested():
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+		return
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	_apply_windowed_resolution()
 
 
 func _update_debug_panel() -> void:
@@ -646,6 +849,7 @@ func _can_arm_sugar_tool() -> bool:
 	return (
 		_fatal_simulation_error.is_empty()
 		and not _preparation_gate_active
+		and not _pause_menu_open
 		and _simulation_clock != null
 		and not _simulation_clock.is_paused()
 		and _latest_snapshot != null
@@ -684,7 +888,7 @@ func _restart_session() -> void:
 	if not _colony_simulation.restart_session():
 		var message: String = _colony_simulation.get_configuration_error()
 		if message.is_empty():
-			message = "无法从冻结配置重新开始连续观察。"
+			message = tr("ERROR_RESTART")
 		_set_fatal_simulation_error(message)
 		return
 
@@ -692,11 +896,13 @@ func _restart_session() -> void:
 	_latest_snapshot = null
 	_player_annotation_state.reset_session()
 	_preparation_gate_active = true
+	_pause_menu_open = false
+	_pause_menu.visible = false
 	_simulation_clock.reset()
 	_simulation_clock.set_paused(true)
 	_set_sugar_tool_armed(false)
 	_debug_panel.visible = false
-	_debug_label.text = "等待第一份模拟快照……"
+	_debug_label.text = tr("UI_DEBUG_WAITING")
 	_worker_observation_panel.reset_panel()
 	_habitat_view.reset_projection()
 	_apply_game_snapshot()
@@ -709,28 +915,27 @@ func _build_completion_summary() -> String:
 		first_worker_id
 	)
 	var subject: String = (
-		display_name if not display_name.is_empty() else "第一只工蚁"
+		display_name
+		if not display_name.is_empty()
+		else tr("COMPLETION_DEFAULT_SUBJECT")
 	)
-	return (
-		"%s从晚期蛹羽化，并在同一局中搬运幼体、发现糖水、返巢分享。"
-		% subject
-	)
+	return tr("COMPLETION_SUMMARY") % subject
 
 
 func _get_phase_heading(phase: int) -> String:
 	match phase:
 		ScenarioSequenceSnapshot.Phase.FOUNDING_PRELUDE:
-			return "第 1/5 段 · 建群序幕"
+			return tr("PHASE_1")
 		ScenarioSequenceSnapshot.Phase.IDENTITY_OBSERVATION:
-			return "第 2/5 段 · 认识个体"
+			return tr("PHASE_2")
 		ScenarioSequenceSnapshot.Phase.HUMIDITY_OBSERVATION:
-			return "第 3/5 段 · 湿度观察"
+			return tr("PHASE_3")
 		ScenarioSequenceSnapshot.Phase.SUGAR_FORAGING:
-			return "第 4/5 段 · 糖水觅食"
+			return tr("PHASE_4")
 		ScenarioSequenceSnapshot.Phase.OBSERVATION_SUMMARY:
-			return "第 5/5 段 · 观察总结"
+			return tr("PHASE_5")
 		_:
-			return "连续观察"
+			return tr("PHASE_FALLBACK")
 
 
 func _get_phase_name(phase: int) -> String:
@@ -752,6 +957,8 @@ func _get_phase_name(phase: int) -> String:
 func _enter_preparation_gate() -> void:
 	_preparation_gate_active = true
 	_preparation_gate.visible = true
+	_pause_menu_open = false
+	_pause_menu.visible = false
 	_start_observation_button.disabled = not _fatal_simulation_error.is_empty()
 	_debug_panel.visible = false
 	_set_sugar_tool_armed(false)
@@ -769,6 +976,34 @@ func is_preparation_gate_active() -> bool:
 	return _preparation_gate_active
 
 
+func is_pause_menu_open() -> bool:
+	return _pause_menu_open
+
+
+func is_simulation_paused() -> bool:
+	return _simulation_clock == null or _simulation_clock.is_paused()
+
+
+func get_simulation_tick() -> int:
+	return (
+		_latest_snapshot.simulation_tick
+		if _latest_snapshot != null
+		else 0
+	)
+
+
+func get_requested_window_resolution() -> Vector2i:
+	return _demo_settings_state.get_windowed_resolution()
+
+
+func is_fullscreen_requested() -> bool:
+	return _demo_settings_state.is_fullscreen_requested()
+
+
+func get_selected_locale() -> String:
+	return _demo_settings_state.get_locale_code()
+
+
 func _debug_controls_available() -> bool:
 	return OS.is_debug_build()
 
@@ -781,13 +1016,13 @@ func _set_card_copy(
 	if unlocked:
 		_set_copy(
 			label,
-			"✓  %s" % unlocked_text,
+			"✓  %s" % tr(unlocked_text),
 			COPY_ROLE_POST_EVENT_CONCLUSION
 		)
 	else:
 		_set_copy(
 			label,
-			LOCKED_CARD_TEXT,
+			tr("UI_CARD_LOCKED"),
 			COPY_ROLE_NEUTRAL_PLACEHOLDER
 		)
 

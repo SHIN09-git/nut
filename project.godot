@@ -20,6 +20,11 @@ window/size/window_width_override=1280
 window/size/window_height_override=720
 window/stretch/mode="canvas_items"
 
+[internationalization]
+
+locale/fallback="zh_CN"
+locale/translations=PackedStringArray("res://localization/v0_2.en.translation", "res://localization/v0_2.zh_CN.translation")
+
 [rendering]
 
 renderer/rendering_method="gl_compatibility"

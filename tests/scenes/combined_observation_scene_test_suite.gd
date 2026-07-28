@@ -60,6 +60,9 @@ func _test_scene_instantiates_at_target_size() -> void:
 	var pause_button: Button = controller.get_node_or_null(
 		"%PauseButton"
 	) as Button
+	var pause_menu: Control = controller.get_node_or_null(
+		"%PauseMenu"
+	) as Control
 	var speed_4x_button: Button = controller.get_node_or_null(
 		"%Speed4xButton"
 	) as Button
@@ -78,6 +81,7 @@ func _test_scene_instantiates_at_target_size() -> void:
 	)
 	_expect_true(preparation_gate != null, "combined scene has a preparation gate")
 	_expect_true(start_button != null, "preparation gate has one start affordance")
+	_expect_true(pause_menu != null, "combined scene has one pause menu")
 	_expect_true(
 		controller._fatal_simulation_error.is_empty(),
 		"combined scene starts without a simulation error"
@@ -117,7 +121,12 @@ func _test_scene_instantiates_at_target_size() -> void:
 	if start_button != null:
 		_expect_true(not start_button.disabled, "start affordance is initially available")
 	if pause_button != null:
-		_expect_true(pause_button.disabled, "pause is locked before observation starts")
+		_expect_true(
+			not pause_button.disabled,
+			"menu remains available before observation starts"
+		)
+	if pause_menu != null:
+		_expect_true(not pause_menu.visible, "pause menu starts hidden")
 	if speed_4x_button != null:
 		_expect_true(speed_4x_button.disabled, "4x is locked before observation starts")
 	if speed_16x_button != null:
@@ -220,6 +229,15 @@ func _test_preparation_gate_freezes_tick_and_projection() -> void:
 		initial_queen_position,
 		"queen projection does not move before start"
 	)
+	_expect_true(
+		controller.is_pause_menu_open(),
+		"menu button opens settings without releasing the preparation gate"
+	)
+	(controller.get_node("%ResumeButton") as Button).pressed.emit()
+	_expect_true(
+		not controller.is_pause_menu_open(),
+		"resume closes the menu while the preparation gate remains frozen"
+	)
 
 	_press_start_button(controller)
 	_expect_true(
@@ -282,7 +300,7 @@ func _test_pre_event_copy_roles_do_not_leak() -> void:
 		)
 		_expect_string(
 			card_label.text,
-			CombinedObservationController.LOCKED_CARD_TEXT,
+			TranslationServer.translate("UI_CARD_LOCKED"),
 			"locked observation card does not reveal its conclusion"
 		)
 	_expect_copy_role(
@@ -791,7 +809,11 @@ func _test_pause_and_f3_freeze_projection() -> void:
 	var paused_position: Vector2 = ant_view.position
 	_expect_true(
 		controller._simulation_clock.is_paused(),
-		"real pause button pauses the fixed clock"
+		"menu button pauses the fixed clock"
+	)
+	_expect_true(
+		controller.is_pause_menu_open(),
+		"menu button exposes the pause menu"
 	)
 	_expect_true(
 		habitat_view.are_visuals_paused(),

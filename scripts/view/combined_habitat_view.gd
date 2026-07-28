@@ -98,17 +98,28 @@ var _sugar_tool_armed: bool = false
 func _ready() -> void:
 	_queen_view.z_index = 3
 	_queen_view.set_visuals_paused(_visuals_paused)
+	_refresh_localized_labels()
 	_layout_projection()
 	queue_redraw()
 
 
 func _notification(what: int) -> void:
+	if what == NOTIFICATION_TRANSLATION_CHANGED and is_node_ready():
+		_refresh_localized_labels()
+		return
 	if what != NOTIFICATION_RESIZED:
 		return
 	if is_node_ready():
 		_recalculate_position_endpoints()
 		_layout_projection()
 	queue_redraw()
+
+
+func _refresh_localized_labels() -> void:
+	_nursery_label.text = tr("HABITAT_NURSERY")
+	_resting_label.text = tr("HABITAT_RESTING")
+	_foraging_label.text = tr("HABITAT_FORAGING")
+	_placement_hint.text = tr("HABITAT_PLACEMENT_HINT")
 
 
 func _gui_input(event: InputEvent) -> void:

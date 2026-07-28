@@ -133,17 +133,18 @@ layout_mode = 2
 theme_override_constants/separation = 0
 
 [node name="Title" type="Label" parent="SafeArea/Content/Header/Margin/Row/TitleBlock"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
 theme_override_font_sizes/font_size = 22
-text = "玻璃蚁国 · 连续观察"
+text = "UI_TITLE"
 
 [node name="PhaseLabel" type="Label" parent="SafeArea/Content/Header/Margin/Row/TitleBlock"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.61, 0.69, 0.66, 1)
 theme_override_font_sizes/font_size = 13
-text = "第 1/5 段 · 建群序幕"
+text = "PHASE_1"
 
 [node name="Spacer" type="Control" parent="SafeArea/Content/Header/Margin/Row"]
 layout_mode = 2
@@ -154,7 +155,7 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(105, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.68, 0.82, 0.73, 1)
-text = "观察中 · 1×"
+text = "STATUS_OBSERVING"
 horizontal_alignment = 1
 vertical_alignment = 1
 
@@ -162,7 +163,7 @@ vertical_alignment = 1
 unique_name_in_owner = true
 custom_minimum_size = Vector2(64, 40)
 layout_mode = 2
-text = "暂停"
+text = "UI_MENU"
 
 [node name="Speed1xButton" type="Button" parent="SafeArea/Content/Header/Margin/Row"]
 unique_name_in_owner = true
@@ -234,11 +235,12 @@ custom_minimum_size = Vector2(292, 0)
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="Heading" type="Label" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/Summary"]
+[node name="WorkerObservationHeading" type="Label" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/Summary"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
 theme_override_font_sizes/font_size = 16
-text = "个体观察"
+text = "UI_WORKER_OBSERVATION"
 
 [node name="WorkerPromptLabel" type="Label" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/Summary"]
 unique_name_in_owner = true
@@ -246,7 +248,7 @@ custom_minimum_size = Vector2(260, 0)
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_colors/font_color = Color(0.73, 0.77, 0.69, 1)
-text = "观察不同个体的轮廓与行动。"
+text = "UI_WORKER_PROMPT"
 vertical_alignment = 1
 autowrap_mode = 2
 metadata/evidence_copy_role = &"observation_cue"
@@ -262,13 +264,13 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.89, 0.83, 0.66, 1)
 theme_override_font_sizes/font_size = 15
-text = "未命名工蚁"
+text = "UI_WORKER_UNNAMED"
 
 [node name="WorkerCurrentBehaviorLabel" type="Label" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/Summary/SelectedWorkerContent"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.73, 0.77, 0.69, 1)
-text = "正在巢室内停留"
+text = "BEHAVIOR_IDLE"
 
 [node name="NamingRow" type="HBoxContainer" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/Summary/SelectedWorkerContent"]
 layout_mode = 2
@@ -280,13 +282,13 @@ custom_minimum_size = Vector2(186, 30)
 layout_mode = 2
 size_flags_horizontal = 3
 max_length = 16
-placeholder_text = "可选：给它起个名字"
+placeholder_text = "UI_WORKER_NAME_PLACEHOLDER"
 
 [node name="WorkerNameButton" type="Button" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/Summary/SelectedWorkerContent/NamingRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(72, 30)
 layout_mode = 2
-text = "保存"
+text = "UI_SAVE_NAME"
 
 [node name="Divider" type="VSeparator" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content"]
 layout_mode = 2
@@ -298,10 +300,11 @@ size_flags_horizontal = 3
 theme_override_constants/separation = 4
 
 [node name="HistoryHeading" type="Label" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/History"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
 theme_override_font_sizes/font_size = 16
-text = "最近行动"
+text = "UI_RECENT_ACTIONS"
 
 [node name="WorkerHistoryLabel" type="Label" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/History"]
 unique_name_in_owner = true
@@ -309,7 +312,7 @@ layout_mode = 2
 size_flags_vertical = 3
 theme_override_colors/font_color = Color(0.73, 0.77, 0.69, 1)
 theme_override_font_sizes/font_size = 12
-text = "个体的行动记录会在这里出现。"
+text = "UI_EMPTY_HISTORY"
 vertical_alignment = 1
 autowrap_mode = 2
 metadata/evidence_copy_role = &"neutral_placeholder"
@@ -331,10 +334,11 @@ layout_mode = 2
 theme_override_constants/separation = 8
 
 [node name="ObservationHeading" type="Label" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
 theme_override_font_sizes/font_size = 17
-text = "观察卡"
+text = "UI_OBSERVATION_CARDS"
 
 [node name="ObservationCards" type="VBoxContainer" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
 layout_mode = 2
@@ -349,7 +353,7 @@ theme_override_styles/panel = SubResource("StyleBox_card")
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.78, 0.79, 0.69, 1)
-text = "○  尚未记录"
+text = "UI_CARD_LOCKED"
 horizontal_alignment = 1
 vertical_alignment = 1
 metadata/evidence_copy_role = &"neutral_placeholder"
@@ -365,7 +369,7 @@ custom_minimum_size = Vector2(270, 40)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.78, 0.79, 0.69, 1)
 theme_override_font_sizes/font_size = 12
-text = "○  尚未记录"
+text = "UI_CARD_LOCKED"
 horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 2
@@ -382,7 +386,7 @@ custom_minimum_size = Vector2(270, 40)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.78, 0.79, 0.69, 1)
 theme_override_font_sizes/font_size = 12
-text = "○  尚未记录"
+text = "UI_CARD_LOCKED"
 horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 2
@@ -396,7 +400,7 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(270, 58)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.77, 0.8, 0.72, 1)
-text = "观察蚁后身旁的晚期蛹。"
+text = "GUIDE_FOUNDING_INSTRUCTION"
 autowrap_mode = 2
 metadata/evidence_copy_role = &"observation_cue"
 
@@ -406,7 +410,7 @@ custom_minimum_size = Vector2(270, 50)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.61, 0.69, 0.66, 1)
 theme_override_font_sizes/font_size = 12
-text = "此时不需要干预。"
+text = "GUIDE_FOUNDING_FEEDBACK"
 autowrap_mode = 2
 metadata/evidence_copy_role = &"observation_cue"
 
@@ -424,14 +428,14 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
 theme_override_font_sizes/font_size = 17
-text = "建群序幕"
+text = "TOOL_FOUNDING"
 
 [node name="StageActionButton" type="Button" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent/StageControls"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 disabled = true
-text = "等待第一只工蚁羽化"
+text = "ACTION_WAIT_FIRST_WORKER"
 
 [node name="CompletionPanel" type="VBoxContainer" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
 unique_name_in_owner = true
@@ -440,31 +444,33 @@ layout_mode = 2
 theme_override_constants/separation = 7
 
 [node name="CompletionHeading" type="Label" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent/CompletionPanel"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
 theme_override_font_sizes/font_size = 18
-text = "连续观察完成"
+text = "UI_COMPLETION_HEADING"
 
 [node name="CompletionLabel" type="Label" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent/CompletionPanel"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(270, 70)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.73, 0.77, 0.69, 1)
-text = "已经完成三条观察记录。"
+text = "UI_COMPLETION_DEFAULT"
 autowrap_mode = 2
 
 [node name="RestartButton" type="Button" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent/CompletionPanel"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
-text = "重新开始连续观察"
+text = "UI_RESTART_OBSERVATION"
 
 [node name="Footer" type="Label" parent="SafeArea/Content"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 22)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.61, 0.69, 0.66, 1)
 theme_override_font_sizes/font_size = 12
-text = "原型节奏参数不代表真实物种数据"
+text = "UI_FOOTER_PROTOTYPE"
 horizontal_alignment = 1
 vertical_alignment = 1
 metadata/evidence_copy_role = &"system_status"
@@ -496,11 +502,12 @@ theme_override_constants/margin_bottom = 12
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="Title" type="Label" parent="DebugPanel/Margin/Content"]
+[node name="DebugTitle" type="Label" parent="DebugPanel/Margin/Content"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
 theme_override_font_sizes/font_size = 19
-text = "连续观察诊断"
+text = "UI_DEBUG_HEADING"
 
 [node name="Rule" type="HSeparator" parent="DebugPanel/Margin/Content"]
 layout_mode = 2
@@ -517,7 +524,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.75, 0.81, 0.75, 1)
 theme_override_font_sizes/font_size = 12
-text = "等待第一份模拟快照……"
+text = "UI_DEBUG_WAITING"
 autowrap_mode = 2
 
 [node name="PreparationGate" type="Control" parent="."]
@@ -569,17 +576,19 @@ layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 14
 
-[node name="Heading" type="Label" parent="PreparationGate/Center/Panel/Margin/Content"]
+[node name="PreparationHeading" type="Label" parent="PreparationGate/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
 theme_override_font_sizes/font_size = 24
-text = "准备连续观察"
+text = "UI_PREPARATION_HEADING"
 horizontal_alignment = 1
 
-[node name="Description" type="Label" parent="PreparationGate/Center/Panel/Margin/Content"]
+[node name="PreparationDescription" type="Label" parent="PreparationGate/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.73, 0.77, 0.69, 1)
-text = "先熟悉栖息地和观察面板。准备好后，从静止的画面开始记录变化。"
+text = "UI_PREPARATION_DESCRIPTION"
 horizontal_alignment = 1
 autowrap_mode = 2
 metadata/evidence_copy_role = &"observation_cue"
@@ -588,5 +597,127 @@ metadata/evidence_copy_role = &"observation_cue"
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
-text = "开始观察"
+text = "UI_START_OBSERVATION"
 metadata/evidence_copy_role = &"action_affordance"
+
+[node name="PauseMenu" type="Control" parent="."]
+unique_name_in_owner = true
+visible = false
+z_index = 70
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Dim" type="ColorRect" parent="PauseMenu"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+color = Color(0.015, 0.022, 0.02, 0.78)
+
+[node name="Center" type="CenterContainer" parent="PauseMenu"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Panel" type="PanelContainer" parent="PauseMenu/Center"]
+custom_minimum_size = Vector2(560, 0)
+layout_mode = 2
+mouse_filter = 0
+theme_override_styles/panel = SubResource("StyleBox_gate")
+
+[node name="Margin" type="MarginContainer" parent="PauseMenu/Center/Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 30
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 30
+theme_override_constants/margin_bottom = 24
+
+[node name="Content" type="VBoxContainer" parent="PauseMenu/Center/Panel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="PauseHeading" type="Label" parent="PauseMenu/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
+theme_override_font_sizes/font_size = 24
+text = "UI_PAUSE_HEADING"
+horizontal_alignment = 1
+
+[node name="ResumeButton" type="Button" parent="PauseMenu/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+text = "UI_RESUME"
+
+[node name="PauseRestartButton" type="Button" parent="PauseMenu/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+text = "UI_RESTART"
+
+[node name="Rule" type="HSeparator" parent="PauseMenu/Center/Panel/Margin/Content"]
+layout_mode = 2
+
+[node name="DisplayHeading" type="Label" parent="PauseMenu/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.81, 0.78, 0.64, 1)
+theme_override_font_sizes/font_size = 17
+text = "UI_DISPLAY_HEADING"
+
+[node name="ResolutionRow" type="HBoxContainer" parent="PauseMenu/Center/Panel/Margin/Content"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="ResolutionLabel" type="Label" parent="PauseMenu/Center/Panel/Margin/Content/ResolutionRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(185, 38)
+layout_mode = 2
+text = "UI_RESOLUTION"
+vertical_alignment = 1
+
+[node name="ResolutionOption" type="OptionButton" parent="PauseMenu/Center/Panel/Margin/Content/ResolutionRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(245, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="FullscreenCheck" type="CheckButton" parent="PauseMenu/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "UI_FULLSCREEN"
+
+[node name="LanguageRow" type="HBoxContainer" parent="PauseMenu/Center/Panel/Margin/Content"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="LanguageLabel" type="Label" parent="PauseMenu/Center/Panel/Margin/Content/LanguageRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(185, 38)
+layout_mode = 2
+text = "UI_LANGUAGE"
+vertical_alignment = 1
+
+[node name="LanguageOption" type="OptionButton" parent="PauseMenu/Center/Panel/Margin/Content/LanguageRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(245, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ExitButton" type="Button" parent="PauseMenu/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+text = "UI_EXIT"

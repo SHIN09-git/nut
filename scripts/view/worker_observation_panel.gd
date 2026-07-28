@@ -4,27 +4,53 @@ extends PanelContainer
 signal name_commit_requested(text: String)
 
 const MAX_VISIBLE_HISTORY_EVENTS: int = 4
-const UNNAMED_WORKER_TEXT: String = "未命名工蚁"
-const EMPTY_HISTORY_TEXT: String = "暂时还没有可记录的行为。"
 
 var _selected_worker_id: int = -1
 var _applied_display_name: String = ""
 var _visible_event_ids: Array[int] = []
 var _visible_actor_ids: Array[int] = []
+var _applied_worker_snapshot: AntSnapshot
+var _applied_events: Array = []
 
+@onready var _worker_observation_heading: Label = get_node_or_null(
+	"%WorkerObservationHeading"
+) as Label
 @onready var _worker_prompt_label: Label = %WorkerPromptLabel
 @onready var _selected_worker_content: Control = %SelectedWorkerContent
 @onready var _worker_display_name_label: Label = %WorkerDisplayNameLabel
 @onready var _worker_current_behavior_label: Label = %WorkerCurrentBehaviorLabel
 @onready var _worker_name_edit: LineEdit = %WorkerNameEdit
 @onready var _worker_name_button: Button = %WorkerNameButton
+@onready var _history_heading: Label = get_node_or_null(
+	"%HistoryHeading"
+) as Label
 @onready var _worker_history_label: Label = %WorkerHistoryLabel
 
 
 func _ready() -> void:
 	_worker_name_button.pressed.connect(_on_worker_name_button_pressed)
 	_worker_name_edit.text_submitted.connect(_on_worker_name_text_submitted)
+	_refresh_localized_static_copy()
 	reset_panel()
+
+
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_TRANSLATION_CHANGED or not is_node_ready():
+		return
+	_refresh_localized_static_copy()
+	if _applied_worker_snapshot != null:
+		_worker_display_name_label.text = (
+			_applied_display_name
+			if not _applied_display_name.is_empty()
+			else tr("UI_WORKER_UNNAMED")
+		)
+		_worker_current_behavior_label.text = _describe_current_behavior(
+			_applied_worker_snapshot
+		)
+		_apply_event_history(_applied_events)
+	else:
+		_worker_display_name_label.text = tr("UI_WORKER_UNNAMED")
+		_worker_history_label.text = tr("UI_EMPTY_HISTORY")
 
 
 func apply_selection(
@@ -46,6 +72,8 @@ func apply_selection(
 	var name_changed: bool = _applied_display_name != normalized_display_name
 	_selected_worker_id = worker_snapshot.entity_id
 	_applied_display_name = normalized_display_name
+	_applied_worker_snapshot = worker_snapshot
+	_applied_events.assign(events)
 
 	_worker_prompt_label.visible = false
 	_selected_worker_content.visible = true
@@ -53,7 +81,7 @@ func apply_selection(
 	_worker_display_name_label.text = (
 		normalized_display_name
 		if not normalized_display_name.is_empty()
-		else UNNAMED_WORKER_TEXT
+		else tr("UI_WORKER_UNNAMED")
 	)
 	_worker_current_behavior_label.text = _describe_current_behavior(
 		worker_snapshot
@@ -67,17 +95,19 @@ func apply_selection(
 func reset_panel() -> void:
 	_selected_worker_id = -1
 	_applied_display_name = ""
+	_applied_worker_snapshot = null
+	_applied_events.clear()
 	_visible_event_ids.clear()
 	_visible_actor_ids.clear()
 
 	_worker_prompt_label.visible = true
 	_selected_worker_content.visible = false
-	_worker_display_name_label.text = UNNAMED_WORKER_TEXT
+	_worker_display_name_label.text = tr("UI_WORKER_UNNAMED")
 	_worker_current_behavior_label.text = ""
 	_worker_name_edit.text = ""
 	_worker_name_edit.release_focus()
 	_worker_name_button.disabled = true
-	_worker_history_label.text = EMPTY_HISTORY_TEXT
+	_worker_history_label.text = tr("UI_EMPTY_HISTORY")
 
 
 func get_visible_event_ids() -> Array[int]:
@@ -113,7 +143,7 @@ func _apply_event_history(events: Array) -> void:
 		history_lines.append("• %s" % _describe_event(event.event_type))
 
 	_worker_history_label.text = (
-		EMPTY_HISTORY_TEXT
+		tr("UI_EMPTY_HISTORY")
 		if history_lines.is_empty()
 		else "\n".join(history_lines)
 	)
@@ -127,65 +157,65 @@ func _describe_current_behavior(worker_snapshot: AntSnapshot) -> String:
 	):
 		match worker_snapshot.foraging_task.state:
 			ForagingTaskSnapshot.State.SEEKING_FOOD:
-				return "这只工蚁似乎察觉到了巢外的食物。"
+				return tr("BEHAVIOR_SEEKING_FOOD")
 			ForagingTaskSnapshot.State.MOVING_TO_FOOD:
-				return "这只工蚁正在穿过出入口，前往糖水。"
+				return tr("BEHAVIOR_MOVING_TO_FOOD")
 			ForagingTaskSnapshot.State.COLLECTING:
-				return "这只工蚁正在采集糖水。"
+				return tr("BEHAVIOR_COLLECTING")
 			ForagingTaskSnapshot.State.RETURNING_TO_NEST:
-				return "这只工蚁正携带糖水返回巢室。"
+				return tr("BEHAVIOR_RETURNING")
 			ForagingTaskSnapshot.State.SHARING:
-				return "这只工蚁正在巢内与同伴分享糖水。"
+				return tr("BEHAVIOR_SHARING")
 
 	match worker_snapshot.worker_task_state:
 		WorkerTaskModel.State.IDLE:
-			return "这只工蚁正在巢室里休整。"
+			return tr("BEHAVIOR_IDLE")
 		WorkerTaskModel.State.MOVING_TO_BROOD:
-			return "这只工蚁正在靠近一只幼体。"
+			return tr("BEHAVIOR_MOVING_TO_BROOD")
 		WorkerTaskModel.State.PICKING_UP:
-			return "这只工蚁正在拾起一只幼体。"
+			return tr("BEHAVIOR_PICKING_UP")
 		WorkerTaskModel.State.CARRYING_TO_ZONE:
-			return "这只工蚁正在携带幼体前往新的位置。"
+			return tr("BEHAVIOR_CARRYING_BROOD")
 		WorkerTaskModel.State.DROPPING:
-			return "这只工蚁正在安置刚刚搬来的幼体。"
+			return tr("BEHAVIOR_DROPPING_BROOD")
 		_:
-			return "这只工蚁正在观察周围。"
+			return tr("BEHAVIOR_FALLBACK")
 
 
 func _describe_event(event_type: ObservationEvent.Type) -> String:
 	match event_type:
 		ObservationEvent.Type.RELOCATION_STARTED:
-			return "出发前往幼体所在的位置。"
+			return tr("EVENT_RELOCATION_STARTED")
 		ObservationEvent.Type.BROOD_PICKUP_STARTED:
-			return "开始拾起一只幼体。"
+			return tr("EVENT_PICKUP_STARTED")
 		ObservationEvent.Type.BROOD_CARRY_STARTED:
-			return "开始携带一只幼体前往新的位置。"
+			return tr("EVENT_CARRY_STARTED")
 		ObservationEvent.Type.BROOD_DROPPED:
-			return "把一只幼体安置在新的位置。"
+			return tr("EVENT_BROOD_DROPPED")
 		ObservationEvent.Type.BROOD_HUMIDITY_OBSERVATION_COMPLETED:
-			return "群落的湿度观察已经完成。"
+			return tr("EVENT_HUMIDITY_COMPLETE")
 		ObservationEvent.Type.FOOD_SEEK_STARTED:
-			return "察觉到巢外出现了食物。"
+			return tr("EVENT_FOOD_SEEK")
 		ObservationEvent.Type.FOOD_TRAVEL_STARTED:
-			return "出发前往觅食区。"
+			return tr("EVENT_FOOD_TRAVEL")
 		ObservationEvent.Type.SUGAR_COLLECTED:
-			return "从糖水滴中采集了一份食物。"
+			return tr("EVENT_SUGAR_COLLECTED")
 		ObservationEvent.Type.SUGAR_RETURN_STARTED:
-			return "携带糖水开始返回巢室。"
+			return tr("EVENT_SUGAR_RETURN")
 		ObservationEvent.Type.SUGAR_SHARED:
-			return "在巢内把糖水分享给了同伴。"
+			return tr("EVENT_SUGAR_SHARED")
 		ObservationEvent.Type.SUGAR_OBSERVATION_COMPLETED:
-			return "群落的糖水觅食观察已经完成。"
+			return tr("EVENT_SUGAR_COMPLETE")
 		ObservationEvent.Type.FORAGING_TASK_CANCELLED:
-			return "环境变化后放弃了这次觅食。"
+			return tr("EVENT_FORAGING_CANCELLED")
 		ObservationEvent.Type.FIRST_WORKER_EMERGED:
-			return "从晚期蛹羽化为第一只工蚁。"
+			return tr("EVENT_FIRST_WORKER")
 		ObservationEvent.Type.IDENTITY_OBSERVATION_COMPLETED:
-			return "成为本局持续观察的工蚁个体。"
+			return tr("EVENT_IDENTITY_COMPLETE")
 		ObservationEvent.Type.OBSERVATION_SESSION_COMPLETED:
-			return "参与完成了本局连续观察。"
+			return tr("EVENT_SESSION_COMPLETE")
 		_:
-			return "发生了一次新的行为。"
+			return tr("EVENT_FALLBACK")
 
 
 func _on_worker_name_button_pressed() -> void:
@@ -202,3 +232,13 @@ func _emit_name_commit(text: String) -> void:
 	var normalized_text: String = text.strip_edges()
 	_worker_name_edit.text = normalized_text
 	name_commit_requested.emit(normalized_text)
+
+
+func _refresh_localized_static_copy() -> void:
+	if _worker_observation_heading != null:
+		_worker_observation_heading.text = tr("UI_WORKER_OBSERVATION")
+	_worker_prompt_label.text = tr("UI_WORKER_PROMPT")
+	_worker_name_edit.placeholder_text = tr("UI_WORKER_NAME_PLACEHOLDER")
+	_worker_name_button.text = tr("UI_SAVE_NAME")
+	if _history_heading != null:
+		_history_heading.text = tr("UI_RECENT_ACTIONS")

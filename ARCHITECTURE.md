@@ -1,8 +1,8 @@
 # 《玻璃蚁国》技术架构
 
-> 文档版本：1.0｜更新日期：2026-07-28
+> 文档版本：1.1｜更新日期：2026-07-28
 >
-> 本文描述当前已经实现并完成 R0-A 证据有效性修正的 M4 连续组合观察，以及仍保留的生命周期、湿度搬运和糖水觅食独立调试／验证路径。
+> 本文描述当前 v0.2 Demo 候选的连续组合观察、应用外壳，以及仍保留的生命周期、湿度搬运和糖水觅食独立调试／验证路径。
 
 ## 1. 固定技术决定
 
@@ -16,6 +16,7 @@
 | 配置 | 强类型 Resource，启动时验证并复制 |
 | 随机性 | 当前切片不使用随机性 |
 | 显示 | Godot 内置节点和程序化占位图形 |
+| 应用外壳 | 暂停菜单、两档窗口分辨率、窗口／全屏、简体中文／临时英文 |
 | 测试 | 项目自建 headless runner，无第三方插件 |
 
 ## 2. 数据流与命令边界
@@ -70,9 +71,12 @@ GameSnapshot
 - 把快照交给 `CombinedHabitatView`、会话注释层、观察面板和调试 UI。
 - 每个渲染帧把时钟插值系数交给 View。
 - 在总结快照允许时协调会话重置；重置复用冻结配置和同一个时钟对象。
+- 协调应用层暂停菜单、显示模式、语言和退出；这些状态不进入模拟命令队列。
 - 在模拟或 View 拒绝更新时暂停并显示可见错误。
 
 控制器不能访问私有 `ColonyState`，也不创建或逐只管理蚂蚁视觉节点。糖水落点的屏幕坐标只用于 View 命中判断，不进入命令或模拟。
+
+`DemoSettingsState` 只保存当前程序会话的分辨率索引、全屏请求和语言代码。`CombinedObservationController` 把该状态应用到 `DisplayServer` 与 `TranslationServer`；它不读取或修改 `ColonyState`，也不进入 `GameSnapshot`。打开暂停菜单只暂停 `SimulationClock` 并冻结 View 插值；继续时恢复合法时钟语义。分辨率、全屏和语言切换不会推进 Tick、消费命令或改变模拟快照。
 
 原有独立湿度和糖水入口继续遵守相同边界：
 
@@ -365,7 +369,9 @@ IDLE
 
 `CombinedObservationController` 从 `ScenarioSequenceSnapshot` 投影五阶段标题、阶段按钮、三张观察卡和总结面板；从 `ColonySnapshot`、`ForagingScenarioSnapshot` 与 `ObservationJournalSnapshot` 投影对应的环境、工具和事件状态。UI 只组合快照，不能直接推进阶段或修改群落状态。
 
-玩家可见的阶段说明、反馈和观察卡同时携带小型 `evidence_copy_role` 元数据：`observation_cue`、`action_affordance`、`neutral_placeholder`、`post_event_conclusion`、`system_status` 或 `error`。锁定卡只能使用中性占位，事件完成后才能切换为结论角色；场景测试检查角色和节点状态，不绑定完整中文句子。这是当前场景的证据边界，不是通用本地化或文案框架。
+玩家可见文本通过 `localization/v0_2.csv` 导入简体中文与临时英文翻译资源。阶段说明、反馈和观察卡仍携带小型 `evidence_copy_role` 元数据：`observation_cue`、`action_affordance`、`neutral_placeholder`、`post_event_conclusion`、`system_status` 或 `error`。翻译只改变表现文字，不改变角色或权威状态；锁定卡只能使用中性占位，事件完成后才能切换为结论角色。场景测试检查键、角色和节点状态，不绑定完整中文句子。这是当前场景的应用文案边界，不是通用内容框架。
+
+暂停菜单属于同一场景的应用层遮罩，提供继续、重新开始、退出、两档窗口分辨率、窗口／全屏和语言切换。显示模式只经 `DisplayServer` 应用，翻译只经 `TranslationServer` 刷新 UI；两者都没有模拟引用。当前没有设置持久化。
 
 ### 独立湿度显示层
 
@@ -385,7 +391,7 @@ IDLE
 - 鼠标命中使用当前插值后的 `AntView.position`；只接受工蚁，重叠时先选最近者，距离相同按稳定实体 ID。
 - `AntView` 只投影是否选中的静态轮廓，不拥有选择事实。
 
-普通 UI 不显示精确湿度、任务枚举、目标 ID、生命周期倒计时或调试入口。F3 诊断层读取相同快照并显示精确内部状态，但组合场景只在 `OS.is_debug_build()` 为真时响应 F3；普通布局没有按钮或底部提示。release 外测构建的实际禁用证据属于后续 R0-B。
+普通 UI 不显示精确湿度、任务枚举、目标 ID、生命周期倒计时或调试入口。F3 诊断层读取相同快照并显示精确内部状态，但组合场景只在 `OS.is_debug_build()` 为真时响应 F3；普通布局没有按钮或底部提示。Windows release 候选已实际确认 F3 无可见效果。
 
 ### 会话身份层
 
@@ -446,8 +452,11 @@ ColonyViewAdapter
 - `tests/scenes/worker_identity_scene_test_suite.gd`
 - `tests/scenes/sugar_foraging_scene_test_suite.gd`
 - `tests/scenes/combined_observation_scene_test_suite.gd`
+- `tests/scenes/demo_shell_scene_test_suite.gd`
+- `tests/ui/demo_settings_state_test_suite.gd`
+- `tests/ui/demo_localization_test_suite.gd`
 
-生命周期边界从 Resource 计算。湿度套件覆盖原有命令、搬运、所有权、节奏和 soak；黄金套件锁定 `BroodRelocationSystem` 拆分前后等价。糖水套件覆盖下一 Tick 命令、冻结配置、稳定选择、全部状态边界、软失效与返程恢复、份数守恒、快照隔离、三档速度、事件和 10,000 Tick soak。组合模拟套件覆盖五阶段顺序、稳定首工 ID、阶段门控、三类命令、冻结配置、精确线性拓扑、湿度闭环可完成性、快照隔离、重开和组合不变量；组合场景套件覆盖真实阶段按钮、快照卡片 ID、糖水落点、总结与 View 节点复用。场景测试使用实际按钮和 Viewport 鼠标输入路径，不绑定完整中文文案。
+生命周期边界从 Resource 计算。湿度套件覆盖原有命令、搬运、所有权、节奏和 soak；黄金套件锁定 `BroodRelocationSystem` 拆分前后等价。糖水套件覆盖下一 Tick 命令、冻结配置、稳定选择、全部状态边界、软失效与返程恢复、份数守恒、快照隔离、三档速度、事件和 10,000 Tick soak。组合模拟套件覆盖五阶段顺序、稳定首工 ID、阶段门控、三类命令、冻结配置、精确线性拓扑、湿度闭环可完成性、快照隔离、重开和组合不变量；组合场景套件覆盖真实阶段按钮、快照卡片 ID、糖水落点、总结与 View 节点复用。应用外壳套件覆盖暂停冻结／恢复、重开、明确退出信号、分辨率、全屏、即时语言和两档布局；翻译套件检查键唯一性、双语非空、资源加载和主要玩家场景不残留嵌入式中文。场景测试使用实际按钮和 Viewport 鼠标输入路径，不绑定完整中文文案。
 
 标准命令：
 
@@ -457,7 +466,7 @@ ColonyViewAdapter
 & '.\Godot_v4.7.1-stable_win64_console.exe' --headless --path . --quit-after 30
 ```
 
-自动测试不替代 1280×720 的人工可读性检查。
+自动测试不替代 1280×720、1920×1080、窗口和全屏的人工可读性检查。
 
 ## 13. 当前限制
 
@@ -465,6 +474,7 @@ ColonyViewAdapter
 - 默认组合场景固定为三个区域、一个接近羽化的晚期蛹、五个幼虫和一份糖水；五阶段按唯一顺序推进，不支持分支。
 - 当前冻结配置在无额外玩家停留时于 Tick 586 完成，技术上已形成连续流程，但尚未达到 12～15 分钟的外部试玩节奏目标；架构不会通过无信息等待补足时长。
 - 原有生命周期、双室湿度和三区域糖水场景仍作为独立调试／验证入口；它们不会与默认组合会话共享状态。
-- 名称、选择和个人记录只存在于当前会话，重开后不保留。
+- 名称、选择、个人记录和显示设置只存在于当前会话，重开或退出后不保留。
+- 临时英文尚未完成用户最终校对；7 名有效首次接触测试者数据未取得，外部理解度 Gate 未通过。用户已明确豁免该前置条件继续 M5，但该决定不构成外部验证证据。
 - 糖水分享只解锁观察记录，不实现饥饿、能量、蛋白质或资源经济。
 - 没有镜头、直接个体命令、存档、随机行为、正式素材或外部插件。

@@ -37,7 +37,7 @@ offset_bottom = 24.0
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.82, 0.78, 0.63, 0.9)
 theme_override_font_sizes/font_size = 13
-text = "育幼室"
+text = "HABITAT_NURSERY"
 
 [node name="RestingZoneLabel" type="Label" parent="OverlayLayer"]
 unique_name_in_owner = true
@@ -46,7 +46,7 @@ offset_bottom = 24.0
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.82, 0.78, 0.63, 0.9)
 theme_override_font_sizes/font_size = 13
-text = "栖息室"
+text = "HABITAT_RESTING"
 
 [node name="ForagingZoneLabel" type="Label" parent="OverlayLayer"]
 unique_name_in_owner = true
@@ -56,7 +56,7 @@ offset_bottom = 24.0
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.75, 0.82, 0.70, 0.9)
 theme_override_font_sizes/font_size = 13
-text = "觅食区"
+text = "HABITAT_FORAGING"
 
 [node name="PlacementHint" type="Label" parent="OverlayLayer"]
 unique_name_in_owner = true
@@ -67,5 +67,5 @@ offset_bottom = 28.0
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.96, 0.84, 0.48, 1)
 theme_override_font_sizes/font_size = 12
-text = "点击觅食区放置糖水"
+text = "HABITAT_PLACEMENT_HINT"
 horizontal_alignment = 1

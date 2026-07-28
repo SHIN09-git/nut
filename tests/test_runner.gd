@@ -24,6 +24,12 @@ const ObservationEventTestSuiteScript: Script = preload(
 const PlayerAnnotationStateTestSuiteScript: Script = preload(
 	"res://tests/session/player_annotation_state_test_suite.gd"
 )
+const DemoSettingsStateTestSuiteScript: Script = preload(
+	"res://tests/ui/demo_settings_state_test_suite.gd"
+)
+const DemoLocalizationTestSuiteScript: Script = preload(
+	"res://tests/ui/demo_localization_test_suite.gd"
+)
 const ViewAdapterTestSuiteScript: Script = preload(
 	"res://tests/view/view_adapter_test_suite.gd"
 )
@@ -48,6 +54,9 @@ const SugarForagingSceneTestSuiteScript: Script = preload(
 const CombinedObservationSceneTestSuiteScript: Script = preload(
 	"res://tests/scenes/combined_observation_scene_test_suite.gd"
 )
+const DemoShellSceneTestSuiteScript: Script = preload(
+	"res://tests/scenes/demo_shell_scene_test_suite.gd"
+)
 
 var _assertion_count: int = 0
 var _failure_count: int = 0
@@ -58,6 +67,7 @@ func _initialize() -> void:
 
 
 func _run_all_tests() -> void:
+	TranslationServer.set_locale("zh_CN")
 	_run_simulation_clock_test_suite()
 	_run_lifecycle_test_suite()
 	_run_humidity_relocation_test_suite()
@@ -66,6 +76,8 @@ func _run_all_tests() -> void:
 	_run_combined_observation_test_suite()
 	_run_observation_event_test_suite()
 	_run_player_annotation_state_test_suite()
+	_run_demo_settings_state_test_suite()
+	_run_demo_localization_test_suite()
 	_run_view_adapter_test_suite()
 	_run_habitat_view_interpolation_test_suite()
 	_run_worker_observation_panel_test_suite()
@@ -74,6 +86,7 @@ func _run_all_tests() -> void:
 	_run_worker_identity_scene_test_suite()
 	_run_sugar_foraging_scene_test_suite()
 	_run_combined_observation_scene_test_suite()
+	_run_demo_shell_scene_test_suite()
 
 	if _failure_count == 0:
 		print("PASS: %d project assertions" % _assertion_count)
@@ -143,6 +156,20 @@ func _run_player_annotation_state_test_suite() -> void:
 	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
 
 
+func _run_demo_settings_state_test_suite() -> void:
+	var suite: DemoSettingsStateTestSuite = (
+		DemoSettingsStateTestSuiteScript.new()
+	)
+	suite.run()
+	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
+
+
+func _run_demo_localization_test_suite() -> void:
+	var suite: DemoLocalizationTestSuite = DemoLocalizationTestSuiteScript.new()
+	suite.run()
+	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
+
+
 func _run_view_adapter_test_suite() -> void:
 	var suite: ViewAdapterTestSuite = ViewAdapterTestSuiteScript.new()
 	suite.run(root)
@@ -199,6 +226,12 @@ func _run_combined_observation_scene_test_suite() -> void:
 	var suite: CombinedObservationSceneTestSuite = (
 		CombinedObservationSceneTestSuiteScript.new()
 	)
+	suite.run(root)
+	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
+
+
+func _run_demo_shell_scene_test_suite() -> void:
+	var suite: DemoShellSceneTestSuite = DemoShellSceneTestSuiteScript.new()
 	suite.run(root)
 	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
 

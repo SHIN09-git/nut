@@ -15,7 +15,8 @@
 - 启动与重开都先进入 Tick 0 准备门；门内固定 1×，时钟、插值与视觉冻结，点击“开始观察”只释放应用层时钟。
 - 未解锁观察卡只显示中性占位；事件完成后才显示结论。身份提示只提供观察线索，不要求玩家点击或命名首工。
 - 普通视图不显示精确湿度、内部任务枚举、目标 ID、生命周期倒计时或调试入口；编辑器与开发调试构建仍可按 F3 打开诊断层。
-- 支持暂停、1×、4×、16×；倍速只改变现实时间内处理的 Tick 数，不改变单 Tick 语义。
+- 支持暂停、1×、4×、16×；倍速只改变现实时间内处理的 Tick 数，不改变单 Tick 语义。标题栏“菜单”或 `Esc` 打开暂停菜单，可继续、重新开始或退出。
+- 暂停菜单支持 1280×720、1920×1080、窗口／全屏切换，以及简体中文／临时英文即时切换。界面设置属于当前程序会话，不写入存档；英文仍需最终人工校对。
 - 完成后可立即重新开始；重开会清除旧命令、阶段、资源、观察卡、名称、选择、事件游标和视觉映射，并返回 Tick 0 准备门。
 - 旧的双室湿度切片、独立糖水切片和完整生命周期试管场景仍可单独启动，用于回归与调试。
 
@@ -71,13 +72,14 @@
 - 先观察第一次幼体搬运；补水开放后分三次给育幼室少量补水。
 - 湿度观察卡解锁后，点击“准备放置糖水”，再点击右侧觅食区。
 - 继续观察画面，三张观察卡完成后可重新开始。
-- 开始后可使用“暂停”、`1×`、`4×`、`16×` 控制节奏。F3 仅供编辑器与开发调试构建诊断。
+- 开始后可使用“菜单”、`1×`、`4×`、`16×` 控制节奏；也可按 `Esc` 打开暂停菜单，在其中切换分辨率、全屏和语言。
+- F3 仅供编辑器与开发调试构建诊断；Windows release 候选不会显示诊断层。
 
 主视图给出环境和行为线索，但不会直接提示“湿度过低”，也不会让玩家直接命令某只工蚁。
 
 ## 测试
 
-`tests/test_runner.gd` 是唯一顶层入口，聚合固定时钟、生命周期、湿度搬运、糖水觅食、连续场景编排、结构化事件、会话注释、快照隔离、View 映射和真实 UI 路径测试：
+`tests/test_runner.gd` 是唯一顶层入口，聚合固定时钟、生命周期、湿度搬运、糖水觅食、连续场景编排、结构化事件、会话注释、快照隔离、View 映射、真实 UI 路径、暂停菜单、显示设置和翻译资源测试：
 
 ```powershell
 & '.\Godot_v4.7.1-stable_win64_console.exe' `
@@ -103,7 +105,7 @@ New-Item -ItemType Directory -Force -Path '.\builds\windows'
   --headless `
   --path . `
   --export-release 'Windows Desktop' `
-  'builds/windows/ColonyUnderGlass.exe'
+  'builds/windows/ColonyUnderGlass_v0.2_demo.exe'
 ```
 
 `builds/` 已忽略，不进入版本控制。
@@ -111,11 +113,12 @@ New-Item -ItemType Directory -Force -Path '.\builds\windows'
 ## 当前限制
 
 - 当前冻结节奏的无停顿自动流程在 Tick 586，即 58.6 模拟秒完成；它已验证连续因果链，但尚未达到 v0.2 计划中的 12～15 分钟外部试玩目标。不会用无信息等待填充时长。
+- v0.2 计划要求的 7 名有效首次接触测试者数据尚未取得，因此外部理解度 Gate 没有通过。用户于 2026-07-28 明确决定豁免该前置条件并继续 M5；这不是测试结果，也不能作为外部可理解性证据。
 - 连续场景只受控推进一只晚期蛹；完整卵、幼虫、蛹、工蚁生命周期仍只在独立调试场景运行。
-- 名称、选择和个人行动记录不会跨“重新开始”或跨程序会话保存。
+- 名称、选择、个人行动记录和显示设置不会跨“重新开始”或跨程序会话保存。
 - 尚无蛋白质、饥饿、能量、资源经济、多食物点、自由地图、设施建造、镜头跟随、存档、Steam、正式素材、音频或第三方插件。
 
-v0.1 发布基线见 `docs/validation/v0.1_baseline_001.md`；M2 身份验证见 `docs/validation/worker_identity_001.md`；M3 糖水验证见 `docs/validation/sugar_foraging_001.md`；M4 连续体验验证见 `docs/validation/v0_2_combined_001.md`；R0-A 证据有效性修正见 `docs/validation/v0_2_m4_evidence_validity_001.md`；R0-B 冻结外测候选见 `docs/validation/v0_2_m4_evidence_candidate_001.md`。
+v0.1 发布基线见 `docs/validation/v0.1_baseline_001.md`；M2 身份验证见 `docs/validation/worker_identity_001.md`；M3 糖水验证见 `docs/validation/sugar_foraging_001.md`；M4 连续体验验证见 `docs/validation/v0_2_combined_001.md`；R0-A 证据有效性修正见 `docs/validation/v0_2_m4_evidence_validity_001.md`；R0-B 冻结外测候选见 `docs/validation/v0_2_m4_evidence_candidate_001.md`；M5 演示候选见 `docs/validation/v0_2_m5_demo_candidate_001.md`。
 
 未来 3～4 小时完整独立游戏的章节、存档、设施、UI、音画、验证与发行路线见 `CODEX_V1_MASTER_PLAN.md`。该计划不表示未来能力已经实现；当前可运行事实仍以本 README、`GDD.md` 和 `ARCHITECTURE.md` 为准。
 
