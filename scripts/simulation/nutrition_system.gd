@@ -454,51 +454,9 @@ func _find_stable_path(
 	start_zone_id: StringName,
 	target_zone_id: StringName
 ) -> Array[StringName]:
-	var empty_path: Array[StringName] = []
-	var start_zone: HabitatZoneState = state.get_zone(start_zone_id)
-	var target_zone: HabitatZoneState = state.get_zone(target_zone_id)
-	if (
-		start_zone == null
-		or target_zone == null
-		or not start_zone.available
-		or not target_zone.available
-	):
-		return empty_path
-	if start_zone_id == target_zone_id:
-		return [start_zone_id]
-
-	var queue: Array[StringName] = [start_zone_id]
-	var visited: Dictionary[StringName, bool] = {start_zone_id: true}
-	var previous_zone_id: Dictionary[StringName, StringName] = {}
-	var queue_index: int = 0
-	while queue_index < queue.size():
-		var current_zone_id: StringName = queue[queue_index]
-		queue_index += 1
-		var current_zone: HabitatZoneState = state.get_zone(current_zone_id)
-		if current_zone == null or not current_zone.available:
-			continue
-		var neighbor_ids: Array[StringName] = []
-		neighbor_ids.assign(current_zone.connected_zone_ids)
-		neighbor_ids.sort_custom(
-			func(first: StringName, second: StringName) -> bool:
-				return String(first) < String(second)
-		)
-		for neighbor_id: StringName in neighbor_ids:
-			if visited.has(neighbor_id):
-				continue
-			var neighbor: HabitatZoneState = state.get_zone(neighbor_id)
-			if neighbor == null or not neighbor.available:
-				continue
-			visited[neighbor_id] = true
-			previous_zone_id[neighbor_id] = current_zone_id
-			if neighbor_id == target_zone_id:
-				return _reconstruct_path(
-					start_zone_id,
-					target_zone_id,
-					previous_zone_id
-				)
-			queue.append(neighbor_id)
-	return empty_path
+	if state == null:
+		return []
+	return state.find_stable_zone_path(start_zone_id, target_zone_id)
 
 
 func _reconstruct_path(
@@ -523,26 +481,11 @@ func _is_route_valid(
 	start_zone_id: StringName,
 	target_zone_id: StringName
 ) -> bool:
-	if (
-		route_zone_ids.is_empty()
-		or route_zone_ids[0] != start_zone_id
-		or route_zone_ids[-1] != target_zone_id
-	):
-		return false
-	for zone_index: int in route_zone_ids.size():
-		var zone: HabitatZoneState = state.get_zone(
-			route_zone_ids[zone_index]
+	return (
+		state != null
+		and state.is_zone_route_valid(
+			route_zone_ids,
+			start_zone_id,
+			target_zone_id
 		)
-		if zone == null or not zone.available:
-			return false
-		if zone_index == 0:
-			continue
-		var previous_zone: HabitatZoneState = state.get_zone(
-			route_zone_ids[zone_index - 1]
-		)
-		if (
-			previous_zone == null
-			or not previous_zone.connected_zone_ids.has(zone.zone_id)
-		):
-			return false
-	return true
+	)

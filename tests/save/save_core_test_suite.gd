@@ -570,9 +570,13 @@ func _test_legacy_schema_migration() -> void:
 		ColonySimulation.PendingCommandType.CONTINUE_OBSERVATION_ACTION,
 	]
 	legacy["next_ids"].erase("pending_command_sequence_id")
+	legacy["next_ids"].erase("facility_id")
+	legacy["next_ids"].erase("connection_id")
 	legacy["state_payload"].erase("campaign")
 	legacy["state_payload"].erase("nutrition")
 	legacy["state_payload"].erase("act1")
+	legacy["state_payload"].erase("layout")
+	_restore_legacy_zone_connections(legacy)
 	for ant: Dictionary in legacy["state_payload"]["ants"]:
 		ant.erase("protein_supported_growth_ticks")
 		ant.erase("feeding_task")
@@ -584,6 +588,7 @@ func _test_legacy_schema_migration() -> void:
 	legacy_habitat.erase("protein_placement_zone_id")
 	legacy_habitat.erase("protein_portions")
 	legacy_habitat.erase("founding_care_config")
+	legacy_habitat.erase("facility_catalog_config")
 	legacy["frozen_config_hash"] = CanonicalSaveJson.sha256(
 		legacy["frozen_config_bundle"]
 	)
@@ -622,6 +627,19 @@ func _test_legacy_schema_migration() -> void:
 		SimulationStateCodec.LEGACY_SCHEMA_ID,
 		"migration does not mutate the source save"
 	)
+
+
+func _restore_legacy_zone_connections(envelope: Dictionary) -> void:
+	var config_by_zone: Dictionary[String, Array] = {}
+	for zone: Dictionary in envelope["frozen_config_bundle"]["habitat"]["zones"]:
+		config_by_zone[String(zone["zone_id"])] = (
+			zone["connected_zone_ids"] as Array
+		).duplicate()
+	for zone: Dictionary in envelope["state_payload"]["zones"]:
+		zone["connected_zone_ids"] = config_by_zone.get(
+			String(zone["zone_id"]),
+			[]
+		)
 
 
 func _test_atomic_commit_and_backup_recovery() -> void:

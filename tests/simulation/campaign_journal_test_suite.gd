@@ -324,6 +324,8 @@ func _test_pending_inference_save_and_previous_schema_migration() -> void:
 	previous["state_payload"].erase("campaign")
 	previous["state_payload"].erase("nutrition")
 	previous["state_payload"].erase("act1")
+	previous["state_payload"].erase("layout")
+	_restore_legacy_zone_connections(previous)
 	for ant: Dictionary in previous["state_payload"]["ants"]:
 		ant.erase("protein_supported_growth_ticks")
 		ant.erase("feeding_task")
@@ -335,11 +337,18 @@ func _test_pending_inference_save_and_previous_schema_migration() -> void:
 	previous_habitat.erase("protein_placement_zone_id")
 	previous_habitat.erase("protein_portions")
 	previous_habitat.erase("founding_care_config")
+	previous_habitat.erase("facility_catalog_config")
+	previous["next_ids"].erase("facility_id")
+	previous["next_ids"].erase("connection_id")
 	previous["frozen_config_hash"] = CanonicalSaveJson.sha256(
 		previous["frozen_config_bundle"]
 	)
 	for command: Dictionary in previous["pending_commands"]:
 		command.erase("argument_id")
+		command.erase("argument_entity_id")
+		command.erase("argument_slot")
+		command.erase("argument_orientation")
+		command.erase("argument_flag")
 	previous = service.seal_envelope(previous)
 	var migration_result: Dictionary = service.load_envelope(previous)
 	_expect_true(
@@ -356,6 +365,19 @@ func _test_pending_inference_save_and_previous_schema_migration() -> void:
 				.create_game_snapshot().campaign.chapter,
 			CampaignState.Chapter.FOUNDING_OBSERVATION,
 			"migration derives the compatible founding chapter"
+		)
+
+
+func _restore_legacy_zone_connections(envelope: Dictionary) -> void:
+	var config_by_zone: Dictionary[String, Array] = {}
+	for zone: Dictionary in envelope["frozen_config_bundle"]["habitat"]["zones"]:
+		config_by_zone[String(zone["zone_id"])] = (
+			zone["connected_zone_ids"] as Array
+		).duplicate()
+	for zone: Dictionary in envelope["state_payload"]["zones"]:
+		zone["connected_zone_ids"] = config_by_zone.get(
+			String(zone["zone_id"]),
+			[]
 		)
 
 

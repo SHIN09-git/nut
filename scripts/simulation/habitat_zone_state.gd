@@ -39,6 +39,15 @@ func duplicate_state() -> HabitatZoneState:
 	)
 
 
+func duplicate_environment_state() -> HabitatZoneState:
+	return HabitatZoneState.new(
+		zone_id,
+		humidity,
+		[],
+		available
+	)
+
+
 func apply_humidity_adjustment(amount: float) -> bool:
 	if is_nan(amount) or is_inf(amount):
 		return false

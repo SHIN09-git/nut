@@ -192,6 +192,7 @@ func _test_real_controls_complete_both_chapters() -> void:
 		not (controller.get_node("%CompletionPanel") as Control).visible,
 		"continuing observation keeps the completed overlay dismissed"
 	)
+	_test_layout_controls_after_act1_completion(controller)
 	_destroy_controller(controller)
 
 
@@ -234,28 +235,163 @@ func _test_supported_viewport_layouts() -> void:
 		Vector2(1280, 720),
 		Vector2(1920, 1080),
 	]:
-		var controller: Act1TestTubeController = _create_controller(
-			viewport_size
-		)
-		_settle_container_layout(controller)
-		var viewport_rect: Rect2 = controller.get_global_rect()
-		for node_path: String in [
-			"%StartObservationButton",
-			"%CoverButton",
-			"%JournalButton",
-		]:
-			var control: Control = controller.get_node(node_path) as Control
+		for ui_scale: float in [1.0, 1.5]:
+			var controller: Act1TestTubeController = _create_controller(
+				viewport_size,
+				ui_scale
+			)
+			_settle_container_layout(controller)
+			var viewport_rect := Rect2(Vector2.ZERO, viewport_size)
+			for node_path: String in [
+				"%StartObservationButton",
+				"%CoverButton",
+				"%JournalButton",
+				"%LayoutButton",
+				"%ResetCameraButton",
+				"%ZoomInButton",
+			]:
+				var control: Control = controller.get_node(node_path) as Control
+				_expect_true(
+					viewport_rect.encloses(control.get_global_rect()),
+					"%s remains inside %dx%d at %d%% UI scale (actual %s)"
+						% [
+							node_path,
+							int(viewport_size.x),
+							int(viewport_size.y),
+							int(ui_scale * 100.0),
+							str(control.get_global_rect()),
+						]
+				)
 			_expect_true(
-				viewport_rect.encloses(control.get_global_rect()),
-				"%s remains inside %dx%d (actual %s)"
+				not (
+					controller.get_node("%LayoutButton") as Control
+				).get_global_rect().intersects(
+					(
+						controller.get_node("%ZoomOutButton") as Control
+					).get_global_rect()
+				),
+				"layout and camera controls do not overlap at %dx%d / %d%%"
 					% [
-						node_path,
 						int(viewport_size.x),
 						int(viewport_size.y),
-						str(control.get_global_rect()),
+						int(ui_scale * 100.0),
 					]
 			)
-		_destroy_controller(controller)
+			_destroy_controller(controller)
+
+
+func _test_layout_controls_after_act1_completion(
+	controller: Act1TestTubeController
+) -> void:
+	var layout_button: Button = controller.get_node("%LayoutButton") as Button
+	var place_button: Button = controller.get_node("%PlaceBoxButton") as Button
+	var view: Act1TestTubeView = controller.get_node(
+		"%Act1TestTubeView"
+	) as Act1TestTubeView
+	layout_button.button_pressed = true
+	layout_button.pressed.emit()
+	_expect_true(view.is_layout_mode(), "layout button opens the module view")
+	_expect_true(
+		place_button.visible and not place_button.disabled,
+		"completed Act 1 exposes one placeable foraging box"
+	)
+	place_button.pressed.emit()
+	var option: FacilityPlacementOptionSnapshot
+	for candidate: FacilityPlacementOptionSnapshot in (
+		controller.get_latest_snapshot().layout.placement_options
+	):
+		if candidate.type_id == CampaignState.FACILITY_SMALL_FORAGING_BOX:
+			option = candidate
+			break
+	_expect_true(option != null, "layout snapshot provides a valid box slot")
+	if option == null:
+		return
+	var layout_view: FacilityLayoutView = view.get_layout_view()
+	var click: InputEventMouseButton = InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	click.position = layout_view._slot_rect(
+		option.slot,
+		Vector2i.ONE
+	).get_center()
+	var before_count: int = (
+		controller.get_latest_snapshot().layout.facilities.size()
+	)
+	layout_view._gui_input(click)
+	_expect_true(
+		controller.get_latest_snapshot().layout.action_pending,
+		"mouse placement queues a layout command"
+	)
+	_expect_int(
+		controller.get_latest_snapshot().layout.facilities.size(),
+		before_count,
+		"mouse placement waits for the next fixed Tick"
+	)
+	controller._process(SimulationClock.FIXED_STEP_SECONDS)
+	_expect_int(
+		controller.get_latest_snapshot().layout.facilities.size(),
+		before_count + 1,
+		"mouse placement creates one facility on the next Tick"
+	)
+
+	var zoom_before: float = view.get_layout_camera_zoom()
+	var wheel: InputEventMouseButton = InputEventMouseButton.new()
+	wheel.button_index = MOUSE_BUTTON_WHEEL_UP
+	wheel.pressed = true
+	layout_view._gui_input(wheel)
+	_expect_true(
+		view.get_layout_camera_zoom() > zoom_before,
+		"mouse wheel zoom changes only the layout camera"
+	)
+	var offset_before: Vector2 = view.get_layout_camera_offset()
+	_send_key(controller, KEY_D)
+	_expect_true(
+		view.get_layout_camera_offset() != offset_before,
+		"keyboard panning changes the layout camera"
+	)
+	_expect_int(
+		controller.get_latest_snapshot().layout.facilities.size(),
+		before_count + 1,
+		"camera input cannot mutate simulation layout"
+	)
+
+	_send_key(controller, KEY_TAB)
+	_expect_true(
+		view.get_selected_facility_id() >= 3,
+		"Tab selects the removable facility without a mouse"
+	)
+	_send_key(controller, KEY_DELETE)
+	_expect_true(
+		controller.get_latest_snapshot().layout.action_pending,
+		"Delete queues removal through the keyboard path"
+	)
+	controller._process(SimulationClock.FIXED_STEP_SECONDS)
+	_expect_int(
+		controller.get_latest_snapshot().layout.facilities.size(),
+		before_count,
+		"keyboard removal applies on the next Tick"
+	)
+
+	_send_key(controller, KEY_P)
+	_expect_true(layout_view.is_placing(), "P starts keyboard placement")
+	_send_key(controller, KEY_ENTER)
+	_expect_true(
+		controller.get_latest_snapshot().layout.action_pending,
+		"Enter queues the selected valid placement"
+	)
+	controller._process(SimulationClock.FIXED_STEP_SECONDS)
+	_expect_int(
+		controller.get_latest_snapshot().layout.facilities.size(),
+		before_count + 1,
+		"keyboard placement completes through the same command boundary"
+	)
+
+
+func _send_key(controller: Act1TestTubeController, keycode: Key) -> void:
+	var event: InputEventKey = InputEventKey.new()
+	event.keycode = keycode
+	event.pressed = true
+	controller._unhandled_input(event)
 
 
 func _find_inference_button(
@@ -288,7 +424,8 @@ func _process_until(
 
 
 func _create_controller(
-	viewport_size: Vector2
+	viewport_size: Vector2,
+	ui_scale: float = 1.0
 ) -> Act1TestTubeController:
 	var controller: Act1TestTubeController = (
 		ACT1_SCENE.instantiate() as Act1TestTubeController
@@ -297,7 +434,7 @@ func _create_controller(
 		"zh_CN",
 		Vector2i(int(viewport_size.x), int(viewport_size.y)),
 		false,
-		1.0,
+		ui_scale,
 		false
 	)
 	controller.exit_application_on_request = false

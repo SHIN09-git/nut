@@ -2,6 +2,14 @@ class_name Act1TestTubeView
 extends Control
 
 signal worker_selection_requested(entity_id: int)
+signal facility_placement_requested(
+	type_id: StringName,
+	slot: Vector2i,
+	orientation: int
+)
+signal facility_rotation_requested(facility_id: int, orientation: int)
+signal facility_removal_requested(facility_id: int)
+signal facility_selection_changed(facility_id: int)
 
 const ANT_VIEW_SCRIPT: Script = preload("res://scripts/view/ant_view.gd")
 
@@ -34,12 +42,29 @@ var _selected_worker_id: int = -1
 
 @onready var _entity_layer: Node2D = %EntityLayer
 @onready var _queen_view: QueenView = %QueenView
+@onready var _facility_layout_view: FacilityLayoutView = %FacilityLayoutView
 
 
 func _ready() -> void:
 	_queen_view.z_index = 5
 	_queen_view.set_visuals_paused(_visuals_paused)
 	_queen_view.set_reduced_motion(_reduced_motion)
+	_facility_layout_view.placement_requested.connect(
+		func(type_id: StringName, slot: Vector2i, orientation: int) -> void:
+			facility_placement_requested.emit(type_id, slot, orientation)
+	)
+	_facility_layout_view.rotation_requested.connect(
+		func(facility_id: int, orientation: int) -> void:
+			facility_rotation_requested.emit(facility_id, orientation)
+	)
+	_facility_layout_view.removal_requested.connect(
+		func(facility_id: int) -> void:
+			facility_removal_requested.emit(facility_id)
+	)
+	_facility_layout_view.selection_changed.connect(
+		func(facility_id: int) -> void:
+			facility_selection_changed.emit(facility_id)
+	)
 	_layout_projection()
 	queue_redraw()
 
@@ -75,6 +100,8 @@ func apply_snapshot(snapshot: GameSnapshot) -> bool:
 		_latest_snapshot != null
 		and snapshot.simulation_tick < _latest_snapshot.simulation_tick
 	):
+		return false
+	if not _facility_layout_view.apply_snapshot(snapshot.layout):
 		return false
 	_update_endpoints(snapshot)
 	var present_ids: Dictionary[int, bool] = {}
@@ -189,6 +216,66 @@ func get_queen_view() -> QueenView:
 	return _queen_view
 
 
+func set_layout_mode(value: bool) -> void:
+	_facility_layout_view.visible = value
+	if value:
+		_facility_layout_view.grab_focus()
+
+
+func is_layout_mode() -> bool:
+	return _facility_layout_view.visible
+
+
+func begin_facility_placement(type_id: StringName) -> bool:
+	if not is_layout_mode():
+		set_layout_mode(true)
+	return _facility_layout_view.begin_placement(type_id)
+
+
+func cancel_facility_placement() -> void:
+	_facility_layout_view.cancel_placement()
+
+
+func handle_layout_keyboard_action(keycode: Key) -> bool:
+	return _facility_layout_view.handle_keyboard_action(keycode)
+
+
+func get_selected_facility_id() -> int:
+	return _facility_layout_view.get_selected_facility_id()
+
+
+func request_rotate_selected_facility() -> bool:
+	return _facility_layout_view.request_rotate_selected()
+
+
+func request_remove_selected_facility() -> bool:
+	return _facility_layout_view.request_remove_selected()
+
+
+func zoom_layout_in() -> void:
+	_facility_layout_view.zoom_in()
+
+
+func zoom_layout_out() -> void:
+	_facility_layout_view.zoom_out()
+
+
+func reset_layout_camera() -> void:
+	_facility_layout_view.reset_camera()
+
+
+func get_layout_camera_zoom() -> float:
+	return _facility_layout_view.get_camera_zoom()
+
+
+func get_layout_camera_offset() -> Vector2:
+	return _facility_layout_view.get_camera_offset()
+
+
+func get_layout_view() -> FacilityLayoutView:
+	return _facility_layout_view
+
+
 func _validate_snapshot(snapshot: GameSnapshot) -> bool:
 	if (
 		snapshot == null
@@ -196,6 +283,7 @@ func _validate_snapshot(snapshot: GameSnapshot) -> bool:
 		or snapshot.scenario == null
 		or snapshot.nutrition == null
 		or snapshot.act1 == null
+		or snapshot.layout == null
 		or snapshot.act1.queen_care == null
 		or snapshot.colony.scenario_id != &"act1_test_tube"
 		or snapshot.colony.zones.size() != 3

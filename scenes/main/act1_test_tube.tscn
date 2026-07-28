@@ -188,42 +188,48 @@ theme_override_constants/margin_top = 12
 theme_override_constants/margin_right = 12
 theme_override_constants/margin_bottom = 12
 
-[node name="SideContent" type="VBoxContainer" parent="Main/Body/SidePanel/SideMargin"]
+[node name="SideScroll" type="ScrollContainer" parent="Main/Body/SidePanel/SideMargin"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="SideContent" type="VBoxContainer" parent="Main/Body/SidePanel/SideMargin/SideScroll"]
 custom_minimum_size = Vector2(330, 0)
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="ObjectiveHeading" type="Label" parent="Main/Body/SidePanel/SideMargin/SideContent"]
+[node name="ObjectiveHeading" type="Label" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.91, 0.80, 0.56, 1)
 theme_override_font_sizes/font_size = 18
 text = "本章目标"
 
-[node name="ObjectiveCard" type="PanelContainer" parent="Main/Body/SidePanel/SideMargin/SideContent"]
+[node name="ObjectiveCard" type="PanelContainer" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent"]
 layout_mode = 2
 theme_override_styles/panel = SubResource("Style_card")
 
-[node name="ObjectiveLabel" type="Label" parent="Main/Body/SidePanel/SideMargin/SideContent/ObjectiveCard"]
+[node name="ObjectiveLabel" type="Label" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent/ObjectiveCard"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(306, 0)
 layout_mode = 2
 text = "○ 安装遮光套\n○ 观察蚁后护理\n○ 记录首枚蛹"
 autowrap_mode = 2
 
-[node name="EvidenceHeading" type="Label" parent="Main/Body/SidePanel/SideMargin/SideContent"]
+[node name="EvidenceHeading" type="Label" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.65, 0.77, 0.69, 1)
 theme_override_font_sizes/font_size = 17
 text = "已记录线索"
 
-[node name="EvidenceCard" type="PanelContainer" parent="Main/Body/SidePanel/SideMargin/SideContent"]
+[node name="EvidenceCard" type="PanelContainer" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent"]
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_styles/panel = SubResource("Style_card")
 
-[node name="EvidenceLabel" type="Label" parent="Main/Body/SidePanel/SideMargin/SideContent/EvidenceCard"]
+[node name="EvidenceLabel" type="Label" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent/EvidenceCard"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(306, 0)
 layout_mode = 2
@@ -231,7 +237,7 @@ size_flags_vertical = 3
 text = "• 继续观察画面中的变化"
 autowrap_mode = 2
 
-[node name="GuidanceLabel" type="Label" parent="Main/Body/SidePanel/SideMargin/SideContent"]
+[node name="GuidanceLabel" type="Label" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(330, 52)
 layout_mode = 2
@@ -240,19 +246,19 @@ text = "先为试管安装遮光套，观察蚁后如何回应。"
 autowrap_mode = 2
 vertical_alignment = 1
 
-[node name="JournalButton" type="Button" parent="Main/Body/SidePanel/SideMargin/SideContent"]
+[node name="JournalButton" type="Button" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 42)
 layout_mode = 2
 text = "打开观察手册"
 
-[node name="InspectPanel" type="PanelContainer" parent="Main/Body/SidePanel/SideMargin/SideContent"]
+[node name="InspectPanel" type="PanelContainer" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 theme_override_styles/panel = SubResource("Style_card")
 
-[node name="InspectLabel" type="Label" parent="Main/Body/SidePanel/SideMargin/SideContent/InspectPanel"]
+[node name="InspectLabel" type="Label" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent/InspectPanel"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(306, 0)
 layout_mode = 2
@@ -260,7 +266,7 @@ text = "放大观察"
 autowrap_mode = 2
 
 [node name="ToolBar" type="PanelContainer" parent="Main"]
-custom_minimum_size = Vector2(0, 72)
+custom_minimum_size = Vector2(0, 124)
 layout_mode = 2
 theme_override_styles/panel = SubResource("Style_panel")
 
@@ -271,42 +277,46 @@ theme_override_constants/margin_top = 8
 theme_override_constants/margin_right = 12
 theme_override_constants/margin_bottom = 8
 
-[node name="ToolRow" type="HBoxContainer" parent="Main/ToolBar/ToolMargin"]
+[node name="ToolContent" type="VBoxContainer" parent="Main/ToolBar/ToolMargin"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="ToolRow" type="HBoxContainer" parent="Main/ToolBar/ToolMargin/ToolContent"]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="ToolLabel" type="Label" parent="Main/ToolBar/ToolMargin/ToolRow"]
+[node name="ToolLabel" type="Label" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRow"]
 custom_minimum_size = Vector2(90, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.63, 0.72, 0.67, 1)
 text = "设施与工具"
 vertical_alignment = 1
 
-[node name="CoverButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolRow"]
+[node name="CoverButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(170, 48)
 layout_mode = 2
 text = "安装遮光套"
 
-[node name="MagnifierButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolRow"]
+[node name="MagnifierButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(155, 48)
 layout_mode = 2
 toggle_mode = true
 text = "放大镜观察"
 
-[node name="SugarButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolRow"]
+[node name="SugarButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRow"]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(180, 48)
 layout_mode = 2
 text = "在喂食口滴糖水"
 
-[node name="ToolSpacer" type="Control" parent="Main/ToolBar/ToolMargin/ToolRow"]
+[node name="ToolSpacer" type="Control" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="PrototypeLabel" type="Label" parent="Main/ToolBar/ToolMargin/ToolRow"]
+[node name="PrototypeLabel" type="Label" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRow"]
 custom_minimum_size = Vector2(230, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.45, 0.54, 0.50, 1)
@@ -315,6 +325,60 @@ text = "原型节奏；并非真实物种护理建议"
 horizontal_alignment = 2
 vertical_alignment = 1
 autowrap_mode = 2
+
+[node name="LayoutRow" type="HBoxContainer" parent="Main/ToolBar/ToolMargin/ToolContent"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="LayoutButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(150, 42)
+layout_mode = 2
+toggle_mode = true
+text = "模块布局 [L]"
+
+[node name="PlaceBoxButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(180, 42)
+layout_mode = 2
+text = "放置觅食盒 [P]"
+
+[node name="RotateFacilityButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(112, 42)
+layout_mode = 2
+disabled = true
+text = "旋转 [R]"
+
+[node name="RemoveFacilityButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(112, 42)
+layout_mode = 2
+disabled = true
+text = "拆除 [Del]"
+
+[node name="LayoutSpacer" type="Control" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ZoomOutButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(48, 42)
+layout_mode = 2
+text = "−"
+
+[node name="ResetCameraButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(92, 42)
+layout_mode = 2
+text = "重置视图"
+
+[node name="ZoomInButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(48, 42)
+layout_mode = 2
+text = "+"
 
 [node name="PreparationGate" type="Control" parent="."]
 unique_name_in_owner = true

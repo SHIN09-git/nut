@@ -23,6 +23,8 @@ var nutrition_config: NutritionConfig
 var protein_placement_zone_id: StringName
 var protein_portions: int
 var founding_care_config: FoundingCareConfig
+var facility_catalog_config: FacilityCatalogConfig
+var initial_zone_connections: Dictionary[StringName, Array] = {}
 
 
 static func from_data(
@@ -39,6 +41,9 @@ static func from_data(
 		if zone_state == null:
 			return null
 		config.zones.append(zone_state)
+		var connections: Array[StringName] = []
+		connections.assign(zone_data.connected_zone_ids)
+		config.initial_zone_connections[zone_data.zone_id] = connections
 	config.initial_worker_count = scenario_data.initial_worker_count
 	config.initial_brood_count = scenario_data.initial_brood_count
 	config.initial_brood_stage = scenario_data.initial_brood_stage
@@ -81,6 +86,12 @@ static func from_data(
 			scenario_data.founding_care_data
 		)
 		if config.founding_care_config == null:
+			return null
+	if scenario_data.facility_catalog_data != null:
+		config.facility_catalog_config = FacilityCatalogConfig.from_data(
+			scenario_data.facility_catalog_data
+		)
+		if config.facility_catalog_config == null:
 			return null
 	return config
 

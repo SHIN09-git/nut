@@ -23,6 +23,7 @@ var _simulation_clock: SimulationClock
 var _colony_simulation: ColonySimulation
 var _latest_snapshot: GameSnapshot
 var _settings_state: DemoSettingsState
+var _ui_scale_theme: Theme
 var _preparation_gate_active: bool = true
 var _pause_menu_open: bool = false
 var _journal_open: bool = false
@@ -46,6 +47,13 @@ var _fatal_error: String = ""
 @onready var _cover_button: Button = %CoverButton
 @onready var _magnifier_button: Button = %MagnifierButton
 @onready var _sugar_button: Button = %SugarButton
+@onready var _layout_button: Button = %LayoutButton
+@onready var _place_box_button: Button = %PlaceBoxButton
+@onready var _rotate_facility_button: Button = %RotateFacilityButton
+@onready var _remove_facility_button: Button = %RemoveFacilityButton
+@onready var _zoom_out_button: Button = %ZoomOutButton
+@onready var _reset_camera_button: Button = %ResetCameraButton
+@onready var _zoom_in_button: Button = %ZoomInButton
 @onready var _journal_button: Button = %JournalButton
 @onready var _inspect_panel: PanelContainer = %InspectPanel
 @onready var _inspect_label: Label = %InspectLabel
@@ -88,6 +96,7 @@ func _ready() -> void:
 		_settings_state = DemoSettingsState.new(
 			TranslationServer.get_locale()
 		)
+	_apply_ui_scale()
 	_connect_controls()
 	_initialize_session()
 	_refresh_copy()
@@ -123,6 +132,24 @@ func _unhandled_input(event: InputEvent) -> void:
 		_debug_panel.visible = not _debug_panel.visible
 		_update_debug()
 		get_viewport().set_input_as_handled()
+	elif (
+		key_event.keycode == KEY_L
+		and not _preparation_gate_active
+		and not _pause_menu_open
+		and not _journal_open
+	):
+		_set_facility_layout_mode(not _habitat_view.is_layout_mode())
+		get_viewport().set_input_as_handled()
+	elif (
+		_habitat_view.is_layout_mode()
+		and not _preparation_gate_active
+		and not _pause_menu_open
+		and not _journal_open
+		and _habitat_view.handle_layout_keyboard_action(
+			key_event.keycode
+		)
+	):
+		get_viewport().set_input_as_handled()
 	elif key_event.keycode == KEY_ESCAPE:
 		if _journal_open:
 			_close_journal()
@@ -153,6 +180,19 @@ func _connect_controls() -> void:
 	_cover_button.pressed.connect(_on_cover_pressed)
 	_magnifier_button.pressed.connect(_on_magnifier_pressed)
 	_sugar_button.pressed.connect(_on_sugar_pressed)
+	_layout_button.pressed.connect(_on_layout_pressed)
+	_place_box_button.pressed.connect(_on_place_box_pressed)
+	_rotate_facility_button.pressed.connect(
+		_habitat_view.request_rotate_selected_facility
+	)
+	_remove_facility_button.pressed.connect(
+		_habitat_view.request_remove_selected_facility
+	)
+	_zoom_out_button.pressed.connect(_habitat_view.zoom_layout_out)
+	_reset_camera_button.pressed.connect(
+		_habitat_view.reset_layout_camera
+	)
+	_zoom_in_button.pressed.connect(_habitat_view.zoom_layout_in)
 	_journal_button.pressed.connect(_open_journal)
 	_journal_close_button.pressed.connect(_close_journal)
 	_continue_button.pressed.connect(_on_continue_freeplay_pressed)
@@ -162,6 +202,19 @@ func _connect_controls() -> void:
 		)
 	_habitat_view.worker_selection_requested.connect(
 		_on_worker_selected
+	)
+	_habitat_view.facility_placement_requested.connect(
+		_on_facility_placement_requested
+	)
+	_habitat_view.facility_rotation_requested.connect(
+		_on_facility_rotation_requested
+	)
+	_habitat_view.facility_removal_requested.connect(
+		_on_facility_removal_requested
+	)
+	_habitat_view.facility_selection_changed.connect(
+		func(_facility_id: int) -> void:
+			_update_controls()
 	)
 
 
@@ -240,6 +293,58 @@ func _on_sugar_pressed() -> void:
 	if _colony_simulation.submit_place_sugar_action():
 		_apply_snapshot()
 		_guidance_label.text = tr("ACT1_FEEDBACK_SUGAR_PENDING")
+
+
+func _on_layout_pressed() -> void:
+	_set_facility_layout_mode(_layout_button.button_pressed)
+
+
+func _set_facility_layout_mode(value: bool) -> void:
+	_habitat_view.set_layout_mode(value)
+	if not value:
+		_habitat_view.cancel_facility_placement()
+	_layout_button.button_pressed = value
+	_update_controls()
+
+
+func _on_place_box_pressed() -> void:
+	if _habitat_view.begin_facility_placement(
+		CampaignState.FACILITY_SMALL_FORAGING_BOX
+	):
+		_layout_button.button_pressed = true
+		_update_controls()
+
+
+func _on_facility_placement_requested(
+	type_id: StringName,
+	slot: Vector2i,
+	orientation: int
+) -> void:
+	if _colony_simulation.submit_place_facility_action(
+		type_id,
+		slot,
+		orientation
+	):
+		_apply_snapshot()
+		_guidance_label.text = tr("R7_LAYOUT_ACTION_PENDING")
+
+
+func _on_facility_rotation_requested(
+	facility_id: int,
+	orientation: int
+) -> void:
+	if _colony_simulation.submit_rotate_facility_action(
+		facility_id,
+		orientation
+	):
+		_apply_snapshot()
+		_guidance_label.text = tr("R7_LAYOUT_ACTION_PENDING")
+
+
+func _on_facility_removal_requested(facility_id: int) -> void:
+	if _colony_simulation.submit_remove_facility_action(facility_id):
+		_apply_snapshot()
+		_guidance_label.text = tr("R7_LAYOUT_ACTION_PENDING")
 
 
 func _on_magnifier_pressed() -> void:
@@ -424,6 +529,53 @@ func _update_controls() -> void:
 	_sugar_button.disabled = (
 		blocked or not _latest_snapshot.nutrition.sugar_action_available
 	)
+	var layout: HabitatLayoutSnapshot = _latest_snapshot.layout
+	var layout_available: bool = layout != null and layout.active
+	_layout_button.visible = layout_available
+	_layout_button.disabled = blocked or not layout_available
+	_layout_button.button_pressed = _habitat_view.is_layout_mode()
+	var box_supply: FacilitySupplySnapshot = (
+		layout.get_supply(CampaignState.FACILITY_SMALL_FORAGING_BOX)
+		if layout_available
+		else null
+	)
+	_place_box_button.visible = (
+		box_supply != null and box_supply.unlocked
+	)
+	_place_box_button.disabled = (
+		blocked
+		or not layout_available
+		or not _habitat_view.is_layout_mode()
+		or layout.action_pending
+		or box_supply == null
+		or box_supply.remaining_count <= 0
+	)
+	if box_supply != null:
+		_place_box_button.text = tr("R7_LAYOUT_PLACE_BOX") % (
+			box_supply.remaining_count
+		)
+	var selected_facility: FacilitySnapshot = (
+		layout.get_facility(_habitat_view.get_selected_facility_id())
+		if layout_available
+		else null
+	)
+	var can_edit_selected: bool = (
+		not blocked
+		and _habitat_view.is_layout_mode()
+		and not layout.action_pending
+		and selected_facility != null
+		and selected_facility.player_removable
+	)
+	_rotate_facility_button.disabled = not can_edit_selected
+	_remove_facility_button.disabled = not can_edit_selected
+	for camera_button: Button in [
+		_zoom_out_button,
+		_reset_camera_button,
+		_zoom_in_button,
+	]:
+		camera_button.disabled = (
+			blocked or not _habitat_view.is_layout_mode()
+		)
 	_magnifier_button.disabled = blocked
 	_magnifier_button.button_pressed = _magnifier_active
 	_journal_button.disabled = (
@@ -506,8 +658,17 @@ func _update_debug() -> void:
 				_latest_snapshot.nutrition.sugar_reserve_portions,
 				_latest_snapshot.nutrition.protein_reserve_portions,
 				_latest_snapshot.nutrition.completed_feeding_count,
-			],
+		],
 	]
+	lines.append(
+		"Layout revision %d · facilities %d · pending %s · zoom %.2f"
+		% [
+			_latest_snapshot.layout.revision,
+			_latest_snapshot.layout.facilities.size(),
+			str(_latest_snapshot.layout.action_pending),
+			_habitat_view.get_layout_camera_zoom(),
+		]
+	)
 	for ant: AntSnapshot in _latest_snapshot.colony.ants:
 		lines.append(
 			"#%03d stage=%d zone=%s forage=%d feed=%d"
@@ -680,6 +841,10 @@ func _refresh_copy() -> void:
 	_cover_button.text = tr("ACT1_TOOL_COVER")
 	_magnifier_button.text = tr("ACT1_TOOL_MAGNIFIER")
 	_sugar_button.text = tr("ACT1_TOOL_SUGAR")
+	_layout_button.text = tr("R7_LAYOUT_TOGGLE")
+	_rotate_facility_button.text = tr("R7_LAYOUT_ROTATE")
+	_remove_facility_button.text = tr("R7_LAYOUT_REMOVE")
+	_reset_camera_button.text = tr("R7_LAYOUT_RESET_CAMERA")
 	_journal_button.text = tr("CAMPAIGN_JOURNAL_OPEN")
 	_preparation_heading.text = tr("ACT1_PREPARATION_HEADING")
 	_preparation_body.text = tr("ACT1_PREPARATION_BODY")
@@ -747,6 +912,7 @@ func start_new_profile() -> bool:
 	_magnifier_active = false
 	_completion_dismissed = false
 	_habitat_view.reset_projection()
+	_habitat_view.set_layout_mode(false)
 	_apply_snapshot()
 	_simulation_clock.set_paused(true)
 	_enter_preparation_gate()
@@ -779,6 +945,7 @@ func restore_loaded_session(
 	_preparation_gate_active = false
 	_preparation_gate.visible = false
 	_fatal_error = ""
+	_habitat_view.set_layout_mode(false)
 	_completion_dismissed = false
 	_habitat_view.reset_projection()
 	_apply_snapshot()
@@ -796,8 +963,41 @@ func apply_external_settings(settings: DemoSettingsState) -> void:
 		return
 	_settings_state = settings
 	provided_settings_state = settings
+	_apply_ui_scale()
 	_habitat_view.set_reduced_motion(settings.is_reduced_motion())
 	_refresh_copy()
+
+
+func _apply_ui_scale() -> void:
+	if _settings_state == null:
+		return
+	var scale_factor: float = _settings_state.get_ui_scale_factor()
+	if _ui_scale_theme == null:
+		_ui_scale_theme = Theme.new()
+		theme = _ui_scale_theme
+	_ui_scale_theme.default_base_scale = scale_factor
+	_ui_scale_theme.default_font_size = int(round(16.0 * scale_factor))
+	_apply_explicit_font_scale(self, scale_factor)
+
+
+func _apply_explicit_font_scale(node: Node, scale_factor: float) -> void:
+	if node is Control:
+		var control: Control = node as Control
+		if control.has_theme_font_size_override(&"font_size"):
+			if not control.has_meta(&"ui_scale_base_font_size"):
+				control.set_meta(
+					&"ui_scale_base_font_size",
+					control.get_theme_font_size(&"font_size")
+				)
+			control.add_theme_font_size_override(
+				&"font_size",
+				int(round(
+					float(control.get_meta(&"ui_scale_base_font_size"))
+					* scale_factor
+				))
+			)
+	for child: Node in node.get_children():
+		_apply_explicit_font_scale(child, scale_factor)
 
 
 func report_profile_save_result(success: bool) -> void:

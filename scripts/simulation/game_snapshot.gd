@@ -9,6 +9,7 @@ var sequence: ScenarioSequenceSnapshot
 var campaign: CampaignSnapshot
 var nutrition: NutritionSnapshot
 var act1: Act1Snapshot
+var layout: HabitatLayoutSnapshot
 
 
 func _init(
@@ -19,7 +20,8 @@ func _init(
 	new_sequence: ScenarioSequenceSnapshot = null,
 	new_campaign: CampaignSnapshot = null,
 	new_nutrition: NutritionSnapshot = null,
-	new_act1: Act1Snapshot = null
+	new_act1: Act1Snapshot = null,
+	new_layout: HabitatLayoutSnapshot = null
 ) -> void:
 	simulation_tick = new_simulation_tick
 	colony = new_colony
@@ -29,3 +31,4 @@ func _init(
 	campaign = new_campaign
 	nutrition = new_nutrition
 	act1 = new_act1
+	layout = new_layout

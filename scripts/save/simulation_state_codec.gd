@@ -1,7 +1,8 @@
 class_name SimulationStateCodec
 extends RefCounted
 
-const CURRENT_SCHEMA_ID: String = "r6.authority.v4"
+const CURRENT_SCHEMA_ID: String = "r7.authority.v5"
+const R6_SCHEMA_ID: String = "r6.authority.v4"
 const R5_SCHEMA_ID: String = "r5.authority.v3"
 const R4_SCHEMA_ID: String = "r4.authority.v2"
 const PREVIOUS_SCHEMA_ID: String = "r2.authority.v1"
@@ -11,6 +12,13 @@ const LEGACY_SCHEMA_ID: String = "r2.authority.v0"
 static func encode_simulation(simulation: ColonySimulation) -> Dictionary:
 	if simulation == null or not simulation.is_ready():
 		return {}
+	var next_facility_id: int = 1
+	var next_connection_id: int = 1
+	if simulation._state.layout_state != null:
+		next_facility_id = simulation._state.layout_state._next_facility_id
+		next_connection_id = (
+			simulation._state.layout_state._next_connection_id
+		)
 	return {
 		"frozen_config_bundle": _encode_frozen_config(simulation),
 		"next_ids": {
@@ -19,6 +27,8 @@ static func encode_simulation(simulation: ColonySimulation) -> Dictionary:
 				simulation._state._next_observation_event_id,
 			"pending_command_sequence_id":
 				simulation._next_pending_command_sequence_id,
+			"facility_id": next_facility_id,
+			"connection_id": next_connection_id,
 		},
 		"pending_commands": _encode_pending_commands(
 			simulation._pending_commands
@@ -117,7 +127,10 @@ static func _encode_frozen_config(
 static func _encode_habitat(config: HabitatScenarioConfig) -> Dictionary:
 	var zones: Array[Dictionary] = []
 	for zone: HabitatZoneState in config.zones:
-		zones.append(_encode_zone(zone))
+		zones.append(_encode_config_zone(
+			zone,
+			config.initial_zone_connections.get(zone.zone_id, [])
+		))
 	return {
 		"scenario_id": String(config.scenario_id),
 		"scenario_kind": config.scenario_kind,
@@ -188,6 +201,9 @@ static func _encode_habitat(config: HabitatScenarioConfig) -> Dictionary:
 				config.founding_care_config
 			)
 		),
+		"facility_catalog_config": _encode_facility_catalog_config(
+			config.facility_catalog_config
+		),
 	}
 
 
@@ -197,7 +213,7 @@ static func _encode_state(state: ColonyState) -> Dictionary:
 		ants.append(_encode_ant(ant))
 	var zones: Array[Dictionary] = []
 	for zone: HabitatZoneState in state.zones:
-		zones.append(_encode_zone(zone))
+		zones.append(_encode_state_zone(zone))
 	var sources: Array[Dictionary] = []
 	for source: FoodSourceState in state.food_sources:
 		sources.append({
@@ -268,6 +284,7 @@ static func _encode_state(state: ColonyState) -> Dictionary:
 		"campaign": campaign,
 		"nutrition": nutrition,
 		"act1": act1,
+		"layout": _encode_layout_state(state.layout_state),
 		"observation_events": events,
 	}
 
@@ -334,6 +351,58 @@ static func _encode_founding_care_config(
 			String(config.first_worker_observation_card_id),
 		"worker_care_observation_card_id":
 			String(config.worker_care_observation_card_id),
+	}
+
+
+static func _encode_facility_catalog_config(
+	catalog: FacilityCatalogConfig
+) -> Variant:
+	if catalog == null:
+		return null
+	var types: Array[Dictionary] = []
+	for type_id: StringName in catalog.copy_type_ids():
+		var config: FacilityConfig = catalog.get_type(type_id)
+		var ports: Array[Dictionary] = []
+		for port: FacilityPortConfig in config.ports:
+			ports.append({
+				"local_cell": [port.local_cell.x, port.local_cell.y],
+				"direction": port.direction,
+				"connection_kind": String(port.connection_kind),
+			})
+		types.append({
+			"type_id": String(config.type_id),
+			"unlock_type_id": String(config.unlock_type_id),
+			"footprint": [config.footprint.x, config.footprint.y],
+			"allowed_orientations": config.allowed_orientations.duplicate(),
+			"ports": ports,
+			"placement_layer": config.placement_layer,
+			"requires_connection": config.requires_connection,
+			"player_removable": config.player_removable,
+		})
+	var initial_facilities: Array[Dictionary] = []
+	for initial: InitialFacilityConfig in catalog.initial_facilities:
+		initial_facilities.append({
+			"facility_id": initial.facility_id,
+			"type_id": String(initial.type_id),
+			"slot": [initial.slot.x, initial.slot.y],
+			"orientation": initial.orientation,
+			"zone_id": String(initial.zone_id),
+			"available": initial.available,
+			"player_removable": initial.player_removable,
+		})
+	var supplies: Array[Dictionary] = []
+	for type_id: StringName in catalog.copy_type_ids():
+		if not catalog.initial_supply_counts.has(type_id):
+			continue
+		supplies.append({
+			"type_id": String(type_id),
+			"available_count": catalog.initial_supply_counts[type_id],
+		})
+	return {
+		"grid_size": [catalog.grid_size.x, catalog.grid_size.y],
+		"facility_types": types,
+		"initial_facilities": initial_facilities,
+		"initial_supplies": supplies,
 	}
 
 
@@ -436,13 +505,72 @@ static func _encode_ant(ant: AntModel) -> Dictionary:
 	}
 
 
-static func _encode_zone(zone: HabitatZoneState) -> Dictionary:
+static func _encode_config_zone(
+	zone: HabitatZoneState,
+	connected_zone_ids: Array
+) -> Dictionary:
 	return {
 		"zone_id": String(zone.zone_id),
 		"humidity": zone.humidity,
 		"connected_zone_ids":
-			_strings_from_names(zone.connected_zone_ids),
+			_strings_from_names(connected_zone_ids),
 		"available": zone.available,
+	}
+
+
+static func _encode_state_zone(zone: HabitatZoneState) -> Dictionary:
+	return {
+		"zone_id": String(zone.zone_id),
+		"humidity": zone.humidity,
+		"available": zone.available,
+	}
+
+
+static func _encode_layout_state(layout: HabitatLayoutState) -> Variant:
+	if layout == null:
+		return null
+	var facilities: Array[Dictionary] = []
+	for facility: FacilityState in layout.get_facilities_in_stable_order():
+		facilities.append({
+			"facility_id": facility.facility_id,
+			"type_id": String(facility.type_id),
+			"slot": [facility.slot.x, facility.slot.y],
+			"orientation": facility.orientation,
+			"zone_id": String(facility.zone_id),
+			"available": facility.available,
+			"player_removable": facility.player_removable,
+		})
+	var connections: Array[Dictionary] = []
+	for connection: HabitatConnectionState in (
+		layout.get_connections_in_stable_order()
+	):
+		connections.append({
+			"connection_id": connection.connection_id,
+			"first_zone_id": String(connection.first_zone_id),
+			"second_zone_id": String(connection.second_zone_id),
+			"gated": connection.gated,
+			"open": connection.open,
+			"owner_facility_id": connection.owner_facility_id,
+		})
+	var supplies: Array[Dictionary] = []
+	var supply_ids: Array[StringName] = []
+	for type_id: StringName in layout.supply.remaining_by_type:
+		supply_ids.append(type_id)
+	supply_ids.sort_custom(
+		func(first: StringName, second: StringName) -> bool:
+			return String(first) < String(second)
+	)
+	for type_id: StringName in supply_ids:
+		supplies.append({
+			"type_id": String(type_id),
+			"remaining_count": layout.supply.get_remaining(type_id),
+		})
+	return {
+		"grid_size": [layout.grid_size.x, layout.grid_size.y],
+		"revision": layout.revision,
+		"facilities": facilities,
+		"connections": connections,
+		"supplies": supplies,
 	}
 
 
@@ -455,6 +583,13 @@ static func _encode_pending_commands(
 			"sequence_id": command.sequence_id,
 			"command_type": command.command_type,
 			"argument_id": String(command.argument_id),
+			"argument_entity_id": command.argument_entity_id,
+			"argument_slot": [
+				command.argument_slot.x,
+				command.argument_slot.y,
+			],
+			"argument_orientation": command.argument_orientation,
+			"argument_flag": command.argument_flag,
 		})
 	return encoded
 
@@ -598,6 +733,7 @@ static func _decode_habitat_data(value: Variant) -> Dictionary:
 		"protein_placement_zone_id",
 		"protein_portions",
 		"founding_care_config",
+		"facility_catalog_config",
 	]
 	if not _is_dictionary_with_keys(value, keys):
 		return _failure("Habitat configuration is invalid")
@@ -696,6 +832,12 @@ static func _decode_habitat_data(value: Variant) -> Dictionary:
 	if not founding_result.get("ok", false):
 		return founding_result
 	habitat.founding_care_data = founding_result["founding_care_data"]
+	var catalog_result: Dictionary = _decode_facility_catalog_data(
+		value["facility_catalog_config"]
+	)
+	if not catalog_result.get("ok", false):
+		return catalog_result
+	habitat.facility_catalog_data = catalog_result["catalog_data"]
 	if not habitat.is_valid():
 		return _failure("Frozen habitat configuration is not valid")
 	return {"ok": true, "error": "", "habitat_data": habitat}
@@ -918,6 +1060,166 @@ static func _decode_founding_care_data(value: Variant) -> Dictionary:
 	}
 
 
+static func _decode_facility_catalog_data(value: Variant) -> Dictionary:
+	if value == null:
+		return {"ok": true, "error": "", "catalog_data": null}
+	if not _is_dictionary_with_keys(
+		value,
+		[
+			"grid_size",
+			"facility_types",
+			"initial_facilities",
+			"initial_supplies",
+		]
+	):
+		return _failure("Facility catalog configuration is invalid")
+	var grid_result: Dictionary = _decode_vector2i(value["grid_size"])
+	if (
+		not grid_result.get("ok", false)
+		or typeof(value["facility_types"]) != TYPE_ARRAY
+		or typeof(value["initial_facilities"]) != TYPE_ARRAY
+		or typeof(value["initial_supplies"]) != TYPE_ARRAY
+	):
+		return _failure("Facility catalog contains invalid collections")
+	var catalog: FacilityCatalogData = FacilityCatalogData.new()
+	catalog.data_status = &"prototype_pacing_fixture"
+	catalog.scientifically_validated = false
+	catalog.grid_size = grid_result["value"]
+	for type_value: Variant in value["facility_types"]:
+		var type_result: Dictionary = _decode_facility_data(type_value)
+		if not type_result.get("ok", false):
+			return type_result
+		catalog.facility_types.append(type_result["facility_data"])
+	for initial_value: Variant in value["initial_facilities"]:
+		var initial_result: Dictionary = _decode_initial_facility_data(
+			initial_value
+		)
+		if not initial_result.get("ok", false):
+			return initial_result
+		catalog.initial_facilities.append(initial_result["initial_data"])
+	for supply_value: Variant in value["initial_supplies"]:
+		if not _is_dictionary_with_keys(
+			supply_value,
+			["type_id", "available_count"]
+		):
+			return _failure("Facility supply configuration is invalid")
+		if (
+			typeof(supply_value["type_id"]) != TYPE_STRING
+			or not _is_nonnegative_int(supply_value["available_count"])
+		):
+			return _failure("Facility supply contains invalid data")
+		var supply: FacilitySupplyData = FacilitySupplyData.new()
+		supply.type_id = StringName(supply_value["type_id"])
+		supply.available_count = int(supply_value["available_count"])
+		catalog.initial_supplies.append(supply)
+	if not catalog.is_valid():
+		return _failure("Frozen facility catalog is not valid")
+	return {"ok": true, "error": "", "catalog_data": catalog}
+
+
+static func _decode_facility_data(value: Variant) -> Dictionary:
+	if not _is_dictionary_with_keys(
+		value,
+		[
+			"type_id",
+			"unlock_type_id",
+			"footprint",
+			"allowed_orientations",
+			"ports",
+			"placement_layer",
+			"requires_connection",
+			"player_removable",
+		]
+	):
+		return _failure("Facility type configuration is invalid")
+	var footprint_result: Dictionary = _decode_vector2i(value["footprint"])
+	if (
+		not footprint_result.get("ok", false)
+		or typeof(value["type_id"]) != TYPE_STRING
+		or typeof(value["unlock_type_id"]) != TYPE_STRING
+		or typeof(value["allowed_orientations"]) != TYPE_ARRAY
+		or typeof(value["ports"]) != TYPE_ARRAY
+		or not _is_integral_number(value["placement_layer"])
+		or typeof(value["requires_connection"]) != TYPE_BOOL
+		or typeof(value["player_removable"]) != TYPE_BOOL
+	):
+		return _failure("Facility type contains invalid data")
+	var data: FacilityData = FacilityData.new()
+	data.type_id = StringName(value["type_id"])
+	data.unlock_type_id = StringName(value["unlock_type_id"])
+	data.data_status = &"prototype_pacing_fixture"
+	data.footprint = footprint_result["value"]
+	data.allowed_orientations.clear()
+	for orientation_value: Variant in value["allowed_orientations"]:
+		if not _is_integral_number(orientation_value):
+			return _failure("Facility orientation is not an integer")
+		data.allowed_orientations.append(int(orientation_value))
+	for port_value: Variant in value["ports"]:
+		if not _is_dictionary_with_keys(
+			port_value,
+			["local_cell", "direction", "connection_kind"]
+		):
+			return _failure("Facility port configuration is invalid")
+		var cell_result: Dictionary = _decode_vector2i(
+			port_value["local_cell"]
+		)
+		if (
+			not cell_result.get("ok", false)
+			or not _is_integral_number(port_value["direction"])
+			or typeof(port_value["connection_kind"]) != TYPE_STRING
+		):
+			return _failure("Facility port contains invalid data")
+		var port: FacilityPortData = FacilityPortData.new()
+		port.local_cell = cell_result["value"]
+		port.direction = int(port_value["direction"])
+		port.connection_kind = StringName(port_value["connection_kind"])
+		data.ports.append(port)
+	data.placement_layer = int(value["placement_layer"])
+	data.requires_connection = bool(value["requires_connection"])
+	data.player_removable = bool(value["player_removable"])
+	if not data.is_valid():
+		return _failure("Frozen facility type is not valid")
+	return {"ok": true, "error": "", "facility_data": data}
+
+
+static func _decode_initial_facility_data(value: Variant) -> Dictionary:
+	if not _is_dictionary_with_keys(
+		value,
+		[
+			"facility_id",
+			"type_id",
+			"slot",
+			"orientation",
+			"zone_id",
+			"available",
+			"player_removable",
+		]
+	):
+		return _failure("Initial facility configuration is invalid")
+	var slot_result: Dictionary = _decode_vector2i(value["slot"])
+	if (
+		not slot_result.get("ok", false)
+		or not _is_positive_int(value["facility_id"])
+		or typeof(value["type_id"]) != TYPE_STRING
+		or not _is_integral_number(value["orientation"])
+		or typeof(value["zone_id"]) != TYPE_STRING
+		or typeof(value["available"]) != TYPE_BOOL
+		or typeof(value["player_removable"]) != TYPE_BOOL
+	):
+		return _failure("Initial facility contains invalid data")
+	var data: InitialFacilityData = InitialFacilityData.new()
+	data.facility_id = int(value["facility_id"])
+	data.type_id = StringName(value["type_id"])
+	data.slot = slot_result["value"]
+	data.orientation = int(value["orientation"])
+	data.zone_id = StringName(value["zone_id"])
+	data.available = bool(value["available"])
+	data.player_removable = bool(value["player_removable"])
+	if not data.is_valid():
+		return _failure("Frozen initial facility is not valid")
+	return {"ok": true, "error": "", "initial_data": data}
+
+
 static func _decode_state(
 	payload: Dictionary,
 	next_ids: Dictionary
@@ -941,6 +1243,7 @@ static func _decode_state(
 			"campaign",
 			"nutrition",
 			"act1",
+			"layout",
 			"observation_events",
 		]
 	):
@@ -951,6 +1254,8 @@ static func _decode_state(
 			"entity_id",
 			"observation_event_id",
 			"pending_command_sequence_id",
+			"facility_id",
+			"connection_id",
 		]
 	):
 		return _failure("Next-ID payload has unexpected fields")
@@ -1054,6 +1359,14 @@ static func _decode_state(
 	if not act1_result.get("ok", false):
 		return act1_result
 	state.act1_state = act1_result["act1"]
+	var layout_result: Dictionary = _decode_layout_state(
+		payload["layout"],
+		int(next_ids["facility_id"]),
+		int(next_ids["connection_id"])
+	)
+	if not layout_result.get("ok", false):
+		return layout_result
+	state.layout_state = layout_result["layout"]
 	state._observation_events.clear()
 	for event_value: Variant in payload["observation_events"]:
 		var event_result: Dictionary = _decode_event(event_value)
@@ -1478,18 +1791,179 @@ static func _decode_feeding_task(value: Variant) -> Dictionary:
 
 
 static func _decode_zone_state(value: Variant) -> Dictionary:
-	var data_result: Dictionary = _decode_zone_data(value)
-	if not data_result.get("ok", false):
-		return data_result
-	var data: HabitatZoneData = data_result["zone_data"]
+	if not _is_dictionary_with_keys(
+		value,
+		["zone_id", "humidity", "available"]
+	):
+		return _failure("Zone state is invalid")
+	if (
+		typeof(value["zone_id"]) != TYPE_STRING
+		or not _is_finite_number(value["humidity"])
+		or float(value["humidity"]) < 0.0
+		or float(value["humidity"]) > 1.0
+		or typeof(value["available"]) != TYPE_BOOL
+	):
+		return _failure("Zone state contains invalid data")
 	return {
 		"ok": true,
 		"error": "",
 		"zone": HabitatZoneState.new(
-			data.zone_id,
-			data.initial_humidity,
-			data.connected_zone_ids,
-			data.available
+			StringName(value["zone_id"]),
+			float(value["humidity"]),
+			[],
+			bool(value["available"])
+		),
+	}
+
+
+static func _decode_layout_state(
+	value: Variant,
+	next_facility_id: int,
+	next_connection_id: int
+) -> Dictionary:
+	if value == null:
+		return {"ok": true, "error": "", "layout": null}
+	if not _is_dictionary_with_keys(
+		value,
+		[
+			"grid_size",
+			"revision",
+			"facilities",
+			"connections",
+			"supplies",
+		]
+	):
+		return _failure("Habitat layout state is invalid")
+	var grid_result: Dictionary = _decode_vector2i(value["grid_size"])
+	if (
+		not grid_result.get("ok", false)
+		or not _is_nonnegative_int(value["revision"])
+		or typeof(value["facilities"]) != TYPE_ARRAY
+		or typeof(value["connections"]) != TYPE_ARRAY
+		or typeof(value["supplies"]) != TYPE_ARRAY
+		or next_facility_id <= 0
+		or next_connection_id <= 0
+	):
+		return _failure("Habitat layout contains invalid data")
+	var layout: HabitatLayoutState = HabitatLayoutState.new()
+	layout.grid_size = grid_result["value"]
+	layout.revision = int(value["revision"])
+	layout._next_facility_id = next_facility_id
+	layout._next_connection_id = next_connection_id
+	for facility_value: Variant in value["facilities"]:
+		var facility_result: Dictionary = _decode_facility_state(
+			facility_value
+		)
+		if not facility_result.get("ok", false):
+			return facility_result
+		var facility: FacilityState = facility_result["facility"]
+		if layout.facilities.has(facility.facility_id):
+			return _failure("Habitat layout contains duplicate facilities")
+		layout.facilities[facility.facility_id] = facility
+	for connection_value: Variant in value["connections"]:
+		var connection_result: Dictionary = _decode_connection_state(
+			connection_value
+		)
+		if not connection_result.get("ok", false):
+			return connection_result
+		var connection: HabitatConnectionState = connection_result[
+			"connection"
+		]
+		if layout.connections.has(connection.connection_id):
+			return _failure("Habitat layout contains duplicate connections")
+		layout.connections[connection.connection_id] = connection
+	var counts: Dictionary[StringName, int] = {}
+	for supply_value: Variant in value["supplies"]:
+		if not _is_dictionary_with_keys(
+			supply_value,
+			["type_id", "remaining_count"]
+		):
+			return _failure("Facility supply state is invalid")
+		if (
+			typeof(supply_value["type_id"]) != TYPE_STRING
+			or not _is_nonnegative_int(supply_value["remaining_count"])
+		):
+			return _failure("Facility supply state contains invalid data")
+		var type_id: StringName = StringName(supply_value["type_id"])
+		if type_id.is_empty() or counts.has(type_id):
+			return _failure("Facility supply state contains duplicate IDs")
+		counts[type_id] = int(supply_value["remaining_count"])
+	layout.supply = FacilitySupplyState.new(counts)
+	return {"ok": true, "error": "", "layout": layout}
+
+
+static func _decode_facility_state(value: Variant) -> Dictionary:
+	if not _is_dictionary_with_keys(
+		value,
+		[
+			"facility_id",
+			"type_id",
+			"slot",
+			"orientation",
+			"zone_id",
+			"available",
+			"player_removable",
+		]
+	):
+		return _failure("Facility state is invalid")
+	var slot_result: Dictionary = _decode_vector2i(value["slot"])
+	if (
+		not slot_result.get("ok", false)
+		or not _is_positive_int(value["facility_id"])
+		or typeof(value["type_id"]) != TYPE_STRING
+		or not _is_integral_number(value["orientation"])
+		or typeof(value["zone_id"]) != TYPE_STRING
+		or typeof(value["available"]) != TYPE_BOOL
+		or typeof(value["player_removable"]) != TYPE_BOOL
+	):
+		return _failure("Facility state contains invalid data")
+	return {
+		"ok": true,
+		"error": "",
+		"facility": FacilityState.new(
+			int(value["facility_id"]),
+			StringName(value["type_id"]),
+			slot_result["value"],
+			int(value["orientation"]),
+			StringName(value["zone_id"]),
+			bool(value["available"]),
+			bool(value["player_removable"])
+		),
+	}
+
+
+static func _decode_connection_state(value: Variant) -> Dictionary:
+	if not _is_dictionary_with_keys(
+		value,
+		[
+			"connection_id",
+			"first_zone_id",
+			"second_zone_id",
+			"gated",
+			"open",
+			"owner_facility_id",
+		]
+	):
+		return _failure("Habitat connection state is invalid")
+	if (
+		not _is_positive_int(value["connection_id"])
+		or typeof(value["first_zone_id"]) != TYPE_STRING
+		or typeof(value["second_zone_id"]) != TYPE_STRING
+		or typeof(value["gated"]) != TYPE_BOOL
+		or typeof(value["open"]) != TYPE_BOOL
+		or not _is_integral_number(value["owner_facility_id"])
+	):
+		return _failure("Habitat connection contains invalid data")
+	return {
+		"ok": true,
+		"error": "",
+		"connection": HabitatConnectionState.new(
+			int(value["connection_id"]),
+			StringName(value["first_zone_id"]),
+			StringName(value["second_zone_id"]),
+			bool(value["gated"]),
+			bool(value["open"]),
+			int(value["owner_facility_id"])
 		),
 	}
 
@@ -1624,13 +2098,28 @@ static func _decode_pending_commands(
 	for value: Variant in values:
 		if not _is_dictionary_with_keys(
 			value,
-			["sequence_id", "command_type", "argument_id"]
+			[
+				"sequence_id",
+				"command_type",
+				"argument_id",
+				"argument_entity_id",
+				"argument_slot",
+				"argument_orientation",
+				"argument_flag",
+			]
 		):
 			return _failure("Pending command record is invalid")
+		var slot_result: Dictionary = _decode_vector2i(
+			value["argument_slot"]
+		)
 		if (
-			not _is_positive_int(value["sequence_id"])
+			not slot_result.get("ok", false)
+			or not _is_positive_int(value["sequence_id"])
 			or not _is_integral_number(value["command_type"])
 			or typeof(value["argument_id"]) != TYPE_STRING
+			or not _is_integral_number(value["argument_entity_id"])
+			or not _is_integral_number(value["argument_orientation"])
+			or typeof(value["argument_flag"]) != TYPE_BOOL
 		):
 			return _failure("Pending command record contains invalid data")
 		var sequence_id: int = int(value["sequence_id"])
@@ -1642,13 +2131,17 @@ static func _decode_pending_commands(
 			or command_type < ColonySimulation.PendingCommandType.WATER_ACTION
 			or command_type
 				> ColonySimulation.PendingCommandType
-					.APPLY_LIGHT_COVER_ACTION
+					.SET_GATE_OPEN_ACTION
 		):
 			return _failure("Pending command ordering or type is invalid")
 		commands.append(PendingSimulationCommand.new(
 			sequence_id,
 			command_type,
-			argument_id
+			argument_id,
+			int(value["argument_entity_id"]),
+			slot_result["value"],
+			int(value["argument_orientation"]),
+			bool(value["argument_flag"])
 		))
 		previous_sequence_id = sequence_id
 	return {"ok": true, "error": "", "commands": commands}
@@ -1761,6 +2254,7 @@ static func _has_valid_core_state(simulation: ColonySimulation) -> bool:
 			state.queen.laid_egg_count == state.ants.size()
 			and state.zones.is_empty()
 			and state.food_sources.is_empty()
+			and state.layout_state == null
 			and state.scenario_progress == null
 			and state.campaign_state == null
 			and state.nutrition_state == null
@@ -1771,7 +2265,10 @@ static func _has_valid_core_state(simulation: ColonySimulation) -> bool:
 			and state.total_sugar_portions_placed == 0
 			and state.unlocked_observation_card_ids.is_empty()
 		)
-	if not _state_graph_matches_frozen_config(simulation):
+	if (
+		state.layout_state == null
+		or not _state_graph_matches_frozen_config(simulation)
+	):
 		return false
 	if simulation._supports_nutrition_growth():
 		if simulation._habitat_config.is_act1_test_tube():
@@ -1950,11 +2447,7 @@ static func _state_graph_matches_frozen_config(
 	for zone_index: int in state.zones.size():
 		var state_zone: HabitatZoneState = state.zones[zone_index]
 		var config_zone: HabitatZoneState = config.zones[zone_index]
-		if (
-			state_zone.zone_id != config_zone.zone_id
-			or state_zone.connected_zone_ids
-				!= config_zone.connected_zone_ids
-		):
+		if state_zone.zone_id != config_zone.zone_id:
 			return false
 	return true
 
@@ -1963,6 +2456,7 @@ static func _has_valid_pending_commands(
 	simulation: ColonySimulation
 ) -> bool:
 	var seen_types: Dictionary[int, bool] = {}
+	var has_layout_command: bool = false
 	for command: PendingSimulationCommand in simulation._pending_commands:
 		if command == null or seen_types.has(command.command_type):
 			return false
@@ -1971,18 +2465,21 @@ static func _has_valid_pending_commands(
 			ColonySimulation.PendingCommandType.WATER_ACTION:
 				if (
 					not command.argument_id.is_empty()
+					or not _has_neutral_extended_arguments(command)
 					or not _can_restore_water_command(simulation)
 				):
 					return false
 			ColonySimulation.PendingCommandType.PLACE_SUGAR_ACTION:
 				if (
 					not command.argument_id.is_empty()
+					or not _has_neutral_extended_arguments(command)
 					or not _can_restore_sugar_command(simulation)
 				):
 					return false
 			ColonySimulation.PendingCommandType.CONTINUE_OBSERVATION_ACTION:
 				if (
 					not command.argument_id.is_empty()
+					or not _has_neutral_extended_arguments(command)
 					or simulation._scenario_director == null
 					or not simulation._scenario_director
 						.is_identity_continue_available(simulation._state)
@@ -1991,6 +2488,7 @@ static func _has_valid_pending_commands(
 			ColonySimulation.PendingCommandType.SELECT_CAMPAIGN_INFERENCE_ACTION:
 				if (
 					command.argument_id.is_empty()
+					or not _has_neutral_extended_arguments(command)
 					or (
 						simulation._campaign_director == null
 						and simulation._act1_campaign_director == null
@@ -2014,20 +2512,119 @@ static func _has_valid_pending_commands(
 			ColonySimulation.PendingCommandType.PLACE_PROTEIN_ACTION:
 				if (
 					not command.argument_id.is_empty()
+					or not _has_neutral_extended_arguments(command)
 					or not _can_restore_protein_command(simulation)
 				):
 					return false
 			ColonySimulation.PendingCommandType.APPLY_LIGHT_COVER_ACTION:
 				if (
 					not command.argument_id.is_empty()
-					or simulation._founding_care_system == null
-					or simulation._state.act1_state == null
-					or simulation._state.act1_state.light_cover_applied
+					or not _has_neutral_extended_arguments(command)
+					or not simulation._can_apply_light_cover_now()
+					or simulation._has_pending_layout_command()
 				):
 					return false
+			ColonySimulation.PendingCommandType.PLACE_FACILITY_ACTION:
+				if (
+					has_layout_command
+					or command.argument_id.is_empty()
+					or command.argument_id
+						== CampaignState.FACILITY_LIGHT_COVER
+					or command.argument_entity_id != -1
+					or command.argument_flag
+					or not simulation._has_layout_authority()
+					or not simulation._state.layout_state.can_place(
+						simulation._habitat_config
+							.facility_catalog_config,
+						command.argument_id,
+						command.argument_slot,
+						command.argument_orientation,
+						simulation._state.campaign_state
+							.unlocked_facility_type_ids
+					)
+				):
+					return false
+				has_layout_command = true
+			ColonySimulation.PendingCommandType.ROTATE_FACILITY_ACTION:
+				if (
+					has_layout_command
+					or not command.argument_id.is_empty()
+					or command.argument_entity_id <= 0
+					or command.argument_slot != Vector2i.ZERO
+					or command.argument_flag
+					or not simulation._has_layout_authority()
+					or not simulation._state.layout_state.can_rotate(
+						simulation._habitat_config
+							.facility_catalog_config,
+						command.argument_entity_id,
+						command.argument_orientation,
+						simulation._state.campaign_state
+							.unlocked_facility_type_ids
+					)
+				):
+					return false
+				has_layout_command = true
+			ColonySimulation.PendingCommandType.REMOVE_FACILITY_ACTION:
+				if (
+					has_layout_command
+					or not command.argument_id.is_empty()
+					or command.argument_entity_id <= 0
+					or command.argument_slot != Vector2i.ZERO
+					or command.argument_orientation != 0
+					or command.argument_flag
+					or not simulation._can_remove_facility_now(
+						command.argument_entity_id
+					)
+				):
+					return false
+				has_layout_command = true
+			ColonySimulation.PendingCommandType.SET_GATE_OPEN_ACTION:
+				if (
+					has_layout_command
+					or not command.argument_id.is_empty()
+					or command.argument_entity_id <= 0
+					or command.argument_slot != Vector2i.ZERO
+					or command.argument_orientation != 0
+					or not _can_restore_gate_command(
+						simulation,
+						command.argument_entity_id,
+						command.argument_flag
+					)
+				):
+					return false
+				has_layout_command = true
 			_:
 				return false
 	return true
+
+
+static func _has_neutral_extended_arguments(
+	command: PendingSimulationCommand
+) -> bool:
+	return (
+		command.argument_entity_id == -1
+		and command.argument_slot == Vector2i.ZERO
+		and command.argument_orientation == 0
+		and not command.argument_flag
+	)
+
+
+static func _can_restore_gate_command(
+	simulation: ColonySimulation,
+	connection_id: int,
+	open: bool
+) -> bool:
+	if not simulation._has_layout_authority():
+		return false
+	var connection: HabitatConnectionState = (
+		simulation._state.layout_state.get_connection(connection_id)
+	)
+	return (
+		connection != null
+		and connection.gated
+		and connection.open != open
+		and (open or not simulation._has_any_active_worker_task())
+	)
 
 
 static func _can_restore_water_command(
@@ -2130,7 +2727,22 @@ static func _decode_string_names(
 	return {"ok": true, "error": "", "values": values}
 
 
-static func _strings_from_names(values: Array[StringName]) -> Array[String]:
+static func _decode_vector2i(value: Variant) -> Dictionary:
+	if (
+		typeof(value) != TYPE_ARRAY
+		or value.size() != 2
+		or not _is_integral_number(value[0])
+		or not _is_integral_number(value[1])
+	):
+		return _failure("Vector2i payload is invalid")
+	return {
+		"ok": true,
+		"error": "",
+		"value": Vector2i(int(value[0]), int(value[1])),
+	}
+
+
+static func _strings_from_names(values: Array) -> Array[String]:
 	var result: Array[String] = []
 	for value: StringName in values:
 		result.append(String(value))

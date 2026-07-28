@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/view/act1_test_tube_view.gd" id="1_view"]
 [ext_resource type="Script" path="res://scripts/view/queen_view.gd" id="2_queen"]
+[ext_resource type="Script" path="res://scripts/view/facility_layout_view.gd" id="3_layout"]
 
 [node name="Act1TestTubeView" type="Control"]
 custom_minimum_size = Vector2(720, 360)
@@ -21,3 +22,15 @@ unique_name_in_owner = true
 [node name="QueenView" type="Node2D" parent="EntityLayer"]
 unique_name_in_owner = true
 script = ExtResource("2_queen")
+
+[node name="FacilityLayoutView" type="Control" parent="."]
+unique_name_in_owner = true
+visible = false
+z_index = 20
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("3_layout")

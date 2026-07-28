@@ -2,7 +2,7 @@ class_name SaveGameService
 extends RefCounted
 
 const CURRENT_FORMAT_VERSION: int = 1
-const CURRENT_GAME_VERSION: String = "0.6.0-dev"
+const CURRENT_GAME_VERSION: String = "0.7.0-dev"
 const CURRENT_CONTENT_MANIFEST_ID: String = (
 	"colony-under-glass.r2-base.1"
 )
@@ -269,8 +269,18 @@ func _verify_and_migrate_envelope(envelope: Dictionary) -> Dictionary:
 	match String(current["state_schema_id"]):
 		SimulationStateCodec.CURRENT_SCHEMA_ID:
 			pass
+		SimulationStateCodec.R6_SCHEMA_ID:
+			var migration_result: Dictionary = _migrate_v4_to_v5(current)
+			if not migration_result.get("ok", false):
+				return migration_result
+			current = migration_result["envelope"]
+			migrated = true
 		SimulationStateCodec.R5_SCHEMA_ID:
 			var migration_result: Dictionary = _migrate_v3_to_v4(current)
+			if not migration_result.get("ok", false):
+				return migration_result
+			current = migration_result["envelope"]
+			migration_result = _migrate_v4_to_v5(current)
 			if not migration_result.get("ok", false):
 				return migration_result
 			current = migration_result["envelope"]
@@ -281,6 +291,10 @@ func _verify_and_migrate_envelope(envelope: Dictionary) -> Dictionary:
 				return migration_result
 			current = migration_result["envelope"]
 			migration_result = _migrate_v3_to_v4(current)
+			if not migration_result.get("ok", false):
+				return migration_result
+			current = migration_result["envelope"]
+			migration_result = _migrate_v4_to_v5(current)
 			if not migration_result.get("ok", false):
 				return migration_result
 			current = migration_result["envelope"]
@@ -295,6 +309,10 @@ func _verify_and_migrate_envelope(envelope: Dictionary) -> Dictionary:
 				return migration_result
 			current = migration_result["envelope"]
 			migration_result = _migrate_v3_to_v4(current)
+			if not migration_result.get("ok", false):
+				return migration_result
+			current = migration_result["envelope"]
+			migration_result = _migrate_v4_to_v5(current)
 			if not migration_result.get("ok", false):
 				return migration_result
 			current = migration_result["envelope"]
@@ -313,6 +331,10 @@ func _verify_and_migrate_envelope(envelope: Dictionary) -> Dictionary:
 				return migration_result
 			current = migration_result["envelope"]
 			migration_result = _migrate_v3_to_v4(current)
+			if not migration_result.get("ok", false):
+				return migration_result
+			current = migration_result["envelope"]
+			migration_result = _migrate_v4_to_v5(current)
 			if not migration_result.get("ok", false):
 				return migration_result
 			current = migration_result["envelope"]
@@ -503,7 +525,7 @@ func _migrate_v3_to_v4(previous: Dictionary) -> Dictionary:
 
 	var migrated: Dictionary = previous.duplicate(true)
 	migrated["game_version"] = CURRENT_GAME_VERSION
-	migrated["state_schema_id"] = SimulationStateCodec.CURRENT_SCHEMA_ID
+	migrated["state_schema_id"] = SimulationStateCodec.R6_SCHEMA_ID
 	migrated["frozen_config_bundle"] = frozen_bundle
 	migrated["frozen_config_hash"] = CanonicalSaveJson.sha256(frozen_bundle)
 	if String(migrated["frozen_config_hash"]).is_empty():
@@ -513,6 +535,349 @@ func _migrate_v3_to_v4(previous: Dictionary) -> Dictionary:
 	if migrated.is_empty():
 		return _failure("R5 save migration could not be sealed")
 	return {"ok": true, "error": "", "envelope": migrated}
+
+
+func _migrate_v4_to_v5(previous: Dictionary) -> Dictionary:
+	if (
+		typeof(previous.get("frozen_config_bundle")) != TYPE_DICTIONARY
+		or typeof(previous.get("state_payload")) != TYPE_DICTIONARY
+		or typeof(previous.get("next_ids")) != TYPE_DICTIONARY
+		or typeof(previous.get("pending_commands")) != TYPE_ARRAY
+	):
+		return _failure("R6 save payload is invalid")
+	var frozen_bundle: Dictionary = (
+		previous["frozen_config_bundle"] as Dictionary
+	).duplicate(true)
+	if (
+		not frozen_bundle.has("habitat")
+		or frozen_bundle.size() != 3
+	):
+		return _failure("R6 frozen configuration is invalid")
+	var habitat_value: Variant = frozen_bundle["habitat"]
+	var has_habitat: bool = habitat_value != null
+	var is_act1: bool = false
+	if has_habitat:
+		if typeof(habitat_value) != TYPE_DICTIONARY:
+			return _failure("R6 habitat configuration is invalid")
+		var habitat: Dictionary = (
+			habitat_value as Dictionary
+		).duplicate(true)
+		if habitat.has("facility_catalog_config"):
+			return _failure("R6 habitat unexpectedly contains R7 data")
+		is_act1 = String(habitat.get("scenario_id", "")) == "act1_test_tube"
+		habitat["facility_catalog_config"] = (
+			_r7_act1_catalog_payload() if is_act1 else null
+		)
+		frozen_bundle["habitat"] = habitat
+
+	var state_payload: Dictionary = (
+		previous["state_payload"] as Dictionary
+	).duplicate(true)
+	if state_payload.has("layout"):
+		return _failure("R6 state unexpectedly contains R7 data")
+	if typeof(state_payload.get("zones")) != TYPE_ARRAY:
+		return _failure("R6 zone state is invalid")
+	var migrated_zones: Array[Dictionary] = []
+	var edge_pairs: Dictionary[String, Array] = {}
+	for zone_value: Variant in state_payload["zones"]:
+		if typeof(zone_value) != TYPE_DICTIONARY:
+			return _failure("R6 zone state is invalid")
+		var zone: Dictionary = zone_value as Dictionary
+		if (
+			not zone.has("zone_id")
+			or not zone.has("humidity")
+			or not zone.has("connected_zone_ids")
+			or not zone.has("available")
+			or typeof(zone["zone_id"]) != TYPE_STRING
+			or typeof(zone["connected_zone_ids"]) != TYPE_ARRAY
+		):
+			return _failure("R6 zone state is invalid")
+		var first_zone_id: String = String(zone["zone_id"])
+		for neighbor_value: Variant in zone["connected_zone_ids"]:
+			if typeof(neighbor_value) != TYPE_STRING:
+				return _failure("R6 zone connection is invalid")
+			var second_zone_id: String = String(neighbor_value)
+			if first_zone_id.is_empty() or second_zone_id.is_empty():
+				return _failure("R6 zone connection is invalid")
+			if first_zone_id == second_zone_id:
+				continue
+			var low: String = (
+				first_zone_id
+				if first_zone_id < second_zone_id
+				else second_zone_id
+			)
+			var high: String = (
+				second_zone_id
+				if first_zone_id < second_zone_id
+				else first_zone_id
+			)
+			edge_pairs["%s|%s" % [low, high]] = [low, high]
+		migrated_zones.append({
+			"zone_id": first_zone_id,
+			"humidity": zone["humidity"],
+			"available": zone["available"],
+		})
+	state_payload["zones"] = migrated_zones
+
+	var connections: Array[Dictionary] = []
+	var edge_keys: Array[String] = []
+	edge_keys.assign(edge_pairs.keys())
+	edge_keys.sort()
+	var connection_id: int = 1
+	for edge_key: String in edge_keys:
+		var pair: Array = edge_pairs[edge_key]
+		connections.append({
+			"connection_id": connection_id,
+			"first_zone_id": pair[0],
+			"second_zone_id": pair[1],
+			"gated": false,
+			"open": true,
+			"owner_facility_id": -1,
+		})
+		connection_id += 1
+	var facilities: Array[Dictionary] = []
+	var supplies: Array[Dictionary] = []
+	var next_facility_id: int = 1
+	if is_act1:
+		facilities = _r7_act1_initial_facilities()
+		supplies = _r7_act1_initial_supplies()
+		next_facility_id = 3
+		var act1_value: Variant = state_payload.get("act1")
+		if (
+			typeof(act1_value) == TYPE_DICTIONARY
+			and bool((act1_value as Dictionary).get(
+				"light_cover_applied",
+				false
+			))
+		):
+			facilities.append({
+				"facility_id": 3,
+				"type_id": "light_cover",
+				"slot": [1, 3],
+				"orientation": 0,
+				"zone_id": "",
+				"available": true,
+				"player_removable": false,
+			})
+			for supply: Dictionary in supplies:
+				if String(supply["type_id"]) == "light_cover":
+					supply["remaining_count"] = 0
+			next_facility_id = 4
+	state_payload["layout"] = (
+		{
+			"grid_size": [12, 8],
+			"revision": 0,
+			"facilities": facilities,
+			"connections": connections,
+			"supplies": supplies,
+		}
+		if has_habitat
+		else null
+	)
+
+	var previous_next_ids: Dictionary = previous["next_ids"]
+	if (
+		previous_next_ids.size() != 3
+		or not previous_next_ids.has("entity_id")
+		or not previous_next_ids.has("observation_event_id")
+		or not previous_next_ids.has("pending_command_sequence_id")
+	):
+		return _failure("R6 next-ID payload is invalid")
+	var next_ids: Dictionary = previous_next_ids.duplicate(true)
+	next_ids["facility_id"] = next_facility_id
+	next_ids["connection_id"] = connection_id
+
+	var commands: Array[Dictionary] = []
+	for command_value: Variant in previous["pending_commands"]:
+		if typeof(command_value) != TYPE_DICTIONARY:
+			return _failure("R6 pending command record is invalid")
+		var command: Dictionary = command_value as Dictionary
+		if (
+			command.size() != 3
+			or not command.has("sequence_id")
+			or not command.has("command_type")
+			or not command.has("argument_id")
+		):
+			return _failure("R6 pending command record is invalid")
+		var migrated_command: Dictionary = command.duplicate(true)
+		migrated_command["argument_entity_id"] = -1
+		migrated_command["argument_slot"] = [0, 0]
+		migrated_command["argument_orientation"] = 0
+		migrated_command["argument_flag"] = false
+		commands.append(migrated_command)
+
+	var migrated: Dictionary = previous.duplicate(true)
+	migrated["game_version"] = CURRENT_GAME_VERSION
+	migrated["state_schema_id"] = SimulationStateCodec.CURRENT_SCHEMA_ID
+	migrated["frozen_config_bundle"] = frozen_bundle
+	migrated["frozen_config_hash"] = CanonicalSaveJson.sha256(frozen_bundle)
+	if String(migrated["frozen_config_hash"]).is_empty():
+		return _failure("R7 frozen configuration hash could not be created")
+	migrated["next_ids"] = next_ids
+	migrated["pending_commands"] = commands
+	migrated["state_payload"] = state_payload
+	migrated = seal_envelope(migrated)
+	if migrated.is_empty():
+		return _failure("R6 save migration could not be sealed")
+	return {"ok": true, "error": "", "envelope": migrated}
+
+
+func _r7_act1_catalog_payload() -> Dictionary:
+	var horizontal_ports: Array[Dictionary] = [
+		_r7_port_payload(0, 0, FacilityPortData.Direction.WEST),
+		_r7_port_payload(0, 0, FacilityPortData.Direction.EAST),
+	]
+	return {
+		"grid_size": [12, 8],
+		"facility_types": [
+			_r7_facility_type_payload(
+				"connector_gate",
+				"connector_family",
+				[1, 1],
+				[0, 1, 2, 3],
+				horizontal_ports,
+				0,
+				true,
+				true
+			),
+			_r7_facility_type_payload(
+				"connector_tube",
+				"connector_family",
+				[1, 1],
+				[0, 1, 2, 3],
+				horizontal_ports,
+				0,
+				true,
+				true
+			),
+			_r7_facility_type_payload(
+				"light_cover",
+				"light_cover",
+				[3, 1],
+				[0],
+				[],
+				1,
+				false,
+				false
+			),
+			_r7_facility_type_payload(
+				"micro_feeding_port",
+				"micro_feeding_port",
+				[1, 1],
+				[0],
+				horizontal_ports,
+				0,
+				true,
+				false
+			),
+			_r7_facility_type_payload(
+				"small_foraging_box",
+				"small_foraging_box",
+				[2, 2],
+				[0, 1, 2, 3],
+				[
+					_r7_port_payload(
+						0,
+						0,
+						FacilityPortData.Direction.WEST
+					),
+					_r7_port_payload(
+						1,
+						0,
+						FacilityPortData.Direction.EAST
+					),
+				],
+				0,
+				true,
+				true
+			),
+			_r7_facility_type_payload(
+				"test_tube_nest",
+				"test_tube_nest",
+				[3, 1],
+				[0],
+				[
+					_r7_port_payload(
+						2,
+						0,
+						FacilityPortData.Direction.EAST
+					),
+				],
+				0,
+				false,
+				false
+			),
+		],
+		"initial_facilities": _r7_act1_initial_facilities(),
+		"initial_supplies": [
+			{"type_id": "connector_gate", "available_count": 2},
+			{"type_id": "connector_tube", "available_count": 4},
+			{"type_id": "light_cover", "available_count": 1},
+			{"type_id": "small_foraging_box", "available_count": 1},
+		],
+	}
+
+
+func _r7_facility_type_payload(
+	type_id: String,
+	unlock_type_id: String,
+	footprint: Array,
+	allowed_orientations: Array,
+	ports: Array,
+	placement_layer: int,
+	requires_connection: bool,
+	player_removable: bool
+) -> Dictionary:
+	return {
+		"type_id": type_id,
+		"unlock_type_id": unlock_type_id,
+		"footprint": footprint.duplicate(),
+		"allowed_orientations": allowed_orientations.duplicate(),
+		"ports": ports.duplicate(true),
+		"placement_layer": placement_layer,
+		"requires_connection": requires_connection,
+		"player_removable": player_removable,
+	}
+
+
+func _r7_port_payload(x: int, y: int, direction: int) -> Dictionary:
+	return {
+		"local_cell": [x, y],
+		"direction": direction,
+		"connection_kind": "habitat",
+	}
+
+
+func _r7_act1_initial_facilities() -> Array[Dictionary]:
+	return [
+		{
+			"facility_id": 1,
+			"type_id": "test_tube_nest",
+			"slot": [1, 3],
+			"orientation": 0,
+			"zone_id": "test_tube_nest",
+			"available": true,
+			"player_removable": false,
+		},
+		{
+			"facility_id": 2,
+			"type_id": "micro_feeding_port",
+			"slot": [4, 3],
+			"orientation": 0,
+			"zone_id": "micro_feeding_port",
+			"available": true,
+			"player_removable": false,
+		},
+	]
+
+
+func _r7_act1_initial_supplies() -> Array[Dictionary]:
+	return [
+		{"type_id": "connector_gate", "remaining_count": 2},
+		{"type_id": "connector_tube", "remaining_count": 4},
+		{"type_id": "light_cover", "remaining_count": 1},
+		{"type_id": "small_foraging_box", "remaining_count": 1},
+	]
 
 
 func _derive_campaign_for_v1(state_payload: Dictionary) -> Variant:

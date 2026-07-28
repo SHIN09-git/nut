@@ -1,8 +1,8 @@
 # 《玻璃蚁国》技术架构
 
-> 文档版本：1.6｜更新日期：2026-07-28
+> 文档版本：1.7｜更新日期：2026-07-28
 >
-> 本文描述当前 R6 正式 Act 1 前两章、R5 营养基础、版本化存档和档案设置外壳，以及仍保留的旧组合与独立调试／验证路径。
+> 本文描述当前 R7 模块化布局与镜头、R6 正式 Act 1 前两章、R5 营养基础、版本化存档和档案设置外壳，以及仍保留的旧组合与独立调试／验证路径。
 
 ## 1. 固定技术决定
 
@@ -20,7 +20,9 @@
 | 章节手册 | Act 1 两章显式枚举、权威证据、推论、递进提示、固定设施工具包解锁与结算；不使用任务 DSL |
 | 蚁后护理 | 独立冻结配置和休息／靠近幼体／护理三态确定性循环；只在正式 Act 1 启用 |
 | 营养成长 | 冻结糖／蛋白储备、确定性觅食与育幼喂食、短缺减速和资源约束生命周期 |
-| 存档核心 | `r6.authority.v4` 规范化 JSON、版本／清单／checksum 校验、冻结配置、主档／备份恢复和单向迁移；已接入玩家 UI |
+| 设施与布局 | 12×8 逻辑槽位、冻结占地／接口／方向、稳定设施与连接 ID、权威库存、下一 Tick 布局命令 |
+| 布局镜头 | `FacilityLayoutView` 只读布局快照；鼠标与键盘平移缩放不进入模拟或存档 |
+| 存档核心 | `r7.authority.v5` 规范化 JSON、版本／清单／checksum 校验、布局权威、主档／备份恢复和单向迁移 |
 | 测试 | 项目自建 headless runner，无第三方插件 |
 
 ## 2. 数据流与命令边界
@@ -33,13 +35,14 @@ PreparationGate（应用层，Tick 0）
 Act1TestTubeController
     ├── 遮光套按钮 → submit_apply_light_cover_action()
     ├── 糖液按钮 → submit_place_sugar_action()
-    └── 手册推论按钮 → submit_campaign_inference_action(inference_id)
+    ├── 手册推论按钮 → submit_campaign_inference_action(inference_id)
+    └── 布局操作 → submit_place/rotate/remove_facility_action(...)
                           （只有推论携带稳定 StringName 选项 ID）
     ↓
 ColonySimulation._pending_commands
     ↓ 先验证 Tick 连续，再按提交顺序消费
     ↓ 下一合法固定 Tick 开始时使用冻结配置应用
-ColonyState + Act1State + CampaignState
+ColonyState + Act1State + CampaignState + HabitatLayoutState
     ↓
 栖息地生命周期 + FoundingCareSystem
     ↓
@@ -57,8 +60,10 @@ GameSnapshot
     ├── ObservationJournalSnapshot
     ├── NutritionSnapshot
     ├── Act1Snapshot
+    ├── HabitatLayoutSnapshot
     └── CampaignSnapshot
             ├── Act1TestTubeView
+            │    └── FacilityLayoutView
             ├── Act1TestTubeController 的章节 UI
             └── 开发调试构建中的 F3 DebugPanel
 ```
@@ -125,8 +130,10 @@ data/habitats/act1_test_tube.tres
     ├── HabitatScenarioConfig（3 zones）
     ├── data/behaviors/founding_care_prototype.tres
     │    └── FoundingCareConfig
-    └── data/behaviors/act1_nutrition_prototype.tres
-         └── NutritionConfig
+    ├── data/behaviors/act1_nutrition_prototype.tres
+    │    └── NutritionConfig
+    └── data/facilities/act1_layout_catalog.tres
+         └── FacilityCatalogConfig
 ```
 
 - `LifecycleConfig` 只保存产卵和阶段转换配置。
@@ -136,6 +143,7 @@ data/habitats/act1_test_tube.tres
 - `ForagingConfig` 保存发现、去程、采集、返程和分享时长。
 - `ScenarioSequenceConfig` 保存首工晚期蛹的初始阶段年龄，以及首工羽化和湿度响应两张观察卡 ID。
 - `FoundingCareConfig` 保存蚁后休息、靠近幼体、护理与蛹观察的节奏、首工晚期蛹的初始阶段年龄，以及 Act 1 四类观察卡 ID。
+- `FacilityCatalogConfig` 冻结逻辑网格、设施占地、允许方向、接口、布局层、初始设施和有限库存；不包含屏幕坐标、颜色或通用环境效果字典。
 - 正式 Act 1 冻结配置声明生命周期与营养均启用，并保留后续章节所需的蛋白区域／份数；当前章节门控只开放糖液动作。
 - Resource 通过验证后复制到私有运行时对象；修改源 `.tres` 不会改变已经开始的模拟。
 - `restart_session()` 使用相同的私有冻结配置创建全新 `ColonyState`，并清空旧会话的待处理命令；不会再次读取 Resource。
@@ -146,6 +154,8 @@ M3 前先把已经验证的幼体搬运逻辑提取为 `BroodRelocationSystem`�
 M4 在既有 `HabitatScenarioData.ScenarioKind` 末尾追加 `COMBINED_OBSERVATION`，不改变原有枚举值。组合配置同时声明湿度和糖水能力，并额外冻结 `ScenarioSequenceData`；原有湿度和糖水配置继续走各自的兼容路径。组合 Resource 必须精确符合“育幼室 ↔ 栖息室 ↔ 觅食区”的双向线性邻接，补水目标、首工初始区和幼体初始区都必须是巢室；额外捷径或不可用区域会在冻结前被拒绝。`ColonySimulation` 再结合冻结的 `BroodCareConfig` 验证：初始状态能触发明显改善的首次搬运，最多 4 次配置补水能到达舒适范围，并能让幼体产生返回巢室的明确改善；不可完成的组合不会进入运行态。
 
 R6 在枚举末尾追加 `ACT1_TEST_TUBE`。该配置必须同时具有序列、蚁后护理、觅食与营养冻结数据，初始工蚁为 0，初始个体按“晚期蛹、两枚卵”的稳定顺序建立。运行中修改任何源 Resource 都不会改变遮光门控、护理节奏、首工边界、糖液份数或营养规则。
+
+R7 为 Act 1 冻结 `FacilityCatalogData`。运行时只使用复制后的 `FacilityCatalogConfig`；源 Resource 的槽位、接口、方向、库存或初始设施在会话开始后即使被修改，也不能改变当前模拟。非 Act 1 旧场景没有设施目录，但其旧区域邻接仍在初始化时迁入 `HabitatLayoutState` 的稳定连接实例。
 
 ## 4. 权威模型
 
@@ -163,11 +173,26 @@ R6 在枚举末尾追加 `ACT1_TEST_TUBE`。该配置必须同时具有序列、
 - 组合场景中的 `CampaignState`：章节、状态、进入 Tick、错误推论次数、提示层级、证据、已确认推论和设施工具包。
 - 正式 Act 1 场景中的 `Act1State`：遮光动作、蚁后护理、蛹观察、首工身份与首次工蚁护理证据。
 - 营养场景与 Act 1 中的 `ColonyNutritionState`。
+- 所有栖息地场景中的 `HabitatLayoutState`：稳定设施、显式区域连接、闸门开关、有限设施库存、布局 revision 与各 ID 域的下一个值。
 - 会话内单调事件 ID 和最多 64 条的结构化观察事件历史。
 
 组合场景初始化时，蚁后固定为实体 ID 0，晚期蛹先于其余幼体创建并取得实体 ID 1。它从蛹原地转换为工蚁时不创建替代实体；`ScenarioProgressState.first_worker_entity_id` 始终指向这个 ID，`configure_worker()` 在同一个 `AntModel` 上建立 `WorkerTaskModel` 与 `ForagingTaskModel`。重开会从冻结配置重新执行同一稳定 ID 分配顺序。
 
 正式 Act 1 使用同样的稳定身份约束：实体 ID 1 是晚期蛹，之后才建立两枚卵；羽化时在同一个 `AntModel` 上配置觅食与育幼状态。初始三个幼体计入本场景已建立的首代个体，生命周期上限不会再次产生重复批次。
+
+### `HabitatLayoutState`
+
+布局状态是设施与可达关系的唯一事实来源：
+
+- `facility_id -> FacilityState` 保存类型、逻辑槽位、方向、所属区域、可用状态与可拆除标记。
+- `connection_id -> HabitatConnectionState` 保存两个稳定区域 ID、闸门属性、开关和所属设施。
+- `FacilitySupplyState` 保存冻结工具包的剩余数量；章节解锁与库存必须同时满足才会发布合法放置选项。
+- 占地、边界、布局层、接口种类和相反方向匹配都从冻结目录确定性验证。
+- 放置、旋转、拆除和闸门开关只在下一连续 Tick 消费；同一时刻最多一个布局命令待处理。
+- 拆除先检查设施是否仍被实体、食物、任务、路线或携带关系引用；拒绝时不产生部分修改，成功时归还库存并清理设施拥有的连接。
+- 区域邻接缓存由布局 revision 派生。设施或闸门变化使缓存失效；缓存本身不写入存档。
+
+`ColonyState.zones` 中的运行时 `HabitatZoneState` 副本从 R7 起只携带区域 ID、湿度和可用状态；配置冻结阶段仍暂用同一值对象读取旧 `.tres` 邻接，并立即迁入初始布局。搬运、觅食与喂食系统统一通过 `ColonyState.find_stable_zone_path()` 查询布局权威，不再读取运行时区域对象上的邻接数组。
 
 ### `Act1State`、`FoundingCareSystem` 与 `Act1CampaignDirector`
 
@@ -432,7 +457,7 @@ IDLE
 
 `SettingsStore` 使用独立的 `user://settings.json`，只保存显示、音量、语言、UI 缩放和减少动效；它不进入 SaveEnvelope，不参与模拟 checksum，也不随档案删除。
 
-当前 `r6.authority.v4` schema 与 `r5.authority.v3 → r6.authority.v4` 迁移见 `docs/architecture/SAVE_SCHEMA_R6.md`；R5、R4 与 R2 文档保留为历史基线。
+当前 `r7.authority.v5` schema 与 `r6.authority.v4 → r7.authority.v5` 迁移见 `docs/architecture/SAVE_SCHEMA_R7.md`；R6、R5、R4 与 R2 文档保留为历史基线。
 
 ## 11. 显示层
 
@@ -449,6 +474,8 @@ IDLE
 - 重复快照不创建重复节点；重开时 `reset_projection()` 清除旧端点、实体映射和临时选择。
 
 `Act1TestTubeController` 从 `CampaignSnapshot` 投影章节、目标、证据、提示、推论按钮、设施工具包和最终结算；从 `Act1Snapshot`、`NutritionSnapshot` 与 `ForagingScenarioSnapshot` 投影遮光、糖液和护理线索。UI 只组合快照，不能直接推进章节或修改群落状态。完成面板的“继续观察”只关闭应用层遮罩，后续 Tick 不会重新打开。
+
+`FacilityLayoutView` 是 `Act1TestTubeView` 的独立子视图，只读取 `HabitatLayoutSnapshot`。它把逻辑槽位投影成网格、命中矩形和程序化设施轮廓，并把鼠标／键盘意图作为逻辑类型、槽位、方向或稳定设施 ID 交给控制器。镜头 offset 与 zoom 是纯显示状态；拖动、WASD、滚轮、`+/-/0` 不创建命令、不推进 Tick，也不写入存档。
 
 玩家可见文本通过 `localization/v0_2.csv` 导入简体中文与临时英文翻译资源。阶段说明、反馈和观察卡仍携带小型 `evidence_copy_role` 元数据：`observation_cue`、`action_affordance`、`neutral_placeholder`、`post_event_conclusion`、`system_status` 或 `error`。翻译只改变表现文字，不改变角色或权威状态；锁定卡只能使用中性占位，事件完成后才能切换为结论角色。场景测试检查键、角色和节点状态，不绑定完整中文句子。这是当前场景的应用文案边界，不是通用内容框架。
 
@@ -551,7 +578,7 @@ ColonyViewAdapter
 - `tests/ui/settings_store_test_suite.gd`
 - `tests/ui/demo_localization_test_suite.gd`
 
-生命周期边界从 Resource 计算。湿度套件覆盖原有命令、搬运、所有权、节奏和 soak；黄金套件锁定 `BroodRelocationSystem` 拆分前后等价。糖水与 R5 营养套件覆盖下一 Tick 命令、冻结配置、稳定选择、状态边界、守恒、快照隔离、三档速度、任务中存读和 10,000 Tick soak。组合与 R4 套件继续覆盖旧五阶段、稳定首工、章节证据和真实日志路径。R6 Act 1 套件覆盖初始实体、遮光命令、护理循环、首工稳定身份、两章证据与推论、糖液与育幼闭环、确定性、快照隔离、三档速度、存读等价和 10,000 Tick soak；场景套件通过真实按钮完成两章，并检查暂停、F3、完成面板、稳定 `AntView` 以及 1280×720／1920×1080 布局。测试入口先验证所有套件脚本可实例化，避免依赖脚本编译失败时产生假阳性退出码。存档套件覆盖任务中途、待处理遮光／糖液命令、冻结护理配置、旧 schema 迁移、checksum、原子提交、备份恢复、故障注入和载入后 soak。应用外壳套件确认新档进入 Act 1、旧组合档案仍路由旧场景，并覆盖真实标题→保存→返回→继续路径。翻译套件检查键唯一性、双语非空、资源加载和主要玩家场景不残留嵌入式中文。
+生命周期边界从 Resource 计算。湿度套件覆盖原有命令、搬运、所有权、节奏和 soak；黄金套件锁定 `BroodRelocationSystem` 拆分前后等价。糖水与 R5 营养套件覆盖下一 Tick 命令、冻结配置、稳定选择、状态边界、守恒、快照隔离、三档速度、任务中存读和 10,000 Tick soak。组合与 R4 套件继续覆盖旧五阶段、稳定首工、章节证据和真实日志路径。R6 Act 1 套件覆盖护理、首工、营养、确定性和 10,000 Tick soak。R7 布局套件覆盖重叠／越界／接口／方向拒绝、稳定设施 ID、库存守恒、放置／旋转／拆除下一 Tick 语义、闸门缓存失效、旧邻接图等价、快照隔离和 R6→R7 存档迁移；场景套件再用真实鼠标与键盘路径操作布局和镜头，并检查 1280×720／1920×1080、100%／150% UI 缩放。测试入口先验证所有套件脚本可实例化，避免依赖脚本编译失败时产生假阳性退出码。存档套件覆盖任务中途、待处理高层命令、冻结配置、旧 schema 迁移、checksum、原子提交、备份恢复、故障注入和载入后 soak。
 
 标准命令：
 
@@ -572,6 +599,6 @@ ColonyViewAdapter
 - Act 1 只开放糖液操作；R5 蛋白状态参与已有育幼表现，但蛋白放置 UI 留给后续章节。
 - 临时英文尚未完成用户最终校对；7 名有效首次接触测试者数据未取得，外部理解度 Gate 未通过。用户已明确豁免该前置条件继续开发，但该决定不构成外部验证证据。
 - 当前只实现正式六章中的前两章。
-- 当前档案保存章节、证据、推论、提示和设施解锁，但不会自动保存，也不含名称、选择或显示设置。
-- 设施解锁仅为稳定类型 ID 与手册显示；没有 `FacilityState`、摆放、接口或环境效果。
-- 没有镜头、直接个体命令、随机行为、正式素材或外部插件。
+- 当前档案保存章节、证据、推论、提示、设施、连接、库存和待处理布局命令，但不会自动保存，也不含名称、选择、镜头位置或显示设置。
+- R7 布局不赋予小型觅食盒、连接管和闸门新的环境效果；环境传播、垃圾和迁巢属于后续里程碑。
+- 没有直接个体命令、随机行为、正式素材或外部插件。

@@ -1,0 +1,182 @@
+[gd_resource type="Resource" script_class="FacilityCatalogData" load_steps=24 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/facility_catalog_data.gd" id="1_catalog"]
+[ext_resource type="Script" path="res://scripts/core/facility_data.gd" id="2_facility"]
+[ext_resource type="Script" path="res://scripts/core/facility_port_data.gd" id="3_port"]
+[ext_resource type="Script" path="res://scripts/core/initial_facility_data.gd" id="4_initial"]
+[ext_resource type="Script" path="res://scripts/core/facility_supply_data.gd" id="5_supply"]
+
+[sub_resource type="Resource" id="Port_test_tube_east"]
+script = ExtResource("3_port")
+local_cell = Vector2i(2, 0)
+direction = 1
+connection_kind = &"habitat"
+
+[sub_resource type="Resource" id="Facility_test_tube"]
+script = ExtResource("2_facility")
+type_id = &"test_tube_nest"
+unlock_type_id = &"test_tube_nest"
+data_status = &"prototype_pacing_fixture"
+footprint = Vector2i(3, 1)
+allowed_orientations = Array[int]([0])
+ports = Array[ExtResource("3_port")]([SubResource("Port_test_tube_east")])
+placement_layer = 0
+requires_connection = false
+player_removable = false
+
+[sub_resource type="Resource" id="Port_feeding_west"]
+script = ExtResource("3_port")
+local_cell = Vector2i(0, 0)
+direction = 3
+connection_kind = &"habitat"
+
+[sub_resource type="Resource" id="Port_feeding_east"]
+script = ExtResource("3_port")
+local_cell = Vector2i(0, 0)
+direction = 1
+connection_kind = &"habitat"
+
+[sub_resource type="Resource" id="Facility_feeding"]
+script = ExtResource("2_facility")
+type_id = &"micro_feeding_port"
+unlock_type_id = &"micro_feeding_port"
+data_status = &"prototype_pacing_fixture"
+footprint = Vector2i(1, 1)
+allowed_orientations = Array[int]([0])
+ports = Array[ExtResource("3_port")]([SubResource("Port_feeding_west"), SubResource("Port_feeding_east")])
+placement_layer = 0
+requires_connection = true
+player_removable = false
+
+[sub_resource type="Resource" id="Port_box_west"]
+script = ExtResource("3_port")
+local_cell = Vector2i(0, 0)
+direction = 3
+connection_kind = &"habitat"
+
+[sub_resource type="Resource" id="Port_box_east"]
+script = ExtResource("3_port")
+local_cell = Vector2i(1, 0)
+direction = 1
+connection_kind = &"habitat"
+
+[sub_resource type="Resource" id="Facility_box"]
+script = ExtResource("2_facility")
+type_id = &"small_foraging_box"
+unlock_type_id = &"small_foraging_box"
+data_status = &"prototype_pacing_fixture"
+footprint = Vector2i(2, 2)
+allowed_orientations = Array[int]([0, 1, 2, 3])
+ports = Array[ExtResource("3_port")]([SubResource("Port_box_west"), SubResource("Port_box_east")])
+placement_layer = 0
+requires_connection = true
+player_removable = true
+
+[sub_resource type="Resource" id="Port_tube_west"]
+script = ExtResource("3_port")
+local_cell = Vector2i(0, 0)
+direction = 3
+connection_kind = &"habitat"
+
+[sub_resource type="Resource" id="Port_tube_east"]
+script = ExtResource("3_port")
+local_cell = Vector2i(0, 0)
+direction = 1
+connection_kind = &"habitat"
+
+[sub_resource type="Resource" id="Facility_tube"]
+script = ExtResource("2_facility")
+type_id = &"connector_tube"
+unlock_type_id = &"connector_family"
+data_status = &"prototype_pacing_fixture"
+footprint = Vector2i(1, 1)
+allowed_orientations = Array[int]([0, 1, 2, 3])
+ports = Array[ExtResource("3_port")]([SubResource("Port_tube_west"), SubResource("Port_tube_east")])
+placement_layer = 0
+requires_connection = true
+player_removable = true
+
+[sub_resource type="Resource" id="Port_gate_west"]
+script = ExtResource("3_port")
+local_cell = Vector2i(0, 0)
+direction = 3
+connection_kind = &"habitat"
+
+[sub_resource type="Resource" id="Port_gate_east"]
+script = ExtResource("3_port")
+local_cell = Vector2i(0, 0)
+direction = 1
+connection_kind = &"habitat"
+
+[sub_resource type="Resource" id="Facility_gate"]
+script = ExtResource("2_facility")
+type_id = &"connector_gate"
+unlock_type_id = &"connector_family"
+data_status = &"prototype_pacing_fixture"
+footprint = Vector2i(1, 1)
+allowed_orientations = Array[int]([0, 1, 2, 3])
+ports = Array[ExtResource("3_port")]([SubResource("Port_gate_west"), SubResource("Port_gate_east")])
+placement_layer = 0
+requires_connection = true
+player_removable = true
+
+[sub_resource type="Resource" id="Facility_cover"]
+script = ExtResource("2_facility")
+type_id = &"light_cover"
+unlock_type_id = &"light_cover"
+data_status = &"prototype_pacing_fixture"
+footprint = Vector2i(3, 1)
+allowed_orientations = Array[int]([0])
+ports = Array[ExtResource("3_port")]([])
+placement_layer = 1
+requires_connection = false
+player_removable = false
+
+[sub_resource type="Resource" id="Initial_test_tube"]
+script = ExtResource("4_initial")
+facility_id = 1
+type_id = &"test_tube_nest"
+slot = Vector2i(1, 3)
+orientation = 0
+zone_id = &"test_tube_nest"
+available = true
+player_removable = false
+
+[sub_resource type="Resource" id="Initial_feeding"]
+script = ExtResource("4_initial")
+facility_id = 2
+type_id = &"micro_feeding_port"
+slot = Vector2i(4, 3)
+orientation = 0
+zone_id = &"micro_feeding_port"
+available = true
+player_removable = false
+
+[sub_resource type="Resource" id="Supply_box"]
+script = ExtResource("5_supply")
+type_id = &"small_foraging_box"
+available_count = 1
+
+[sub_resource type="Resource" id="Supply_tube"]
+script = ExtResource("5_supply")
+type_id = &"connector_tube"
+available_count = 4
+
+[sub_resource type="Resource" id="Supply_gate"]
+script = ExtResource("5_supply")
+type_id = &"connector_gate"
+available_count = 2
+
+[sub_resource type="Resource" id="Supply_cover"]
+script = ExtResource("5_supply")
+type_id = &"light_cover"
+available_count = 1
+
+[resource]
+script = ExtResource("1_catalog")
+data_status = &"prototype_pacing_fixture"
+scientifically_validated = false
+grid_size = Vector2i(12, 8)
+facility_types = Array[ExtResource("2_facility")]([SubResource("Facility_test_tube"), SubResource("Facility_feeding"), SubResource("Facility_box"), SubResource("Facility_tube"), SubResource("Facility_gate"), SubResource("Facility_cover")])
+initial_facilities = Array[ExtResource("4_initial")]([SubResource("Initial_test_tube"), SubResource("Initial_feeding")])
+initial_supplies = Array[ExtResource("5_supply")]([SubResource("Supply_box"), SubResource("Supply_tube"), SubResource("Supply_gate"), SubResource("Supply_cover")])

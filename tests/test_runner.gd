@@ -27,6 +27,9 @@ const NutritionGrowthTestSuiteScript: Script = preload(
 const Act1TestTubeTestSuiteScript: Script = preload(
 	"res://tests/simulation/act1_test_tube_test_suite.gd"
 )
+const FacilityLayoutTestSuiteScript: Script = preload(
+	"res://tests/simulation/facility_layout_test_suite.gd"
+)
 const ObservationEventTestSuiteScript: Script = preload(
 	"res://tests/simulation/observation_event_test_suite.gd"
 )
@@ -114,6 +117,7 @@ func _run_all_tests() -> void:
 	_run_campaign_journal_test_suite()
 	_run_nutrition_growth_test_suite()
 	_run_act1_test_tube_test_suite()
+	_run_facility_layout_test_suite()
 	_run_observation_event_test_suite()
 	_run_save_core_test_suite()
 	_run_profile_store_test_suite()
@@ -158,6 +162,7 @@ func _validate_suite_scripts() -> bool:
 		CampaignJournalTestSuiteScript,
 		NutritionGrowthTestSuiteScript,
 		Act1TestTubeTestSuiteScript,
+		FacilityLayoutTestSuiteScript,
 		ObservationEventTestSuiteScript,
 		SaveCoreTestSuiteScript,
 		ProfileStoreTestSuiteScript,
@@ -245,6 +250,12 @@ func _run_nutrition_growth_test_suite() -> void:
 
 func _run_act1_test_tube_test_suite() -> void:
 	var suite: Act1TestTubeTestSuite = Act1TestTubeTestSuiteScript.new()
+	suite.run()
+	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
+
+
+func _run_facility_layout_test_suite() -> void:
+	var suite: FacilityLayoutTestSuite = FacilityLayoutTestSuiteScript.new()
 	suite.run()
 	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
 

@@ -2,6 +2,7 @@ class_name ColonySimulation
 extends RefCounted
 
 const HUMIDITY_EPSILON: float = 0.000001
+const ACT1_LIGHT_COVER_SLOT: Vector2i = Vector2i(1, 3)
 
 signal egg_laid(entity_id: int, simulation_tick: int)
 signal life_stage_changed(
@@ -18,6 +19,10 @@ enum PendingCommandType {
 	SELECT_CAMPAIGN_INFERENCE_ACTION,
 	PLACE_PROTEIN_ACTION,
 	APPLY_LIGHT_COVER_ACTION,
+	PLACE_FACILITY_ACTION,
+	ROTATE_FACILITY_ACTION,
+	REMOVE_FACILITY_ACTION,
+	SET_GATE_OPEN_ACTION,
 }
 
 var _lifecycle_config: LifecycleConfig
@@ -200,6 +205,74 @@ func submit_apply_light_cover_action() -> bool:
 	return true
 
 
+func submit_place_facility_action(
+	type_id: StringName,
+	slot: Vector2i,
+	orientation: int
+) -> bool:
+	if not _is_place_facility_action_available(
+		type_id,
+		slot,
+		orientation
+	):
+		return false
+	_queue_pending_command(
+		PendingCommandType.PLACE_FACILITY_ACTION,
+		type_id,
+		-1,
+		slot,
+		orientation
+	)
+	return true
+
+
+func submit_rotate_facility_action(
+	facility_id: int,
+	orientation: int
+) -> bool:
+	if not _is_rotate_facility_action_available(
+		facility_id,
+		orientation
+	):
+		return false
+	_queue_pending_command(
+		PendingCommandType.ROTATE_FACILITY_ACTION,
+		&"",
+		facility_id,
+		Vector2i.ZERO,
+		orientation
+	)
+	return true
+
+
+func submit_remove_facility_action(facility_id: int) -> bool:
+	if not _is_remove_facility_action_available(facility_id):
+		return false
+	_queue_pending_command(
+		PendingCommandType.REMOVE_FACILITY_ACTION,
+		&"",
+		facility_id
+	)
+	return true
+
+
+func submit_set_gate_open_action(
+	connection_id: int,
+	open: bool
+) -> bool:
+	if not _is_gate_action_available(connection_id, open):
+		return false
+	_queue_pending_command(
+		PendingCommandType.SET_GATE_OPEN_ACTION,
+		&"",
+		connection_id,
+		Vector2i.ZERO,
+		0,
+		open
+	)
+	return true
+
+
 func submit_continue_observation_action() -> bool:
 	if not _is_continue_observation_action_available():
 		return false
@@ -361,7 +434,7 @@ func create_snapshot() -> ColonySnapshot:
 		snapshot.zones.append(HabitatZoneSnapshot.new(
 			zone.zone_id,
 			zone.humidity,
-			zone.connected_zone_ids,
+			_state.get_connected_zone_ids(zone.zone_id),
 			zone.available
 		))
 
@@ -573,6 +646,7 @@ func create_game_snapshot() -> GameSnapshot:
 				PendingCommandType.APPLY_LIGHT_COVER_ACTION
 			)
 		)
+	var layout_snapshot: HabitatLayoutSnapshot = _create_layout_snapshot()
 	return GameSnapshot.new(
 		_state.simulation_tick,
 		create_snapshot(),
@@ -581,7 +655,8 @@ func create_game_snapshot() -> GameSnapshot:
 		sequence_snapshot,
 		campaign_snapshot,
 		nutrition_snapshot,
-		act1_snapshot
+		act1_snapshot,
+		layout_snapshot
 	)
 
 
@@ -665,6 +740,8 @@ func _has_valid_habitat_ownership(state: ColonyState) -> bool:
 		and not _act1_campaign_director.has_valid_state(state)
 	):
 		return false
+	if not _has_valid_layout_state(state):
+		return false
 	return true
 
 
@@ -702,8 +779,15 @@ func _apply_pending_commands() -> void:
 						command.argument_id
 					)
 			PendingCommandType.APPLY_LIGHT_COVER_ACTION:
-				if _founding_care_system != null:
-					_founding_care_system.apply_light_cover(_state)
+				_apply_light_cover_command()
+			PendingCommandType.PLACE_FACILITY_ACTION:
+				_apply_place_facility_command(command)
+			PendingCommandType.ROTATE_FACILITY_ACTION:
+				_apply_rotate_facility_command(command)
+			PendingCommandType.REMOVE_FACILITY_ACTION:
+				_apply_remove_facility_command(command)
+			PendingCommandType.SET_GATE_OPEN_ACTION:
+				_apply_gate_command(command)
 
 
 func _apply_water_action() -> void:
@@ -986,14 +1070,359 @@ func _is_campaign_inference_action_available(
 
 func _is_light_cover_action_available() -> bool:
 	return (
-		is_ready()
-		and _founding_care_system != null
-		and _state.act1_state != null
-		and not _state.act1_state.light_cover_applied
+		_can_apply_light_cover_now()
+		and not _has_pending_layout_command()
 		and not _has_pending_command(
 			PendingCommandType.APPLY_LIGHT_COVER_ACTION
 		)
 	)
+
+
+func _can_apply_light_cover_now() -> bool:
+	return (
+		_has_layout_authority()
+		and _founding_care_system != null
+		and _state.act1_state != null
+		and not _state.act1_state.light_cover_applied
+		and _state.layout_state.can_place(
+			_habitat_config.facility_catalog_config,
+			CampaignState.FACILITY_LIGHT_COVER,
+			ACT1_LIGHT_COVER_SLOT,
+			0,
+			_state.campaign_state.unlocked_facility_type_ids
+		)
+	)
+
+
+func _is_place_facility_action_available(
+	type_id: StringName,
+	slot: Vector2i,
+	orientation: int
+) -> bool:
+	return (
+		_has_layout_authority()
+		and type_id != CampaignState.FACILITY_LIGHT_COVER
+		and not _has_pending_layout_command()
+		and _state.layout_state.can_place(
+			_habitat_config.facility_catalog_config,
+			type_id,
+			slot,
+			orientation,
+			_state.campaign_state.unlocked_facility_type_ids
+		)
+	)
+
+
+func _is_rotate_facility_action_available(
+	facility_id: int,
+	orientation: int
+) -> bool:
+	return (
+		_has_layout_authority()
+		and not _has_pending_layout_command()
+		and _state.layout_state.can_rotate(
+			_habitat_config.facility_catalog_config,
+			facility_id,
+			orientation,
+			_state.campaign_state.unlocked_facility_type_ids
+		)
+	)
+
+
+func _is_remove_facility_action_available(facility_id: int) -> bool:
+	return (
+		not _has_pending_layout_command()
+		and _can_remove_facility_now(facility_id)
+	)
+
+
+func _can_remove_facility_now(facility_id: int) -> bool:
+	if not _has_layout_authority() or _is_facility_referenced(facility_id):
+		return false
+	var facility: FacilityState = _state.layout_state.get_facility(
+		facility_id
+	)
+	return (
+		facility != null
+		and facility.player_removable
+		and _state.layout_state.supply.remaining_by_type.has(
+			facility.type_id
+		)
+	)
+
+
+func _is_gate_action_available(connection_id: int, open: bool) -> bool:
+	if not _has_layout_authority() or _has_pending_layout_command():
+		return false
+	var connection: HabitatConnectionState = (
+		_state.layout_state.get_connection(connection_id)
+	)
+	if (
+		connection == null
+		or not connection.gated
+		or connection.open == open
+	):
+		return false
+	if not open and _has_any_active_worker_task():
+		return false
+	return true
+
+
+func _has_layout_authority() -> bool:
+	return (
+		is_ready()
+		and _state != null
+		and _state.layout_state != null
+		and _state.campaign_state != null
+		and _habitat_config != null
+		and _habitat_config.facility_catalog_config != null
+	)
+
+
+func _has_pending_layout_command() -> bool:
+	for command_type: PendingCommandType in [
+		PendingCommandType.PLACE_FACILITY_ACTION,
+		PendingCommandType.ROTATE_FACILITY_ACTION,
+		PendingCommandType.REMOVE_FACILITY_ACTION,
+		PendingCommandType.SET_GATE_OPEN_ACTION,
+	]:
+		if _has_pending_command(command_type):
+			return true
+	return false
+
+
+func _apply_place_facility_command(
+	command: PendingSimulationCommand
+) -> void:
+	if not _has_layout_authority():
+		return
+	_state.layout_state.place(
+		_habitat_config.facility_catalog_config,
+		command.argument_id,
+		command.argument_slot,
+		command.argument_orientation,
+		_state.campaign_state.unlocked_facility_type_ids
+	)
+
+
+func _apply_light_cover_command() -> void:
+	if not _can_apply_light_cover_now():
+		return
+	var facility_id: int = _state.layout_state.place(
+		_habitat_config.facility_catalog_config,
+		CampaignState.FACILITY_LIGHT_COVER,
+		ACT1_LIGHT_COVER_SLOT,
+		0,
+		_state.campaign_state.unlocked_facility_type_ids
+	)
+	if facility_id < 0:
+		return
+	_founding_care_system.apply_light_cover(_state)
+
+
+func _apply_rotate_facility_command(
+	command: PendingSimulationCommand
+) -> void:
+	if not _has_layout_authority():
+		return
+	_state.layout_state.rotate(
+		_habitat_config.facility_catalog_config,
+		command.argument_entity_id,
+		command.argument_orientation,
+		_state.campaign_state.unlocked_facility_type_ids
+	)
+
+
+func _apply_remove_facility_command(
+	command: PendingSimulationCommand
+) -> void:
+	if not _can_remove_facility_now(command.argument_entity_id):
+		return
+	_state.layout_state.remove(
+		command.argument_entity_id,
+		_habitat_config.facility_catalog_config
+	)
+
+
+func _apply_gate_command(command: PendingSimulationCommand) -> void:
+	if not _has_layout_authority():
+		return
+	var connection: HabitatConnectionState = (
+		_state.layout_state.get_connection(command.argument_entity_id)
+	)
+	if (
+		connection == null
+		or not connection.gated
+		or (
+			not command.argument_flag
+			and _has_any_active_worker_task()
+		)
+	):
+		return
+	_state.layout_state.set_connection_open(
+		command.argument_entity_id,
+		command.argument_flag
+	)
+
+
+func _create_layout_snapshot() -> HabitatLayoutSnapshot:
+	if _state == null or _state.layout_state == null:
+		return null
+	var snapshot: HabitatLayoutSnapshot = HabitatLayoutSnapshot.new()
+	snapshot.active = _habitat_config.facility_catalog_config != null
+	snapshot.grid_size = _state.layout_state.grid_size
+	snapshot.revision = _state.layout_state.revision
+	snapshot.action_pending = _has_pending_layout_command()
+	var catalog: FacilityCatalogConfig = (
+		_habitat_config.facility_catalog_config
+	)
+	for facility: FacilityState in (
+		_state.layout_state.get_facilities_in_stable_order()
+	):
+		var type_config: FacilityConfig = (
+			catalog.get_type(facility.type_id) if catalog != null else null
+		)
+		if type_config == null:
+			continue
+		snapshot.facilities.append(FacilitySnapshot.new(
+			facility.facility_id,
+			facility.type_id,
+			facility.slot,
+			facility.orientation,
+			type_config.get_oriented_footprint(facility.orientation),
+			type_config.placement_layer,
+			facility.zone_id,
+			facility.available,
+			facility.player_removable
+		))
+	for connection: HabitatConnectionState in (
+		_state.layout_state.get_connections_in_stable_order()
+	):
+		snapshot.connections.append(HabitatConnectionSnapshot.new(
+			connection.connection_id,
+			connection.first_zone_id,
+			connection.second_zone_id,
+			connection.gated,
+			connection.open,
+			connection.owner_facility_id
+		))
+	if catalog == null or _state.campaign_state == null:
+		return snapshot
+	for type_id: StringName in catalog.copy_type_ids():
+		var type_config: FacilityConfig = catalog.get_type(type_id)
+		var remaining: int = _state.layout_state.supply.get_remaining(
+			type_id
+		)
+		var unlocked: bool = (
+			_state.campaign_state.unlocked_facility_type_ids.has(
+				type_config.unlock_type_id
+			)
+		)
+		snapshot.supplies.append(FacilitySupplySnapshot.new(
+			type_id,
+			type_config.unlock_type_id,
+			remaining,
+			unlocked
+		))
+		if not unlocked or remaining <= 0:
+			continue
+		for orientation: int in type_config.allowed_orientations:
+			for y: int in snapshot.grid_size.y:
+				for x: int in snapshot.grid_size.x:
+					var slot: Vector2i = Vector2i(x, y)
+					if _state.layout_state.can_place(
+						catalog,
+						type_id,
+						slot,
+						orientation,
+						_state.campaign_state
+							.unlocked_facility_type_ids
+					):
+						snapshot.placement_options.append(
+							FacilityPlacementOptionSnapshot.new(
+								type_id,
+								slot,
+								orientation
+							)
+						)
+	return snapshot
+
+
+func _has_valid_layout_state(state: ColonyState) -> bool:
+	if state == null or state.layout_state == null:
+		return false
+	var zone_ids: Dictionary[StringName, bool] = {}
+	for zone: HabitatZoneState in state.zones:
+		zone_ids[zone.zone_id] = true
+	return state.layout_state.has_valid_state(
+		_habitat_config.facility_catalog_config,
+		zone_ids
+	)
+
+
+func _is_facility_referenced(facility_id: int) -> bool:
+	var facility: FacilityState = _state.layout_state.get_facility(
+		facility_id
+	)
+	if facility == null:
+		return true
+	if facility.zone_id.is_empty():
+		return false
+	for ant: AntModel in _state.ants:
+		if ant.zone_id == facility.zone_id:
+			return true
+		if (
+			ant.worker_task != null
+			and (
+				ant.worker_task.origin_zone_id == facility.zone_id
+				or ant.worker_task.target_zone_id == facility.zone_id
+			)
+		):
+			return true
+		if (
+			ant.foraging_task != null
+			and (
+				ant.foraging_task.origin_zone_id == facility.zone_id
+				or ant.foraging_task.target_zone_id == facility.zone_id
+				or ant.foraging_task.nest_zone_id == facility.zone_id
+				or ant.foraging_task.route_zone_ids.has(facility.zone_id)
+			)
+		):
+			return true
+		if (
+			ant.feeding_task != null
+			and (
+				ant.feeding_task.origin_zone_id == facility.zone_id
+				or ant.feeding_task.target_zone_id == facility.zone_id
+				or ant.feeding_task.route_zone_ids.has(facility.zone_id)
+			)
+		):
+			return true
+	for source: FoodSourceState in _state.food_sources:
+		if source.available and source.zone_id == facility.zone_id:
+			return true
+	return false
+
+
+func _has_any_active_worker_task() -> bool:
+	for ant: AntModel in _state.ants:
+		if (
+			ant.worker_task != null
+			and ant.worker_task.state != WorkerTaskModel.State.IDLE
+		):
+			return true
+		if (
+			ant.foraging_task != null
+			and ant.foraging_task.state != ForagingTaskModel.State.IDLE
+		):
+			return true
+		if (
+			ant.feeding_task != null
+			and ant.feeding_task.state
+				!= BroodFeedingTaskModel.State.IDLE
+		):
+			return true
+	return false
 
 
 func _has_pending_command(command_type: int) -> bool:
@@ -1005,12 +1434,20 @@ func _has_pending_command(command_type: int) -> bool:
 
 func _queue_pending_command(
 	command_type: PendingCommandType,
-	argument_id: StringName = &""
+	argument_id: StringName = &"",
+	argument_entity_id: int = -1,
+	argument_slot: Vector2i = Vector2i.ZERO,
+	argument_orientation: int = 0,
+	argument_flag: bool = false
 ) -> void:
 	_pending_commands.append(PendingSimulationCommand.new(
 		_next_pending_command_sequence_id,
 		command_type,
-		argument_id
+		argument_id,
+		argument_entity_id,
+		argument_slot,
+		argument_orientation,
+		argument_flag
 	))
 	_next_pending_command_sequence_id += 1
 
@@ -1035,7 +1472,11 @@ func _has_viable_combined_humidity_loop() -> bool:
 		if (
 			not candidate.available
 			or candidate.zone_id == source_zone.zone_id
-			or not source_zone.can_reach(candidate.zone_id)
+			or not (
+				_habitat_config.initial_zone_connections
+					.get(source_zone.zone_id, [])
+					.has(candidate.zone_id)
+			)
 		):
 			continue
 		var candidate_penalty: float = _get_brood_humidity_penalty(

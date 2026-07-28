@@ -20,6 +20,7 @@ var scenario_progress: ScenarioProgressState
 var campaign_state: CampaignState
 var nutrition_state: ColonyNutritionState
 var act1_state: Act1State
+var layout_state: HabitatLayoutState
 var _next_entity_id: int = 1
 var _next_observation_event_id: int = 1
 var _observation_events: Array[ObservationEvent] = []
@@ -51,7 +52,13 @@ func initialize_habitat(
 		return false
 
 	for zone: HabitatZoneState in config.zones:
-		zones.append(zone.duplicate_state())
+		zones.append(zone.duplicate_environment_state())
+	layout_state = HabitatLayoutState.create_initial(
+		config.initial_zone_connections,
+		config.facility_catalog_config
+	)
+	if layout_state == null:
+		return false
 
 	if config.supports_nutrition_growth():
 		if config.nutrition_config == null or not config.lifecycle_active:
@@ -159,6 +166,107 @@ func get_zone(zone_id: StringName) -> HabitatZoneState:
 		if zone.zone_id == zone_id:
 			return zone
 	return null
+
+
+func get_connected_zone_ids(zone_id: StringName) -> Array[StringName]:
+	if layout_state == null:
+		return []
+	return layout_state.get_connected_zone_ids(zone_id)
+
+
+func are_zones_directly_connected(
+	first_zone_id: StringName,
+	second_zone_id: StringName
+) -> bool:
+	if layout_state == null:
+		return false
+	return layout_state.are_directly_connected(
+		first_zone_id,
+		second_zone_id
+	)
+
+
+func find_stable_zone_path(
+	start_zone_id: StringName,
+	target_zone_id: StringName
+) -> Array[StringName]:
+	var empty_path: Array[StringName] = []
+	var start_zone: HabitatZoneState = get_zone(start_zone_id)
+	var target_zone: HabitatZoneState = get_zone(target_zone_id)
+	if (
+		start_zone == null
+		or target_zone == null
+		or not start_zone.available
+		or not target_zone.available
+	):
+		return empty_path
+	if start_zone_id == target_zone_id:
+		return [start_zone_id]
+	var queue: Array[StringName] = [start_zone_id]
+	var visited: Dictionary[StringName, bool] = {start_zone_id: true}
+	var previous: Dictionary[StringName, StringName] = {}
+	var queue_index: int = 0
+	while queue_index < queue.size():
+		var current_id: StringName = queue[queue_index]
+		queue_index += 1
+		for neighbor_id: StringName in get_connected_zone_ids(current_id):
+			if visited.has(neighbor_id):
+				continue
+			var neighbor: HabitatZoneState = get_zone(neighbor_id)
+			if neighbor == null or not neighbor.available:
+				continue
+			visited[neighbor_id] = true
+			previous[neighbor_id] = current_id
+			if neighbor_id == target_zone_id:
+				return _reconstruct_zone_path(
+					start_zone_id,
+					target_zone_id,
+					previous
+				)
+			queue.append(neighbor_id)
+	return empty_path
+
+
+func is_zone_route_valid(
+	route_zone_ids: Array[StringName],
+	start_zone_id: StringName,
+	target_zone_id: StringName
+) -> bool:
+	if (
+		route_zone_ids.is_empty()
+		or route_zone_ids[0] != start_zone_id
+		or route_zone_ids[-1] != target_zone_id
+	):
+		return false
+	for index: int in route_zone_ids.size():
+		var zone: HabitatZoneState = get_zone(route_zone_ids[index])
+		if zone == null or not zone.available:
+			return false
+		if (
+			index > 0
+			and not are_zones_directly_connected(
+				route_zone_ids[index - 1],
+				zone.zone_id
+			)
+		):
+			return false
+	return true
+
+
+func _reconstruct_zone_path(
+	start_zone_id: StringName,
+	target_zone_id: StringName,
+	previous: Dictionary[StringName, StringName]
+) -> Array[StringName]:
+	var reversed_path: Array[StringName] = [target_zone_id]
+	var current_id: StringName = target_zone_id
+	while current_id != start_zone_id:
+		if not previous.has(current_id):
+			return []
+		current_id = previous[current_id]
+		reversed_path.append(current_id)
+	reversed_path.reverse()
+	return reversed_path
 
 
 func create_food_source(

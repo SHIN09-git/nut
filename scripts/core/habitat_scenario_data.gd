@@ -33,6 +33,7 @@ enum ScenarioKind {
 @export var protein_placement_zone_id: StringName = &""
 @export_range(0, 10, 1) var protein_portions: int = 0
 @export var founding_care_data: FoundingCareData
+@export var facility_catalog_data: FacilityCatalogData
 
 
 func is_valid() -> bool:
@@ -93,6 +94,7 @@ func is_valid() -> bool:
 				and protein_placement_zone_id.is_empty()
 				and protein_portions == 0
 				and founding_care_data == null
+				and facility_catalog_data == null
 			)
 		ScenarioKind.SUGAR_FORAGING:
 			return (
@@ -116,6 +118,7 @@ func is_valid() -> bool:
 				and protein_placement_zone_id.is_empty()
 				and protein_portions == 0
 				and founding_care_data == null
+				and facility_catalog_data == null
 				and _has_available_path(
 					nest_zone_id,
 					sugar_placement_zone_id
@@ -151,6 +154,7 @@ func is_valid() -> bool:
 				and protein_placement_zone_id.is_empty()
 				and protein_portions == 0
 				and founding_care_data == null
+				and facility_catalog_data == null
 				and foraging_observation_card_id
 					!= sequence_data.first_worker_observation_card_id
 				and foraging_observation_card_id
@@ -191,6 +195,7 @@ func is_valid() -> bool:
 				and observation_stable_ticks == 0
 				and sequence_data == null
 				and founding_care_data == null
+				and facility_catalog_data == null
 				and _has_available_path(
 					nest_zone_id,
 					sugar_placement_zone_id
@@ -236,6 +241,8 @@ func is_valid() -> bool:
 				and sequence_data == null
 				and founding_care_data != null
 				and founding_care_data.is_valid()
+				and facility_catalog_data != null
+				and facility_catalog_data.is_valid()
 				and foraging_observation_card_id
 					!= founding_care_data
 						.first_worker_observation_card_id

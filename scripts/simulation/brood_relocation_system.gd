@@ -353,7 +353,10 @@ func _find_best_relocation_zone(
 		if (
 			not candidate.available
 			or candidate.zone_id == source_zone_id
-			or not source_zone.can_reach(candidate.zone_id)
+			or not state.are_zones_directly_connected(
+				source_zone_id,
+				candidate.zone_id
+			)
 		):
 			continue
 		var candidate_penalty: float = _get_humidity_penalty(
@@ -390,7 +393,10 @@ func _find_best_available_zone(
 	for candidate: HabitatZoneState in state.zones:
 		if (
 			not candidate.available
-			or not from_zone.can_reach(candidate.zone_id)
+			or not state.are_zones_directly_connected(
+				from_zone_id,
+				candidate.zone_id
+			)
 		):
 			continue
 		var penalty: float = _get_humidity_penalty(candidate.humidity)
@@ -420,7 +426,10 @@ func _is_pre_pickup_task_valid(
 		source_zone == null
 		or target_zone == null
 		or not target_zone.available
-		or not source_zone.can_reach(target_zone.zone_id)
+		or not state.are_zones_directly_connected(
+			source_zone.zone_id,
+			target_zone.zone_id
+		)
 	):
 		return false
 	return (
@@ -447,7 +456,10 @@ func _retarget_carried_brood_if_needed(
 		current_target != null
 		and current_target.available
 		and worker_zone != null
-		and worker_zone.can_reach(current_target.zone_id)
+		and state.are_zones_directly_connected(
+			worker_zone.zone_id,
+			current_target.zone_id
+		)
 	):
 		return
 
