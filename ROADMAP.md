@@ -1,7 +1,7 @@
 # Colony Under Glass · 路线图
 
-> 状态：v0.1 原型完成；v0.2 M5 Windows Demo 候选正在收口，外部 Gate 未通过但已被用户明确豁免为前置条件
-> 当前推进点：完成并推送 `release/v0.2-demo-candidate`；随后按 `CODEX_V1_MASTER_PLAN.md` 进入完整游戏的生产规格锁定
+> 状态：v0.2 M5 Windows Demo 候选已推送；v1 R1 生产规格正在 `docs/v1-production-plan` 锁定，外部 Gate 未通过但已被用户明确豁免为前置条件
+> 当前推进点：提交并推送 R1；随后进入 R2 版本化存档核心
 > 当前产品边界：把生命周期、身份、湿度搬运和糖水觅食组合为同一局连续观察；不增加第三套模拟机制。
 
 第 1～8 节保留 v0.1 的已完成基线和交付纪律；第 9 节记录 v0.2 进度。v0.2 的逐里程碑要求仍以 `CODEX_V0_2_MASTER_PLAN.md` 为准；`GDD.md` 与 `ARCHITECTURE.md` 只描述已经实现的能力。
@@ -258,7 +258,7 @@
 
 ### 下一停止点
 
-M5 分支完成验证并推送后，下一生产步骤是 `CODEX_V1_MASTER_PLAN.md` 的 R1 规格锁定。外部 Gate 保留为未完成风险，不再阻塞开发；合并 `main`、创建 Tag、发布 GitHub Release 或商店发布仍需另行明确授权。
+M5 分支已经完成验证并推送。R1 生产规格锁定在 `docs/v1-production-plan` 执行；其交付索引见 `docs/V1_PRODUCTION_SPEC_INDEX.md`。R1 提交并推送后进入 R2 版本化存档核心。外部 Gate 保留为未完成风险，不再阻塞开发；合并 `main`、创建 Tag、发布 GitHub Release 或商店发布仍需另行明确授权。
 
 ## 10. v1.0 完整游戏规划
 

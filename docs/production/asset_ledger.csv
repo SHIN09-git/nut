@@ -1,0 +1,2 @@
+asset_id,category,repository_path,source_type,creator,source_url_or_contract,license_name,commercial_game_use,marketing_use,modification_allowed,redistribution_allowed,attribution_text,species_review_status,approval_status,approved_by,approved_date,notes
+example_placeholder,example,,internal_procedural,project,,,no,no,yes,no,,not_applicable,reference_only,,,Delete this example row when the first real asset is registered

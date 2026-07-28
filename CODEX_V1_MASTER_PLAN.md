@@ -6,7 +6,7 @@
 >
 > 当前代码基线：`release/v0.2-demo-candidate`
 >
-> 当前事实：M4 技术候选与 R0-B 冻结外测包已完成；7 人无讲解试玩仍未取得数据，外部 Gate 没有通过。用户于 2026-07-28 明确豁免该 Gate 作为继续开发的前置条件，并授权继续完成游戏。M5 Windows Demo 候选正在收口；缺失的外部证据继续作为产品风险记录。
+> 当前事实：M5 Windows Demo 候选已完成并推送；7 人无讲解试玩仍未取得数据，外部 Gate 没有通过。用户于 2026-07-28 明确豁免该 Gate 作为继续开发的前置条件，并授权继续完成游戏。R1 生产规格已拆分为可执行文档；缺失的外部证据继续作为产品风险记录。
 
 本文规划用户要求的完整独立游戏：单个新档案约 3～4 小时、可存档、有明确开始与结局、具有模块化设施布置、丰富但可理解的蚁群行为，以及完整的 UI、设置、无障碍、音画、测试和发行交付。
 
@@ -644,15 +644,17 @@ Gate：
 
 建议分支：`docs/v1-production-plan`
 
+状态：完成候选（2026-07-28）。用户已授权继续完整游戏开发；外部 R0 Gate 仍为 `INCOMPLETE`，不改写为通过。
+
 交付：
 
-- 用户批准本计划。
-- 六章内容矩阵。
-- 设施职责表。
-- 失败与恢复规则。
-- 真实物种和养蚁参数审校计划。
-- 资产与许可计划。
-- 性能和最大实体目标。
+- 用户继续执行授权与规格索引：`docs/V1_PRODUCTION_SPEC_INDEX.md`。
+- 六章内容矩阵：`docs/design/V1_CHAPTER_CONTENT_MATRIX.md`。
+- 设施职责表：`docs/design/V1_FACILITY_RESPONSIBILITY_TABLE.md`。
+- 失败与恢复规则：`docs/design/V1_FAILURE_RECOVERY_RULES.md`。
+- 真实物种和养蚁参数审校计划：`docs/research/V1_SPECIES_REVIEW_PLAN.md`。
+- 资产与许可计划及台账：`docs/production/V1_ASSET_LICENSE_PLAN.md`、`docs/production/asset_ledger.csv`。
+- 性能和最大实体目标：`docs/technical/V1_PERFORMANCE_BUDGET.md`。
 
 ### R2 · 版本化存档核心
 
@@ -817,9 +819,9 @@ R0-B 已从 R0-A 最终完整提交的干净独立 worktree 导出并验证 rele
 用户已明确豁免该 Gate 作为前置条件。当前分支是：
 
 ```text
-release/v0.2-demo-candidate
+docs/v1-production-plan
 ```
 
-M5 完成暂停菜单、显示切换、双语资源、Windows release 构建和实际流程验证后提交并推送。下一生产步骤是 R1 规格锁定；外部数据缺口必须持续列在风险中，未来取得数据时仍使用冻结协议评估。正式美术、音频和批量内容生产仍按各自里程碑推进，不用外部 Gate 豁免替代其专门验证。
+M5 已完成暂停菜单、显示切换、双语资源、Windows release 构建和实际流程验证并推送。R1 已形成六章、设施、失败恢复、科学审校、资产许可和性能预算的独立规格；提交并推送后，下一生产步骤是 R2 版本化存档核心。外部数据缺口必须持续列在风险中，未来取得数据时仍使用冻结协议评估。正式美术、音频和批量内容生产仍按各自里程碑推进，不用外部 Gate 豁免替代其专门验证。
 
 合并 `main`、创建 Tag、发布 GitHub Release 和商店发布继续需要分别明确授权。
