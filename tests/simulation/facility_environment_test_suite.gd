@@ -515,6 +515,7 @@ func _test_r7_save_migrates_environment_defaults() -> void:
 	)
 	previous["state_schema_id"] = SimulationStateCodec.R7_SCHEMA_ID
 	previous["game_version"] = "0.7.0-dev"
+	SaveFixtureDowngrade.strip_r9_fields(previous)
 	var habitat: Dictionary = previous["frozen_config_bundle"]["habitat"]
 	habitat.erase("environment_config")
 	for zone: Dictionary in habitat["zones"]:

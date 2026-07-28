@@ -71,6 +71,7 @@ func validate_tasks(state: ColonyState) -> void:
 				and worker.foraging_task.state
 					!= ForagingTaskModel.State.IDLE
 			)
+			or _has_colony_work_task(worker)
 		):
 			task.reset_to_idle(
 				state.simulation_tick
@@ -310,6 +311,7 @@ func has_valid_state(state: ColonyState) -> bool:
 				ant.foraging_task != null
 				and ant.foraging_task.state != ForagingTaskModel.State.IDLE
 			)
+			or _has_colony_work_task(ant)
 		):
 			return false
 		claimed_brood_ids[task.target_brood_id] = ant.entity_id
@@ -387,6 +389,7 @@ func _is_worker_available(state: ColonyState, worker: AntModel) -> bool:
 		and worker.foraging_task.state == ForagingTaskModel.State.IDLE
 		and worker.feeding_task != null
 		and worker.feeding_task.state == BroodFeedingTaskModel.State.IDLE
+		and not _has_colony_work_task(worker)
 	)
 
 
@@ -434,7 +437,22 @@ func _has_any_active_worker_task(state: ColonyState) -> bool:
 				!= BroodFeedingTaskModel.State.IDLE
 		):
 			return true
+		if _has_colony_work_task(ant):
+			return true
 	return false
+
+
+func _has_colony_work_task(worker: AntModel) -> bool:
+	return (
+		worker.waste_cleanup_task != null
+		and worker.waste_cleanup_task.state
+			!= WasteCleanupTaskModel.State.IDLE
+		or worker.scout_task != null
+		and worker.scout_task.state != ScoutTaskModel.State.IDLE
+		or worker.migration_task != null
+		and worker.migration_task.state
+			!= MigrationTaskModel.State.IDLE
+	)
 
 
 func _get_workers_in_stable_order(state: ColonyState) -> Array[AntModel]:

@@ -2,7 +2,7 @@ class_name SaveGameService
 extends RefCounted
 
 const CURRENT_FORMAT_VERSION: int = 1
-const CURRENT_GAME_VERSION: String = "0.8.0-dev"
+const CURRENT_GAME_VERSION: String = "0.9.0-dev"
 const CURRENT_CONTENT_MANIFEST_ID: String = (
 	"colony-under-glass.r2-base.1"
 )
@@ -269,8 +269,18 @@ func _verify_and_migrate_envelope(envelope: Dictionary) -> Dictionary:
 	match String(current["state_schema_id"]):
 		SimulationStateCodec.CURRENT_SCHEMA_ID:
 			pass
+		SimulationStateCodec.R8_SCHEMA_ID:
+			var migration_result: Dictionary = _migrate_v6_to_v7(current)
+			if not migration_result.get("ok", false):
+				return migration_result
+			current = migration_result["envelope"]
+			migrated = true
 		SimulationStateCodec.R7_SCHEMA_ID:
 			var migration_result: Dictionary = _migrate_v5_to_v6(current)
+			if not migration_result.get("ok", false):
+				return migration_result
+			current = migration_result["envelope"]
+			migration_result = _migrate_v6_to_v7(current)
 			if not migration_result.get("ok", false):
 				return migration_result
 			current = migration_result["envelope"]
@@ -281,6 +291,10 @@ func _verify_and_migrate_envelope(envelope: Dictionary) -> Dictionary:
 				return migration_result
 			current = migration_result["envelope"]
 			migration_result = _migrate_v5_to_v6(current)
+			if not migration_result.get("ok", false):
+				return migration_result
+			current = migration_result["envelope"]
+			migration_result = _migrate_v6_to_v7(current)
 			if not migration_result.get("ok", false):
 				return migration_result
 			current = migration_result["envelope"]
@@ -295,6 +309,10 @@ func _verify_and_migrate_envelope(envelope: Dictionary) -> Dictionary:
 				return migration_result
 			current = migration_result["envelope"]
 			migration_result = _migrate_v5_to_v6(current)
+			if not migration_result.get("ok", false):
+				return migration_result
+			current = migration_result["envelope"]
+			migration_result = _migrate_v6_to_v7(current)
 			if not migration_result.get("ok", false):
 				return migration_result
 			current = migration_result["envelope"]
@@ -313,6 +331,10 @@ func _verify_and_migrate_envelope(envelope: Dictionary) -> Dictionary:
 				return migration_result
 			current = migration_result["envelope"]
 			migration_result = _migrate_v5_to_v6(current)
+			if not migration_result.get("ok", false):
+				return migration_result
+			current = migration_result["envelope"]
+			migration_result = _migrate_v6_to_v7(current)
 			if not migration_result.get("ok", false):
 				return migration_result
 			current = migration_result["envelope"]
@@ -335,6 +357,10 @@ func _verify_and_migrate_envelope(envelope: Dictionary) -> Dictionary:
 				return migration_result
 			current = migration_result["envelope"]
 			migration_result = _migrate_v5_to_v6(current)
+			if not migration_result.get("ok", false):
+				return migration_result
+			current = migration_result["envelope"]
+			migration_result = _migrate_v6_to_v7(current)
 			if not migration_result.get("ok", false):
 				return migration_result
 			current = migration_result["envelope"]
@@ -361,6 +387,10 @@ func _verify_and_migrate_envelope(envelope: Dictionary) -> Dictionary:
 				return migration_result
 			current = migration_result["envelope"]
 			migration_result = _migrate_v5_to_v6(current)
+			if not migration_result.get("ok", false):
+				return migration_result
+			current = migration_result["envelope"]
+			migration_result = _migrate_v6_to_v7(current)
 			if not migration_result.get("ok", false):
 				return migration_result
 			current = migration_result["envelope"]
@@ -906,7 +936,7 @@ func _migrate_v5_to_v6(previous: Dictionary) -> Dictionary:
 
 	var migrated: Dictionary = previous.duplicate(true)
 	migrated["game_version"] = CURRENT_GAME_VERSION
-	migrated["state_schema_id"] = SimulationStateCodec.CURRENT_SCHEMA_ID
+	migrated["state_schema_id"] = SimulationStateCodec.R8_SCHEMA_ID
 	migrated["frozen_config_bundle"] = frozen_bundle
 	migrated["frozen_config_hash"] = CanonicalSaveJson.sha256(frozen_bundle)
 	if String(migrated["frozen_config_hash"]).is_empty():
@@ -917,6 +947,210 @@ func _migrate_v5_to_v6(previous: Dictionary) -> Dictionary:
 	if migrated.is_empty():
 		return _failure("R7 save migration could not be sealed")
 	return {"ok": true, "error": "", "envelope": migrated}
+
+
+func _migrate_v6_to_v7(previous: Dictionary) -> Dictionary:
+	if (
+		typeof(previous.get("frozen_config_bundle")) != TYPE_DICTIONARY
+		or typeof(previous.get("state_payload")) != TYPE_DICTIONARY
+	):
+		return _failure("R8 save payload is invalid")
+	var frozen_bundle: Dictionary = (
+		previous["frozen_config_bundle"] as Dictionary
+	).duplicate(true)
+	var habitat_value: Variant = frozen_bundle.get("habitat")
+	var is_act1: bool = false
+	var nest_zone_id: String = ""
+	if habitat_value != null:
+		if typeof(habitat_value) != TYPE_DICTIONARY:
+			return _failure("R8 habitat configuration is invalid")
+		var habitat: Dictionary = (
+			habitat_value as Dictionary
+		).duplicate(true)
+		if habitat.has("colony_work_config"):
+			return _failure("R8 habitat unexpectedly contains R9 data")
+		is_act1 = (
+			String(habitat.get("scenario_id", ""))
+			== "act1_test_tube"
+		)
+		nest_zone_id = String(habitat.get("nest_zone_id", ""))
+		if typeof(habitat.get("zones")) != TYPE_ARRAY:
+			return _failure("R8 habitat zones are invalid")
+		var config_zones: Array[Dictionary] = []
+		for zone_value: Variant in habitat["zones"]:
+			if typeof(zone_value) != TYPE_DICTIONARY:
+				return _failure("R8 habitat zone is invalid")
+			var zone: Dictionary = (
+				zone_value as Dictionary
+			).duplicate(true)
+			if zone.has("initially_discovered"):
+				return _failure(
+					"R8 zone unexpectedly contains R9 discovery data"
+				)
+			zone["initially_discovered"] = true
+			config_zones.append(zone)
+		habitat["zones"] = config_zones
+		habitat["colony_work_config"] = (
+			_r9_colony_work_payload() if is_act1 else null
+		)
+		frozen_bundle["habitat"] = habitat
+
+	var state_payload: Dictionary = (
+		previous["state_payload"] as Dictionary
+	).duplicate(true)
+	if state_payload.has("colony_work"):
+		return _failure("R8 state unexpectedly contains R9 work data")
+	var queen_value: Variant = state_payload.get("queen")
+	if typeof(queen_value) != TYPE_DICTIONARY:
+		return _failure("R8 queen state is invalid")
+	var queen: Dictionary = (queen_value as Dictionary).duplicate(true)
+	if queen.has("zone_id") or queen.has("zone_entered_tick"):
+		return _failure("R8 queen unexpectedly contains R9 data")
+	queen["zone_id"] = nest_zone_id
+	queen["zone_entered_tick"] = 0
+	state_payload["queen"] = queen
+
+	if typeof(state_payload.get("zones")) != TYPE_ARRAY:
+		return _failure("R8 zone state is invalid")
+	var state_zones: Array[Dictionary] = []
+	for zone_value: Variant in state_payload["zones"]:
+		if typeof(zone_value) != TYPE_DICTIONARY:
+			return _failure("R8 zone state is invalid")
+		var zone: Dictionary = (zone_value as Dictionary).duplicate(true)
+		if zone.has("discovered") or zone.has("discovered_tick"):
+			return _failure(
+				"R8 zone unexpectedly contains R9 discovery state"
+			)
+		zone["discovered"] = true
+		zone["discovered_tick"] = 0
+		state_zones.append(zone)
+	state_payload["zones"] = state_zones
+
+	if typeof(state_payload.get("ants")) != TYPE_ARRAY:
+		return _failure("R8 ant state is invalid")
+	var ants: Array[Dictionary] = []
+	for ant_value: Variant in state_payload["ants"]:
+		if typeof(ant_value) != TYPE_DICTIONARY:
+			return _failure("R8 ant state is invalid")
+		var ant: Dictionary = (ant_value as Dictionary).duplicate(true)
+		for key: String in [
+			"waste_cleanup_task",
+			"scout_task",
+			"migration_task",
+		]:
+			if ant.has(key):
+				return _failure("R8 ant unexpectedly contains R9 tasks")
+		var is_worker: bool = (
+			int(ant.get("life_stage", -1))
+			== AntModel.LifeStage.WORKER
+		)
+		ant["waste_cleanup_task"] = (
+			_r9_idle_waste_task_payload() if is_worker else null
+		)
+		ant["scout_task"] = (
+			_r9_idle_scout_task_payload() if is_worker else null
+		)
+		ant["migration_task"] = (
+			_r9_idle_migration_task_payload() if is_worker else null
+		)
+		ants.append(ant)
+	state_payload["ants"] = ants
+	state_payload["colony_work"] = (
+		_r9_colony_work_state_payload() if is_act1 else null
+	)
+
+	var migrated: Dictionary = previous.duplicate(true)
+	migrated["game_version"] = CURRENT_GAME_VERSION
+	migrated["state_schema_id"] = SimulationStateCodec.CURRENT_SCHEMA_ID
+	migrated["frozen_config_bundle"] = frozen_bundle
+	migrated["frozen_config_hash"] = CanonicalSaveJson.sha256(
+		frozen_bundle
+	)
+	if String(migrated["frozen_config_hash"]).is_empty():
+		return _failure("R9 frozen configuration hash could not be created")
+	migrated["state_payload"] = state_payload
+	migrated = seal_envelope(migrated)
+	if migrated.is_empty():
+		return _failure("R8 save migration could not be sealed")
+	return {"ok": true, "error": "", "envelope": migrated}
+
+
+func _r9_colony_work_payload() -> Dictionary:
+	return {
+		"waste_source_pollution_min": 0.08,
+		"waste_batch_amount": 0.04,
+		"waste_decision_interval_ticks": 20,
+		"waste_travel_ticks_per_connection": 12,
+		"waste_pickup_duration_ticks": 8,
+		"waste_drop_duration_ticks": 8,
+		"scout_decision_interval_ticks": 20,
+		"scout_travel_ticks_per_connection": 14,
+		"scout_observe_duration_ticks": 20,
+		"migration_min_improvement": 0.18,
+		"migration_pollution_max": 0.20,
+		"migration_target_stable_ticks": 30,
+		"migration_minimum_zone_dwell_ticks": 60,
+		"migration_decision_interval_ticks": 20,
+		"migration_travel_ticks_per_connection": 16,
+		"migration_pickup_duration_ticks": 8,
+		"migration_drop_duration_ticks": 8,
+	}
+
+
+func _r9_idle_waste_task_payload() -> Dictionary:
+	return {
+		"state": WasteCleanupTaskModel.State.IDLE,
+		"origin_zone_id": "",
+		"source_zone_id": "",
+		"target_tray_facility_id": -1,
+		"target_zone_id": "",
+		"route_zone_ids": [],
+		"reserved_amount": 0.0,
+		"carried_amount": 0.0,
+		"elapsed_ticks": 0,
+		"duration_ticks": 0,
+		"next_decision_tick": 0,
+	}
+
+
+func _r9_idle_scout_task_payload() -> Dictionary:
+	return {
+		"state": ScoutTaskModel.State.IDLE,
+		"origin_zone_id": "",
+		"target_zone_id": "",
+		"route_zone_ids": [],
+		"elapsed_ticks": 0,
+		"duration_ticks": 0,
+		"next_decision_tick": 0,
+	}
+
+
+func _r9_idle_migration_task_payload() -> Dictionary:
+	return {
+		"state": MigrationTaskModel.State.IDLE,
+		"origin_zone_id": "",
+		"member_origin_zone_id": "",
+		"target_entity_id": -1,
+		"target_zone_id": "",
+		"carried_entity_id": -1,
+		"route_zone_ids": [],
+		"returning_to_origin": false,
+		"elapsed_ticks": 0,
+		"duration_ticks": 0,
+		"next_decision_tick": 0,
+	}
+
+
+func _r9_colony_work_state_payload() -> Dictionary:
+	return {
+		"migration_candidate_zone_id": "",
+		"migration_candidate_stable_ticks": 0,
+		"migration_target_zone_id": "",
+		"completed_migration_count": 0,
+		"scouted_zone_count": 0,
+		"delivered_waste_batch_count": 0,
+		"cleaned_waste_tray_count": 0,
+	}
 
 
 func _r8_environment_payload() -> Dictionary:

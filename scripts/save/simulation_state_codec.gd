@@ -1,7 +1,8 @@
 class_name SimulationStateCodec
 extends RefCounted
 
-const CURRENT_SCHEMA_ID: String = "r8.authority.v6"
+const CURRENT_SCHEMA_ID: String = "r9.authority.v7"
+const R8_SCHEMA_ID: String = "r8.authority.v6"
 const R7_SCHEMA_ID: String = "r7.authority.v5"
 const R6_SCHEMA_ID: String = "r6.authority.v4"
 const R5_SCHEMA_ID: String = "r5.authority.v3"
@@ -208,6 +209,9 @@ static func _encode_habitat(config: HabitatScenarioConfig) -> Dictionary:
 		"environment_config": _encode_environment_config(
 			config.environment_config
 		),
+		"colony_work_config": _encode_colony_work_config(
+			config.colony_work_config
+		),
 	}
 
 
@@ -263,11 +267,16 @@ static func _encode_state(state: ColonyState) -> Dictionary:
 	var act1: Variant = null
 	if state.act1_state != null:
 		act1 = _encode_act1_state(state.act1_state)
+	var colony_work: Variant = null
+	if state.colony_work_state != null:
+		colony_work = _encode_colony_work_state(state.colony_work_state)
 	return {
 		"simulation_tick": state.simulation_tick,
 		"queen": {
 			"entity_id": state.queen.entity_id,
 			"laid_egg_count": state.queen.laid_egg_count,
+			"zone_id": String(state.queen.zone_id),
+			"zone_entered_tick": state.queen.zone_entered_tick,
 		},
 		"ants": ants,
 		"zones": zones,
@@ -289,6 +298,7 @@ static func _encode_state(state: ColonyState) -> Dictionary:
 		"nutrition": nutrition,
 		"act1": act1,
 		"layout": _encode_layout_state(state.layout_state),
+		"colony_work": colony_work,
 		"observation_events": events,
 	}
 
@@ -429,6 +439,65 @@ static func _encode_environment_config(
 	}
 
 
+static func _encode_colony_work_config(
+	config: ColonyWorkConfig
+) -> Variant:
+	if config == null:
+		return null
+	return {
+		"waste_source_pollution_min":
+			config.waste_source_pollution_min,
+		"waste_batch_amount": config.waste_batch_amount,
+		"waste_decision_interval_ticks":
+			config.waste_decision_interval_ticks,
+		"waste_travel_ticks_per_connection":
+			config.waste_travel_ticks_per_connection,
+		"waste_pickup_duration_ticks":
+			config.waste_pickup_duration_ticks,
+		"waste_drop_duration_ticks":
+			config.waste_drop_duration_ticks,
+		"scout_decision_interval_ticks":
+			config.scout_decision_interval_ticks,
+		"scout_travel_ticks_per_connection":
+			config.scout_travel_ticks_per_connection,
+		"scout_observe_duration_ticks":
+			config.scout_observe_duration_ticks,
+		"migration_min_improvement":
+			config.migration_min_improvement,
+		"migration_pollution_max": config.migration_pollution_max,
+		"migration_target_stable_ticks":
+			config.migration_target_stable_ticks,
+		"migration_minimum_zone_dwell_ticks":
+			config.migration_minimum_zone_dwell_ticks,
+		"migration_decision_interval_ticks":
+			config.migration_decision_interval_ticks,
+		"migration_travel_ticks_per_connection":
+			config.migration_travel_ticks_per_connection,
+		"migration_pickup_duration_ticks":
+			config.migration_pickup_duration_ticks,
+		"migration_drop_duration_ticks":
+			config.migration_drop_duration_ticks,
+	}
+
+
+static func _encode_colony_work_state(
+	work: ColonyWorkState
+) -> Dictionary:
+	return {
+		"migration_candidate_zone_id":
+			String(work.migration_candidate_zone_id),
+		"migration_candidate_stable_ticks":
+			work.migration_candidate_stable_ticks,
+		"migration_target_zone_id":
+			String(work.migration_target_zone_id),
+		"completed_migration_count": work.completed_migration_count,
+		"scouted_zone_count": work.scouted_zone_count,
+		"delivered_waste_batch_count":
+			work.delivered_waste_batch_count,
+		"cleaned_waste_tray_count": work.cleaned_waste_tray_count,
+	}
+
+
 static func _encode_facility_effect_config(
 	config: FacilityEffectConfig
 ) -> Dictionary:
@@ -548,6 +617,17 @@ static func _encode_ant(ant: AntModel) -> Dictionary:
 			"duration_ticks": ant.feeding_task.duration_ticks,
 			"next_decision_tick": ant.feeding_task.next_decision_tick,
 		}
+	var waste_cleanup_task: Variant = null
+	if ant.waste_cleanup_task != null:
+		waste_cleanup_task = _encode_waste_cleanup_task(
+			ant.waste_cleanup_task
+		)
+	var scout_task: Variant = null
+	if ant.scout_task != null:
+		scout_task = _encode_scout_task(ant.scout_task)
+	var migration_task: Variant = null
+	if ant.migration_task != null:
+		migration_task = _encode_migration_task(ant.migration_task)
 	return {
 		"entity_id": ant.entity_id,
 		"life_stage": ant.life_stage,
@@ -560,6 +640,57 @@ static func _encode_ant(ant: AntModel) -> Dictionary:
 		"worker_task": worker_task,
 		"foraging_task": foraging_task,
 		"feeding_task": feeding_task,
+		"waste_cleanup_task": waste_cleanup_task,
+		"scout_task": scout_task,
+		"migration_task": migration_task,
+	}
+
+
+static func _encode_waste_cleanup_task(
+	task: WasteCleanupTaskModel
+) -> Dictionary:
+	return {
+		"state": task.state,
+		"origin_zone_id": String(task.origin_zone_id),
+		"source_zone_id": String(task.source_zone_id),
+		"target_tray_facility_id": task.target_tray_facility_id,
+		"target_zone_id": String(task.target_zone_id),
+		"route_zone_ids": _strings_from_names(task.route_zone_ids),
+		"reserved_amount": task.reserved_amount,
+		"carried_amount": task.carried_amount,
+		"elapsed_ticks": task.elapsed_ticks,
+		"duration_ticks": task.duration_ticks,
+		"next_decision_tick": task.next_decision_tick,
+	}
+
+
+static func _encode_scout_task(task: ScoutTaskModel) -> Dictionary:
+	return {
+		"state": task.state,
+		"origin_zone_id": String(task.origin_zone_id),
+		"target_zone_id": String(task.target_zone_id),
+		"route_zone_ids": _strings_from_names(task.route_zone_ids),
+		"elapsed_ticks": task.elapsed_ticks,
+		"duration_ticks": task.duration_ticks,
+		"next_decision_tick": task.next_decision_tick,
+	}
+
+
+static func _encode_migration_task(
+	task: MigrationTaskModel
+) -> Dictionary:
+	return {
+		"state": task.state,
+		"origin_zone_id": String(task.origin_zone_id),
+		"member_origin_zone_id": String(task.member_origin_zone_id),
+		"target_entity_id": task.target_entity_id,
+		"target_zone_id": String(task.target_zone_id),
+		"carried_entity_id": task.carried_entity_id,
+		"route_zone_ids": _strings_from_names(task.route_zone_ids),
+		"returning_to_origin": task.returning_to_origin,
+		"elapsed_ticks": task.elapsed_ticks,
+		"duration_ticks": task.duration_ticks,
+		"next_decision_tick": task.next_decision_tick,
 	}
 
 
@@ -575,6 +706,7 @@ static func _encode_config_zone(
 		"connected_zone_ids":
 			_strings_from_names(connected_zone_ids),
 		"available": zone.available,
+		"initially_discovered": zone.discovered,
 	}
 
 
@@ -585,6 +717,8 @@ static func _encode_state_zone(zone: HabitatZoneState) -> Dictionary:
 		"light_exposure": zone.light_exposure,
 		"pollution": zone.pollution,
 		"available": zone.available,
+		"discovered": zone.discovered,
+		"discovered_tick": zone.discovered_tick,
 	}
 
 
@@ -798,6 +932,7 @@ static func _decode_habitat_data(value: Variant) -> Dictionary:
 		"founding_care_config",
 		"facility_catalog_config",
 		"environment_config",
+		"colony_work_config",
 	]
 	if not _is_dictionary_with_keys(value, keys):
 		return _failure("Habitat configuration is invalid")
@@ -908,6 +1043,12 @@ static func _decode_habitat_data(value: Variant) -> Dictionary:
 	if not environment_result.get("ok", false):
 		return environment_result
 	habitat.environment_data = environment_result["environment_data"]
+	var work_result: Dictionary = _decode_colony_work_data(
+		value["colony_work_config"]
+	)
+	if not work_result.get("ok", false):
+		return work_result
+	habitat.colony_work_data = work_result["colony_work_data"]
 	if not habitat.is_valid():
 		return _failure("Frozen habitat configuration is not valid")
 	return {"ok": true, "error": "", "habitat_data": habitat}
@@ -923,6 +1064,7 @@ static func _decode_zone_data(value: Variant) -> Dictionary:
 			"pollution",
 			"connected_zone_ids",
 			"available",
+			"initially_discovered",
 		]
 	):
 		return _failure("Zone configuration is invalid")
@@ -933,6 +1075,7 @@ static func _decode_zone_data(value: Variant) -> Dictionary:
 		or not _is_finite_number(value["pollution"])
 		or typeof(value["connected_zone_ids"]) != TYPE_ARRAY
 		or typeof(value["available"]) != TYPE_BOOL
+		or typeof(value["initially_discovered"]) != TYPE_BOOL
 	):
 		return _failure("Zone configuration has an invalid value")
 	var connections_result: Dictionary = _decode_string_names(
@@ -947,6 +1090,7 @@ static func _decode_zone_data(value: Variant) -> Dictionary:
 	zone.initial_pollution = float(value["pollution"])
 	zone.connected_zone_ids.assign(connections_result["values"])
 	zone.available = bool(value["available"])
+	zone.initially_discovered = bool(value["initially_discovered"])
 	if not zone.is_valid():
 		return _failure("Frozen zone configuration is not valid")
 	return {"ok": true, "error": "", "zone_data": zone}
@@ -982,6 +1126,63 @@ static func _decode_environment_data(value: Variant) -> Dictionary:
 	if not data.is_valid():
 		return _failure("Frozen environment configuration is not valid")
 	return {"ok": true, "error": "", "environment_data": data}
+
+
+static func _decode_colony_work_data(value: Variant) -> Dictionary:
+	if value == null:
+		return {
+			"ok": true,
+			"error": "",
+			"colony_work_data": null,
+		}
+	var float_keys: Array[String] = [
+		"waste_source_pollution_min",
+		"waste_batch_amount",
+		"migration_min_improvement",
+		"migration_pollution_max",
+	]
+	var int_keys: Array[String] = [
+		"waste_decision_interval_ticks",
+		"waste_travel_ticks_per_connection",
+		"waste_pickup_duration_ticks",
+		"waste_drop_duration_ticks",
+		"scout_decision_interval_ticks",
+		"scout_travel_ticks_per_connection",
+		"scout_observe_duration_ticks",
+		"migration_target_stable_ticks",
+		"migration_minimum_zone_dwell_ticks",
+		"migration_decision_interval_ticks",
+		"migration_travel_ticks_per_connection",
+		"migration_pickup_duration_ticks",
+		"migration_drop_duration_ticks",
+	]
+	var keys: Array[String] = []
+	keys.append_array(float_keys)
+	keys.append_array(int_keys)
+	if not _is_dictionary_with_keys(value, keys):
+		return _failure("Colony-work configuration is invalid")
+	for key: String in float_keys:
+		if not _is_finite_number(value[key]):
+			return _failure("Colony-work configuration is non-finite")
+	for key: String in int_keys:
+		if not _is_integral_number(value[key]):
+			return _failure(
+				"Colony-work configuration contains a non-integer"
+			)
+	var data: ColonyWorkData = ColonyWorkData.new()
+	data.data_status = &"prototype_pacing_fixture"
+	data.scientifically_validated = false
+	for key: String in float_keys:
+		data.set(key, float(value[key]))
+	for key: String in int_keys:
+		data.set(key, int(value[key]))
+	if not data.is_valid():
+		return _failure("Frozen colony-work configuration is not valid")
+	return {
+		"ok": true,
+		"error": "",
+		"colony_work_data": data,
+	}
 
 
 static func _decode_foraging_data(value: Variant) -> Dictionary:
@@ -1508,6 +1709,7 @@ static func _decode_state(
 			"nutrition",
 			"act1",
 			"layout",
+			"colony_work",
 			"observation_events",
 		]
 	):
@@ -1549,12 +1751,21 @@ static func _decode_state(
 		return _failure("State payload contains an invalid collection")
 	if not _is_dictionary_with_keys(
 		payload["queen"],
-		["entity_id", "laid_egg_count"]
+		[
+			"entity_id",
+			"laid_egg_count",
+			"zone_id",
+			"zone_entered_tick",
+		]
 	):
 		return _failure("Queen state is invalid")
 	if (
 		not _is_nonnegative_int(payload["queen"]["entity_id"])
 		or not _is_nonnegative_int(payload["queen"]["laid_egg_count"])
+		or typeof(payload["queen"]["zone_id"]) != TYPE_STRING
+		or not _is_integral_number(
+			payload["queen"]["zone_entered_tick"]
+		)
 	):
 		return _failure("Queen state contains an invalid counter")
 
@@ -1562,6 +1773,10 @@ static func _decode_state(
 	state.simulation_tick = int(payload["simulation_tick"])
 	state.queen = QueenModel.new(int(payload["queen"]["entity_id"]))
 	state.queen.laid_egg_count = int(payload["queen"]["laid_egg_count"])
+	state.queen.zone_id = StringName(payload["queen"]["zone_id"])
+	state.queen.zone_entered_tick = int(
+		payload["queen"]["zone_entered_tick"]
+	)
 	state.ants.clear()
 	for ant_value: Variant in payload["ants"]:
 		var ant_result: Dictionary = _decode_ant(ant_value)
@@ -1631,6 +1846,12 @@ static func _decode_state(
 	if not layout_result.get("ok", false):
 		return layout_result
 	state.layout_state = layout_result["layout"]
+	var colony_work_result: Dictionary = _decode_colony_work_state(
+		payload["colony_work"]
+	)
+	if not colony_work_result.get("ok", false):
+		return colony_work_result
+	state.colony_work_state = colony_work_result["colony_work"]
 	state._observation_events.clear()
 	for event_value: Variant in payload["observation_events"]:
 		var event_result: Dictionary = _decode_event(event_value)
@@ -1642,6 +1863,54 @@ static func _decode_state(
 		next_ids["observation_event_id"]
 	)
 	return {"ok": true, "error": "", "state": state}
+
+
+static func _decode_colony_work_state(value: Variant) -> Dictionary:
+	if value == null:
+		return {"ok": true, "error": "", "colony_work": null}
+	var id_keys: Array[String] = [
+		"migration_candidate_zone_id",
+		"migration_target_zone_id",
+	]
+	var int_keys: Array[String] = [
+		"migration_candidate_stable_ticks",
+		"completed_migration_count",
+		"scouted_zone_count",
+		"delivered_waste_batch_count",
+		"cleaned_waste_tray_count",
+	]
+	var keys: Array[String] = []
+	keys.append_array(id_keys)
+	keys.append_array(int_keys)
+	if not _is_dictionary_with_keys(value, keys):
+		return _failure("Colony-work state is invalid")
+	for key: String in id_keys:
+		if typeof(value[key]) != TYPE_STRING:
+			return _failure("Colony-work state has a non-string ID")
+	for key: String in int_keys:
+		if not _is_nonnegative_int(value[key]):
+			return _failure("Colony-work state has an invalid counter")
+	var work: ColonyWorkState = ColonyWorkState.new()
+	work.migration_candidate_zone_id = StringName(
+		value["migration_candidate_zone_id"]
+	)
+	work.migration_candidate_stable_ticks = int(
+		value["migration_candidate_stable_ticks"]
+	)
+	work.migration_target_zone_id = StringName(
+		value["migration_target_zone_id"]
+	)
+	work.completed_migration_count = int(
+		value["completed_migration_count"]
+	)
+	work.scouted_zone_count = int(value["scouted_zone_count"])
+	work.delivered_waste_batch_count = int(
+		value["delivered_waste_batch_count"]
+	)
+	work.cleaned_waste_tray_count = int(
+		value["cleaned_waste_tray_count"]
+	)
+	return {"ok": true, "error": "", "colony_work": work}
 
 
 static func _decode_act1_state(value: Variant) -> Dictionary:
@@ -1847,6 +2116,9 @@ static func _decode_ant(value: Variant) -> Dictionary:
 			"worker_task",
 			"foraging_task",
 			"feeding_task",
+			"waste_cleanup_task",
+			"scout_task",
+			"migration_task",
 		]
 	):
 		return _failure("Ant state is invalid")
@@ -1892,6 +2164,24 @@ static func _decode_ant(value: Variant) -> Dictionary:
 	if not feeding_result.get("ok", false):
 		return feeding_result
 	ant.feeding_task = feeding_result["task"]
+	var waste_result: Dictionary = _decode_waste_cleanup_task(
+		value["waste_cleanup_task"]
+	)
+	if not waste_result.get("ok", false):
+		return waste_result
+	ant.waste_cleanup_task = waste_result["task"]
+	var scout_result: Dictionary = _decode_scout_task(
+		value["scout_task"]
+	)
+	if not scout_result.get("ok", false):
+		return scout_result
+	ant.scout_task = scout_result["task"]
+	var migration_result: Dictionary = _decode_migration_task(
+		value["migration_task"]
+	)
+	if not migration_result.get("ok", false):
+		return migration_result
+	ant.migration_task = migration_result["task"]
 	return {"ok": true, "error": "", "ant": ant}
 
 
@@ -2054,6 +2344,181 @@ static func _decode_feeding_task(value: Variant) -> Dictionary:
 	return {"ok": true, "error": "", "task": task}
 
 
+static func _decode_waste_cleanup_task(value: Variant) -> Dictionary:
+	if value == null:
+		return {"ok": true, "error": "", "task": null}
+	var id_keys: Array[String] = [
+		"origin_zone_id",
+		"source_zone_id",
+		"target_zone_id",
+	]
+	var int_keys: Array[String] = [
+		"state",
+		"target_tray_facility_id",
+		"elapsed_ticks",
+		"duration_ticks",
+		"next_decision_tick",
+	]
+	var keys: Array[String] = []
+	keys.append_array(id_keys)
+	keys.append_array(int_keys)
+	keys.append_array([
+		"route_zone_ids",
+		"reserved_amount",
+		"carried_amount",
+	])
+	if not _is_dictionary_with_keys(value, keys):
+		return _failure("Waste-cleanup task is invalid")
+	for key: String in id_keys:
+		if typeof(value[key]) != TYPE_STRING:
+			return _failure("Waste-cleanup task has a non-string ID")
+	for key: String in int_keys:
+		if not _is_integral_number(value[key]):
+			return _failure("Waste-cleanup task has a non-integer")
+	if (
+		int(value["state"]) < WasteCleanupTaskModel.State.IDLE
+		or int(value["state"]) > WasteCleanupTaskModel.State.DROPPING
+		or int(value["elapsed_ticks"]) < 0
+		or int(value["duration_ticks"]) < 0
+		or int(value["next_decision_tick"]) < 0
+		or not _is_finite_number(value["reserved_amount"])
+		or not _is_finite_number(value["carried_amount"])
+		or float(value["reserved_amount"]) < 0.0
+		or float(value["carried_amount"]) < 0.0
+	):
+		return _failure("Waste-cleanup task has invalid data")
+	var route_result: Dictionary = _decode_string_names(
+		value["route_zone_ids"]
+	)
+	if not route_result.get("ok", false):
+		return route_result
+	var task: WasteCleanupTaskModel = WasteCleanupTaskModel.new()
+	task.state = int(value["state"])
+	task.origin_zone_id = StringName(value["origin_zone_id"])
+	task.source_zone_id = StringName(value["source_zone_id"])
+	task.target_tray_facility_id = int(
+		value["target_tray_facility_id"]
+	)
+	task.target_zone_id = StringName(value["target_zone_id"])
+	task.route_zone_ids.assign(route_result["values"])
+	task.reserved_amount = float(value["reserved_amount"])
+	task.carried_amount = float(value["carried_amount"])
+	task.elapsed_ticks = int(value["elapsed_ticks"])
+	task.duration_ticks = int(value["duration_ticks"])
+	task.next_decision_tick = int(value["next_decision_tick"])
+	return {"ok": true, "error": "", "task": task}
+
+
+static func _decode_scout_task(value: Variant) -> Dictionary:
+	if value == null:
+		return {"ok": true, "error": "", "task": null}
+	var keys: Array[String] = [
+		"state",
+		"origin_zone_id",
+		"target_zone_id",
+		"route_zone_ids",
+		"elapsed_ticks",
+		"duration_ticks",
+		"next_decision_tick",
+	]
+	if not _is_dictionary_with_keys(value, keys):
+		return _failure("Scout task is invalid")
+	for key: String in [
+		"state",
+		"elapsed_ticks",
+		"duration_ticks",
+		"next_decision_tick",
+	]:
+		if not _is_integral_number(value[key]):
+			return _failure("Scout task has a non-integer")
+	if (
+		int(value["state"]) < ScoutTaskModel.State.IDLE
+		or int(value["state"]) > ScoutTaskModel.State.RETURNING
+		or int(value["elapsed_ticks"]) < 0
+		or int(value["duration_ticks"]) < 0
+		or int(value["next_decision_tick"]) < 0
+		or typeof(value["origin_zone_id"]) != TYPE_STRING
+		or typeof(value["target_zone_id"]) != TYPE_STRING
+	):
+		return _failure("Scout task has invalid data")
+	var route_result: Dictionary = _decode_string_names(
+		value["route_zone_ids"]
+	)
+	if not route_result.get("ok", false):
+		return route_result
+	var task: ScoutTaskModel = ScoutTaskModel.new()
+	task.state = int(value["state"])
+	task.origin_zone_id = StringName(value["origin_zone_id"])
+	task.target_zone_id = StringName(value["target_zone_id"])
+	task.route_zone_ids.assign(route_result["values"])
+	task.elapsed_ticks = int(value["elapsed_ticks"])
+	task.duration_ticks = int(value["duration_ticks"])
+	task.next_decision_tick = int(value["next_decision_tick"])
+	return {"ok": true, "error": "", "task": task}
+
+
+static func _decode_migration_task(value: Variant) -> Dictionary:
+	if value == null:
+		return {"ok": true, "error": "", "task": null}
+	var keys: Array[String] = [
+		"state",
+		"origin_zone_id",
+		"member_origin_zone_id",
+		"target_entity_id",
+		"target_zone_id",
+		"carried_entity_id",
+		"route_zone_ids",
+		"returning_to_origin",
+		"elapsed_ticks",
+		"duration_ticks",
+		"next_decision_tick",
+	]
+	if not _is_dictionary_with_keys(value, keys):
+		return _failure("Migration task is invalid")
+	for key: String in [
+		"state",
+		"target_entity_id",
+		"carried_entity_id",
+		"elapsed_ticks",
+		"duration_ticks",
+		"next_decision_tick",
+	]:
+		if not _is_integral_number(value[key]):
+			return _failure("Migration task has a non-integer")
+	if (
+		int(value["state"]) < MigrationTaskModel.State.IDLE
+		or int(value["state"]) > MigrationTaskModel.State.DROPPING
+		or int(value["elapsed_ticks"]) < 0
+		or int(value["duration_ticks"]) < 0
+		or int(value["next_decision_tick"]) < 0
+		or typeof(value["origin_zone_id"]) != TYPE_STRING
+		or typeof(value["member_origin_zone_id"]) != TYPE_STRING
+		or typeof(value["target_zone_id"]) != TYPE_STRING
+		or typeof(value["returning_to_origin"]) != TYPE_BOOL
+	):
+		return _failure("Migration task has invalid data")
+	var route_result: Dictionary = _decode_string_names(
+		value["route_zone_ids"]
+	)
+	if not route_result.get("ok", false):
+		return route_result
+	var task: MigrationTaskModel = MigrationTaskModel.new()
+	task.state = int(value["state"])
+	task.origin_zone_id = StringName(value["origin_zone_id"])
+	task.member_origin_zone_id = StringName(
+		value["member_origin_zone_id"]
+	)
+	task.target_entity_id = int(value["target_entity_id"])
+	task.target_zone_id = StringName(value["target_zone_id"])
+	task.carried_entity_id = int(value["carried_entity_id"])
+	task.route_zone_ids.assign(route_result["values"])
+	task.returning_to_origin = bool(value["returning_to_origin"])
+	task.elapsed_ticks = int(value["elapsed_ticks"])
+	task.duration_ticks = int(value["duration_ticks"])
+	task.next_decision_tick = int(value["next_decision_tick"])
+	return {"ok": true, "error": "", "task": task}
+
+
 static func _decode_zone_state(value: Variant) -> Dictionary:
 	if not _is_dictionary_with_keys(
 		value,
@@ -2063,6 +2528,8 @@ static func _decode_zone_state(value: Variant) -> Dictionary:
 			"light_exposure",
 			"pollution",
 			"available",
+			"discovered",
+			"discovered_tick",
 		]
 	):
 		return _failure("Zone state is invalid")
@@ -2078,6 +2545,17 @@ static func _decode_zone_state(value: Variant) -> Dictionary:
 		or float(value["pollution"]) < 0.0
 		or float(value["pollution"]) > 1.0
 		or typeof(value["available"]) != TYPE_BOOL
+		or typeof(value["discovered"]) != TYPE_BOOL
+		or not _is_integral_number(value["discovered_tick"])
+		or int(value["discovered_tick"]) < -1
+		or (
+			bool(value["discovered"])
+			and int(value["discovered_tick"]) < 0
+		)
+		or (
+			not bool(value["discovered"])
+			and int(value["discovered_tick"]) != -1
+		)
 	):
 		return _failure("Zone state contains invalid data")
 	return {
@@ -2089,7 +2567,9 @@ static func _decode_zone_state(value: Variant) -> Dictionary:
 			[],
 			bool(value["available"]),
 			float(value["light_exposure"]),
-			float(value["pollution"])
+			float(value["pollution"]),
+			bool(value["discovered"]),
+			int(value["discovered_tick"])
 		),
 	}
 
@@ -2349,7 +2829,7 @@ static func _decode_event(value: Variant) -> Dictionary:
 		or int(value["tick"]) < 0
 		or int(value["event_type"]) < ObservationEvent.Type.RELOCATION_STARTED
 		or int(value["event_type"])
-			> ObservationEvent.Type.FIRST_PUPA_OBSERVED
+			> ObservationEvent.Type.MIGRATION_COMPLETED
 		or typeof(value["source_zone_id"]) != TYPE_STRING
 		or typeof(value["target_zone_id"]) != TYPE_STRING
 	):
@@ -2413,7 +2893,7 @@ static func _decode_pending_commands(
 			or command_type < ColonySimulation.PendingCommandType.WATER_ACTION
 			or command_type
 				> ColonySimulation.PendingCommandType
-					.SET_GATE_OPEN_ACTION
+					.CLEAN_WASTE_TRAY_ACTION
 		):
 			return _failure("Pending command ordering or type is invalid")
 		commands.append(PendingSimulationCommand.new(
@@ -2427,6 +2907,28 @@ static func _decode_pending_commands(
 		))
 		previous_sequence_id = sequence_id
 	return {"ok": true, "error": "", "commands": commands}
+
+
+static func _event_subject_is_valid(
+	event: ObservationEvent,
+	entity_ids: Dictionary[int, bool],
+	state: ColonyState
+) -> bool:
+	if entity_ids.has(event.subject_entity_id):
+		return true
+	if event.event_type in [
+		ObservationEvent.Type.WASTE_CLEANUP_STARTED,
+		ObservationEvent.Type.WASTE_PICKED_UP,
+		ObservationEvent.Type.WASTE_DELIVERED,
+		ObservationEvent.Type.WASTE_TRAY_CLEANED,
+	]:
+		return (
+			state.layout_state != null
+			and state.layout_state.get_facility(
+				event.subject_entity_id
+			) != null
+		)
+	return false
 
 
 static func _has_valid_core_state(simulation: ColonySimulation) -> bool:
@@ -2492,6 +2994,9 @@ static func _has_valid_core_state(simulation: ColonySimulation) -> bool:
 			or not _is_finite_number(zone.pollution)
 			or zone.pollution < 0.0
 			or zone.pollution > 1.0
+			or zone.discovered_tick < -1
+			or (zone.discovered and zone.discovered_tick < 0)
+			or (not zone.discovered and zone.discovered_tick != -1)
 		):
 			return false
 		zone_ids[zone.zone_id] = true
@@ -2523,7 +3028,11 @@ static func _has_valid_core_state(simulation: ColonySimulation) -> bool:
 			)
 			or (
 				event.subject_entity_id != ObservationEvent.NO_ENTITY_ID
-				and not entity_ids.has(event.subject_entity_id)
+				and not _event_subject_is_valid(
+					event,
+					entity_ids,
+					state
+				)
 			)
 			or (
 				not event.source_zone_id.is_empty()
@@ -2547,6 +3056,8 @@ static func _has_valid_core_state(simulation: ColonySimulation) -> bool:
 			and state.campaign_state == null
 			and state.nutrition_state == null
 			and state.act1_state == null
+			and state.colony_work_state == null
+			and state.queen.zone_id.is_empty()
 			and state.humidity_adjustment_count == 0
 			and state.observation_stable_ticks == 0
 			and state.shared_sugar_portions == 0
@@ -2601,6 +3112,9 @@ static func _has_valid_ant_state(
 			ant.worker_task != null
 			or ant.foraging_task != null
 			or ant.feeding_task != null
+			or ant.waste_cleanup_task != null
+			or ant.scout_task != null
+			or ant.migration_task != null
 		):
 			return false
 		var stage_duration: int = simulation.get_stage_duration_ticks(
@@ -2609,7 +3123,13 @@ static func _has_valid_ant_state(
 		if stage_duration <= 0 or ant.stage_age_ticks >= stage_duration:
 			return false
 	elif simulation.has_habitat():
-		if ant.worker_task == null or ant.foraging_task == null:
+		if (
+			ant.worker_task == null
+			or ant.foraging_task == null
+			or ant.waste_cleanup_task == null
+			or ant.scout_task == null
+			or ant.migration_task == null
+		):
 			return false
 		if (
 			simulation._supports_nutrition_growth()
@@ -2621,6 +3141,9 @@ static func _has_valid_ant_state(
 			ant.worker_task != null
 			or ant.foraging_task != null
 			or ant.feeding_task != null
+			or ant.waste_cleanup_task != null
+			or ant.scout_task != null
+			or ant.migration_task != null
 		):
 			return false
 
@@ -2703,6 +3226,107 @@ static func _has_valid_ant_state(
 		for route_zone_id: StringName in foraging_task.route_zone_ids:
 			if simulation._state.get_zone(route_zone_id) == null:
 				return false
+	if not _has_valid_colony_work_task_state(ant, simulation):
+		return false
+	return true
+
+
+static func _has_valid_colony_work_task_state(
+	ant: AntModel,
+	simulation: ColonySimulation
+) -> bool:
+	if ant.waste_cleanup_task != null:
+		var waste: WasteCleanupTaskModel = ant.waste_cleanup_task
+		if (
+			waste.next_decision_tick < 0
+			or not _is_finite_number(waste.reserved_amount)
+			or not _is_finite_number(waste.carried_amount)
+			or waste.reserved_amount < 0.0
+			or waste.carried_amount < 0.0
+		):
+			return false
+		if waste.state == WasteCleanupTaskModel.State.IDLE:
+			if (
+				not waste.origin_zone_id.is_empty()
+				or not waste.source_zone_id.is_empty()
+				or waste.target_tray_facility_id != -1
+				or not waste.target_zone_id.is_empty()
+				or not waste.route_zone_ids.is_empty()
+				or not is_zero_approx(waste.reserved_amount)
+				or not is_zero_approx(waste.carried_amount)
+				or waste.elapsed_ticks != 0
+				or waste.duration_ticks != 0
+			):
+				return false
+		elif (
+			waste.duration_ticks <= 0
+			or waste.elapsed_ticks < 0
+			or waste.elapsed_ticks >= waste.duration_ticks
+			or simulation._state.get_zone(waste.origin_zone_id) == null
+			or simulation._state.get_zone(waste.source_zone_id) == null
+			or simulation._state.get_zone(waste.target_zone_id) == null
+			or simulation._state.layout_state.get_facility(
+				waste.target_tray_facility_id
+			) == null
+		):
+			return false
+	if ant.scout_task != null:
+		var scout: ScoutTaskModel = ant.scout_task
+		if scout.next_decision_tick < 0:
+			return false
+		if scout.state == ScoutTaskModel.State.IDLE:
+			if (
+				not scout.origin_zone_id.is_empty()
+				or not scout.target_zone_id.is_empty()
+				or not scout.route_zone_ids.is_empty()
+				or scout.elapsed_ticks != 0
+				or scout.duration_ticks != 0
+			):
+				return false
+		elif (
+			scout.duration_ticks <= 0
+			or scout.elapsed_ticks < 0
+			or scout.elapsed_ticks >= scout.duration_ticks
+			or simulation._state.get_zone(scout.origin_zone_id) == null
+			or simulation._state.get_zone(scout.target_zone_id) == null
+		):
+			return false
+	if ant.migration_task != null:
+		var migration: MigrationTaskModel = ant.migration_task
+		if migration.next_decision_tick < 0:
+			return false
+		if migration.state == MigrationTaskModel.State.IDLE:
+			if (
+				not migration.origin_zone_id.is_empty()
+				or not migration.member_origin_zone_id.is_empty()
+				or migration.target_entity_id != -1
+				or not migration.target_zone_id.is_empty()
+				or migration.carried_entity_id != -1
+				or not migration.route_zone_ids.is_empty()
+				or migration.returning_to_origin
+				or migration.elapsed_ticks != 0
+				or migration.duration_ticks != 0
+			):
+				return false
+		elif (
+			migration.duration_ticks <= 0
+			or migration.elapsed_ticks < 0
+			or migration.elapsed_ticks >= migration.duration_ticks
+			or simulation._state.get_zone(
+				migration.member_origin_zone_id
+			) == null
+			or simulation._state.get_zone(
+				migration.target_zone_id
+			) == null
+			or (
+				migration.target_entity_id
+					!= simulation._state.queen.entity_id
+				and simulation._state.get_ant(
+					migration.target_entity_id
+				) == null
+			)
+		):
+			return false
 	return true
 
 
@@ -2728,6 +3352,10 @@ static func _state_graph_matches_frozen_config(
 		or (
 			config.is_act1_test_tube()
 			!= (state.act1_state != null)
+		)
+		or (
+			(config.colony_work_config != null)
+			!= (state.colony_work_state != null)
 		)
 	):
 		return false
@@ -2882,6 +3510,21 @@ static func _has_valid_pending_commands(
 				):
 					return false
 				has_layout_command = true
+			ColonySimulation.PendingCommandType.CLEAN_WASTE_TRAY_ACTION:
+				if (
+					not command.argument_id.is_empty()
+					or command.argument_entity_id <= 0
+					or command.argument_slot != Vector2i.ZERO
+					or command.argument_orientation != 0
+					or command.argument_flag
+					or simulation._colony_work_system == null
+					or not simulation._colony_work_system
+						.is_clean_action_available(
+							simulation._state,
+							command.argument_entity_id
+						)
+				):
+					return false
 			_:
 				return false
 	return true

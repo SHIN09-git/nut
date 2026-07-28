@@ -4,6 +4,8 @@ extends RefCounted
 var simulation_tick: int = 0
 var lifecycle_active: bool = true
 var queen_entity_id: int = 0
+var queen_zone_id: StringName = &""
+var queen_carrier_ant_id: int = -1
 var queen_laid_egg_count: int = 0
 var max_first_generation_brood: int = 0
 var next_egg_tick: int = -1
@@ -20,6 +22,7 @@ var water_target_comfortable: bool = false
 var observation_stable_ticks: int = 0
 var brood_humidity_observation_unlocked: bool = false
 var observation_events: Array[ObservationEvent] = []
+var work: ColonyWorkSnapshot
 
 
 func count_stage(stage: AntModel.LifeStage) -> int:

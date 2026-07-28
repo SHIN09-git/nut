@@ -7,6 +7,7 @@ extends Resource
 @export_range(0.0, 1.0, 0.01) var initial_pollution: float = 0.0
 @export var connected_zone_ids: Array[StringName] = []
 @export var available: bool = true
+@export var initially_discovered: bool = true
 
 
 func is_valid() -> bool:

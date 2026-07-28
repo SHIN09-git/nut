@@ -47,6 +47,7 @@ var _fatal_error: String = ""
 @onready var _cover_button: Button = %CoverButton
 @onready var _magnifier_button: Button = %MagnifierButton
 @onready var _sugar_button: Button = %SugarButton
+@onready var _clean_waste_button: Button = %CleanWasteButton
 @onready var _layout_button: Button = %LayoutButton
 @onready var _place_box_button: Button = %PlaceBoxButton
 @onready var _rotate_facility_button: Button = %RotateFacilityButton
@@ -180,6 +181,7 @@ func _connect_controls() -> void:
 	_cover_button.pressed.connect(_on_cover_pressed)
 	_magnifier_button.pressed.connect(_on_magnifier_pressed)
 	_sugar_button.pressed.connect(_on_sugar_pressed)
+	_clean_waste_button.pressed.connect(_on_clean_waste_pressed)
 	_layout_button.pressed.connect(_on_layout_pressed)
 	_place_box_button.pressed.connect(_on_place_box_pressed)
 	_rotate_facility_button.pressed.connect(
@@ -293,6 +295,21 @@ func _on_sugar_pressed() -> void:
 	if _colony_simulation.submit_place_sugar_action():
 		_apply_snapshot()
 		_guidance_label.text = tr("ACT1_FEEDBACK_SUGAR_PENDING")
+
+
+func _on_clean_waste_pressed() -> void:
+	if (
+		_latest_snapshot == null
+		or _latest_snapshot.work == null
+		or _latest_snapshot.work.cleanable_tray_facility_ids.is_empty()
+	):
+		return
+	var facility_id: int = (
+		_latest_snapshot.work.cleanable_tray_facility_ids[0]
+	)
+	if _colony_simulation.submit_clean_waste_tray_action(facility_id):
+		_apply_snapshot()
+		_guidance_label.text = tr("R9_CLEAN_WASTE_PENDING")
 
 
 func _on_layout_pressed() -> void:
@@ -529,6 +546,25 @@ func _update_controls() -> void:
 	_sugar_button.disabled = (
 		blocked or not _latest_snapshot.nutrition.sugar_action_available
 	)
+	var work: ColonyWorkSnapshot = _latest_snapshot.work
+	_clean_waste_button.visible = (
+		work != null
+		and (
+			not work.cleanable_tray_facility_ids.is_empty()
+			or work.clean_action_pending_facility_id >= 0
+		)
+	)
+	_clean_waste_button.disabled = (
+		blocked
+		or work == null
+		or work.cleanable_tray_facility_ids.is_empty()
+		or work.clean_action_pending_facility_id >= 0
+	)
+	_clean_waste_button.text = (
+		tr("R9_TOOL_CLEAN_WASTE_PENDING")
+		if work != null and work.clean_action_pending_facility_id >= 0
+		else tr("R9_TOOL_CLEAN_WASTE")
+	)
 	var layout: HabitatLayoutSnapshot = _latest_snapshot.layout
 	var layout_available: bool = layout != null and layout.active
 	_layout_button.visible = layout_available
@@ -671,12 +707,24 @@ func _update_debug() -> void:
 	)
 	for zone: HabitatZoneSnapshot in _latest_snapshot.colony.zones:
 		lines.append(
-			"zone=%s humidity=%.3f light=%.3f pollution=%.3f"
+			"zone=%s humidity=%.3f light=%.3f pollution=%.3f discovered=%s"
 			% [
 				String(zone.zone_id),
 				zone.humidity,
 				zone.light_exposure,
 				zone.pollution,
+				str(zone.discovered),
+			]
+		)
+	if _latest_snapshot.work != null:
+		lines.append(
+			"work waste=%d scout=%d migration=%d target=%s stable=%d"
+			% [
+				_latest_snapshot.work.active_waste_task_count,
+				_latest_snapshot.work.active_scout_task_count,
+				_latest_snapshot.work.active_migration_task_count,
+				String(_latest_snapshot.work.migration_target_zone_id),
+				_latest_snapshot.work.migration_candidate_stable_ticks,
 			]
 		)
 	for facility: FacilitySnapshot in _latest_snapshot.layout.facilities:
@@ -692,7 +740,7 @@ func _update_debug() -> void:
 		)
 	for ant: AntSnapshot in _latest_snapshot.colony.ants:
 		lines.append(
-			"#%03d stage=%d zone=%s forage=%d feed=%d"
+			"#%03d stage=%d zone=%s forage=%d feed=%d waste=%d scout=%d migration=%d"
 			% [
 				ant.entity_id,
 				ant.life_stage,
@@ -701,6 +749,12 @@ func _update_debug() -> void:
 					if ant.foraging_task != null else -1,
 				ant.feeding_task.state
 					if ant.feeding_task != null else -1,
+				ant.waste_cleanup_task.state
+					if ant.waste_cleanup_task != null else -1,
+				ant.scout_task.state
+					if ant.scout_task != null else -1,
+				ant.migration_task.state
+					if ant.migration_task != null else -1,
 			]
 		)
 	_debug_label.text = "\n".join(lines)
@@ -839,6 +893,22 @@ func _queen_activity() -> String:
 
 func _worker_activity(worker: AntSnapshot) -> String:
 	if (
+		worker.waste_cleanup_task != null
+		and worker.waste_cleanup_task.state
+			!= WasteCleanupTaskModel.State.IDLE
+	):
+		return tr("R9_WORKER_CLEANING")
+	if (
+		worker.scout_task != null
+		and worker.scout_task.state != ScoutTaskModel.State.IDLE
+	):
+		return tr("R9_WORKER_SCOUTING")
+	if (
+		worker.migration_task != null
+		and worker.migration_task.state != MigrationTaskModel.State.IDLE
+	):
+		return tr("R9_WORKER_MIGRATING")
+	if (
 		worker.feeding_task != null
 		and worker.feeding_task.state != BroodFeedingTaskModel.State.IDLE
 	):
@@ -862,6 +932,7 @@ func _refresh_copy() -> void:
 	_cover_button.text = tr("ACT1_TOOL_COVER")
 	_magnifier_button.text = tr("ACT1_TOOL_MAGNIFIER")
 	_sugar_button.text = tr("ACT1_TOOL_SUGAR")
+	_clean_waste_button.text = tr("R9_TOOL_CLEAN_WASTE")
 	_layout_button.text = tr("R7_LAYOUT_TOGGLE")
 	_rotate_facility_button.text = tr("R7_LAYOUT_ROTATE")
 	_remove_facility_button.text = tr("R7_LAYOUT_REMOVE")

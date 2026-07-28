@@ -23,6 +23,7 @@ enum PendingCommandType {
 	ROTATE_FACILITY_ACTION,
 	REMOVE_FACILITY_ACTION,
 	SET_GATE_OPEN_ACTION,
+	CLEAN_WASTE_TRAY_ACTION,
 }
 
 var _lifecycle_config: LifecycleConfig
@@ -36,6 +37,7 @@ var _campaign_director: CampaignDirector
 var _act1_campaign_director: Act1CampaignDirector
 var _founding_care_system: FoundingCareSystem
 var _environment_system: EnvironmentSystem
+var _colony_work_system: ColonyWorkSystem
 var _state: ColonyState
 var _pending_commands: Array[PendingSimulationCommand] = []
 var _next_pending_command_sequence_id: int = 1
@@ -84,6 +86,19 @@ func _init(
 		if not _environment_system.is_ready():
 			_configuration_error = (
 				"ColonySimulation could not initialize environment"
+			)
+			return
+	if _habitat_config.colony_work_config != null:
+		_colony_work_system = ColonyWorkSystem.new(
+			_habitat_config.colony_work_config,
+			_habitat_config,
+			_brood_care_config,
+			_habitat_config.environment_config,
+			_habitat_config.facility_catalog_config
+		)
+		if not _colony_work_system.is_ready():
+			_configuration_error = (
+				"ColonySimulation could not initialize colony work"
 			)
 			return
 	_brood_relocation_system = BroodRelocationSystem.new(
@@ -286,6 +301,26 @@ func submit_set_gate_open_action(
 	return true
 
 
+func submit_clean_waste_tray_action(facility_id: int) -> bool:
+	if (
+		_colony_work_system == null
+		or not _colony_work_system.is_clean_action_available(
+			_state,
+			facility_id
+		)
+		or _has_pending_command(
+			PendingCommandType.CLEAN_WASTE_TRAY_ACTION
+		)
+	):
+		return false
+	_queue_pending_command(
+		PendingCommandType.CLEAN_WASTE_TRAY_ACTION,
+		&"",
+		facility_id
+	)
+	return true
+
+
 func submit_continue_observation_action() -> bool:
 	if not _is_continue_observation_action_available():
 		return false
@@ -343,6 +378,8 @@ func advance_tick(tick_index: int) -> bool:
 	_apply_pending_commands()
 	if _environment_system != null:
 		_environment_system.advance(_state)
+	if _colony_work_system != null:
+		_colony_work_system.update_migration_candidate(_state)
 	if _is_lifecycle_active():
 		_update_existing_ants()
 		_try_lay_egg()
@@ -363,6 +400,8 @@ func advance_tick(tick_index: int) -> bool:
 		_foraging_system.validate_tasks(_state)
 	if _nutrition_system != null:
 		_nutrition_system.validate_tasks(_state)
+	if _colony_work_system != null:
+		_colony_work_system.validate_tasks(_state)
 	var worker_tasks_advance: bool = (
 		_nutrition_system == null
 		or _nutrition_system.should_advance_worker_tasks(_state)
@@ -373,6 +412,10 @@ func advance_tick(tick_index: int) -> bool:
 			_foraging_system.advance_tasks(_state)
 		if _nutrition_system != null:
 			_nutrition_system.advance_tasks(_state)
+		if _colony_work_system != null:
+			_colony_work_system.advance_tasks(_state)
+	if _colony_work_system != null and worker_tasks_advance:
+		_colony_work_system.assign_idle_workers(_state)
 	if _should_assign_brood_relocation():
 		_brood_relocation_system.assign_idle_workers(_state)
 	if _should_assign_brood_feeding():
@@ -405,6 +448,7 @@ func create_snapshot() -> ColonySnapshot:
 	snapshot.simulation_tick = _state.simulation_tick
 	snapshot.lifecycle_active = _is_lifecycle_active()
 	snapshot.queen_entity_id = _state.queen.entity_id
+	snapshot.queen_zone_id = _state.queen.zone_id
 	snapshot.queen_laid_egg_count = (
 		_state.queen.laid_egg_count if snapshot.lifecycle_active else 0
 	)
@@ -452,7 +496,9 @@ func create_snapshot() -> ColonySnapshot:
 			_state.get_connected_zone_ids(zone.zone_id),
 			zone.available,
 			zone.light_exposure,
-			zone.pollution
+			zone.pollution,
+			zone.discovered,
+			zone.discovered_tick
 		))
 
 	var brood_reserved_by_worker_id: Dictionary[int, int] = {}
@@ -480,6 +526,25 @@ func create_snapshot() -> ColonySnapshot:
 				food_carrier_worker_id[
 					ant.foraging_task.target_food_source_id
 				] = ant.entity_id
+		if (
+			ant.migration_task != null
+			and ant.migration_task.state
+				!= MigrationTaskModel.State.IDLE
+		):
+			if ant.migration_task.target_entity_id >= 0:
+				brood_reserved_by_worker_id[
+					ant.migration_task.target_entity_id
+				] = ant.entity_id
+			if ant.migration_task.carried_entity_id >= 0:
+				if (
+					ant.migration_task.carried_entity_id
+					== _state.queen.entity_id
+				):
+					snapshot.queen_carrier_ant_id = ant.entity_id
+				else:
+					brood_carrier_worker_id[
+						ant.migration_task.carried_entity_id
+					] = ant.entity_id
 
 	for source: FoodSourceState in _state.food_sources:
 		snapshot.food_sources.append(FoodSourceSnapshot.new(
@@ -515,6 +580,19 @@ func create_snapshot() -> ColonySnapshot:
 		var feeding_task_snapshot: BroodFeedingTaskSnapshot
 		if ant.feeding_task != null:
 			feeding_task_snapshot = ant.feeding_task.create_snapshot()
+		var waste_cleanup_snapshot: WasteCleanupTaskSnapshot
+		if ant.waste_cleanup_task != null:
+			waste_cleanup_snapshot = WasteCleanupTaskSnapshot.new(
+				ant.waste_cleanup_task
+			)
+		var scout_snapshot: ScoutTaskSnapshot
+		if ant.scout_task != null:
+			scout_snapshot = ScoutTaskSnapshot.new(ant.scout_task)
+		var migration_snapshot: MigrationTaskSnapshot
+		if ant.migration_task != null:
+			migration_snapshot = MigrationTaskSnapshot.new(
+				ant.migration_task
+			)
 		snapshot.ants.append(AntSnapshot.new(
 			ant.entity_id,
 			ant.life_stage,
@@ -534,9 +612,13 @@ func create_snapshot() -> ColonySnapshot:
 			task_duration_ticks,
 			foraging_task_snapshot,
 			ant.protein_supported_growth_ticks,
-			feeding_task_snapshot
+			feeding_task_snapshot,
+			waste_cleanup_snapshot,
+			scout_snapshot,
+			migration_snapshot
 		))
 
+	snapshot.work = _create_colony_work_snapshot()
 	return snapshot
 
 
@@ -664,16 +746,18 @@ func create_game_snapshot() -> GameSnapshot:
 			)
 		)
 	var layout_snapshot: HabitatLayoutSnapshot = _create_layout_snapshot()
+	var colony_snapshot: ColonySnapshot = create_snapshot()
 	return GameSnapshot.new(
 		_state.simulation_tick,
-		create_snapshot(),
+		colony_snapshot,
 		scenario_snapshot,
 		observation_snapshot,
 		sequence_snapshot,
 		campaign_snapshot,
 		nutrition_snapshot,
 		act1_snapshot,
-		layout_snapshot
+		layout_snapshot,
+		colony_snapshot.work
 	)
 
 
@@ -762,6 +846,11 @@ func _has_valid_habitat_ownership(state: ColonyState) -> bool:
 		and not _environment_system.has_valid_state(state)
 	):
 		return false
+	if (
+		_colony_work_system != null
+		and not _colony_work_system.has_valid_state(state)
+	):
+		return false
 	if not _has_valid_layout_state(state):
 		return false
 	return true
@@ -820,6 +909,12 @@ func _apply_pending_commands() -> void:
 				_apply_remove_facility_command(command)
 			PendingCommandType.SET_GATE_OPEN_ACTION:
 				_apply_gate_command(command)
+			PendingCommandType.CLEAN_WASTE_TRAY_ACTION:
+				if _colony_work_system != null:
+					_colony_work_system.apply_clean_action(
+						_state,
+						command.argument_entity_id
+					)
 
 
 func _apply_water_action() -> void:
@@ -1332,7 +1427,9 @@ func _finalize_placed_facility(facility_id: int) -> bool:
 			[],
 			true,
 			effect.initial_light_exposure,
-			effect.initial_pollution
+			effect.initial_pollution,
+			false,
+			-1
 		))
 	elif effect.requires_host_zone():
 		var host_zone_id: StringName = layout.find_host_zone_id(
@@ -1474,6 +1571,67 @@ func _create_layout_snapshot() -> HabitatLayoutSnapshot:
 	return snapshot
 
 
+func _create_colony_work_snapshot() -> ColonyWorkSnapshot:
+	if (
+		_colony_work_system == null
+		or _state == null
+		or _state.colony_work_state == null
+	):
+		return null
+	var state: ColonyWorkState = _state.colony_work_state
+	var snapshot: ColonyWorkSnapshot = ColonyWorkSnapshot.new()
+	snapshot.active = true
+	snapshot.migration_candidate_zone_id = (
+		state.migration_candidate_zone_id
+	)
+	snapshot.migration_candidate_stable_ticks = (
+		state.migration_candidate_stable_ticks
+	)
+	snapshot.migration_target_zone_id = state.migration_target_zone_id
+	snapshot.completed_migration_count = state.completed_migration_count
+	snapshot.scouted_zone_count = state.scouted_zone_count
+	snapshot.delivered_waste_batch_count = (
+		state.delivered_waste_batch_count
+	)
+	snapshot.cleaned_waste_tray_count = state.cleaned_waste_tray_count
+	for command: PendingSimulationCommand in _pending_commands:
+		if command.command_type == PendingCommandType.CLEAN_WASTE_TRAY_ACTION:
+			snapshot.clean_action_pending_facility_id = (
+				command.argument_entity_id
+			)
+			break
+	for worker: AntModel in _state.ants:
+		if (
+			worker.waste_cleanup_task != null
+			and worker.waste_cleanup_task.state
+				!= WasteCleanupTaskModel.State.IDLE
+		):
+			snapshot.active_waste_task_count += 1
+		if (
+			worker.scout_task != null
+			and worker.scout_task.state != ScoutTaskModel.State.IDLE
+		):
+			snapshot.active_scout_task_count += 1
+		if (
+			worker.migration_task != null
+			and worker.migration_task.state
+				!= MigrationTaskModel.State.IDLE
+		):
+			snapshot.active_migration_task_count += 1
+	if snapshot.clean_action_pending_facility_id < 0:
+		for facility: FacilityState in (
+			_state.layout_state.get_facilities_in_stable_order()
+		):
+			if _colony_work_system.is_clean_action_available(
+				_state,
+				facility.facility_id
+			):
+				snapshot.cleanable_tray_facility_ids.append(
+					facility.facility_id
+				)
+	return snapshot
+
+
 func _has_valid_layout_state(state: ColonyState) -> bool:
 	if state == null or state.layout_state == null:
 		return false
@@ -1534,6 +1692,13 @@ func _is_facility_referenced(facility_id: int) -> bool:
 		or type_config == null
 	):
 		return false
+	for ant: AntModel in _state.ants:
+		if (
+			ant.waste_cleanup_task != null
+			and ant.waste_cleanup_task.target_tray_facility_id
+				== facility_id
+		):
+			return true
 	if (
 		type_config.effect_config.kind
 		== FacilityEffectConfig.Kind.FOOD_STATION
@@ -1555,6 +1720,8 @@ func _is_facility_referenced(facility_id: int) -> bool:
 		return false
 	if not type_config.effect_config.provides_zone():
 		return false
+	if _state.queen.zone_id == facility.zone_id:
+		return true
 	for ant: AntModel in _state.ants:
 		if ant.zone_id == facility.zone_id:
 			return true
@@ -1582,6 +1749,44 @@ func _is_facility_referenced(facility_id: int) -> bool:
 				ant.feeding_task.origin_zone_id == facility.zone_id
 				or ant.feeding_task.target_zone_id == facility.zone_id
 				or ant.feeding_task.route_zone_ids.has(facility.zone_id)
+			)
+		):
+			return true
+		if (
+			ant.waste_cleanup_task != null
+			and (
+				ant.waste_cleanup_task.origin_zone_id
+					== facility.zone_id
+				or ant.waste_cleanup_task.source_zone_id
+					== facility.zone_id
+				or ant.waste_cleanup_task.target_zone_id
+					== facility.zone_id
+				or ant.waste_cleanup_task.route_zone_ids.has(
+					facility.zone_id
+				)
+			)
+		):
+			return true
+		if (
+			ant.scout_task != null
+			and (
+				ant.scout_task.origin_zone_id == facility.zone_id
+				or ant.scout_task.target_zone_id == facility.zone_id
+				or ant.scout_task.route_zone_ids.has(facility.zone_id)
+			)
+		):
+			return true
+		if (
+			ant.migration_task != null
+			and (
+				ant.migration_task.origin_zone_id == facility.zone_id
+				or ant.migration_task.member_origin_zone_id
+					== facility.zone_id
+				or ant.migration_task.target_zone_id
+					== facility.zone_id
+				or ant.migration_task.route_zone_ids.has(
+					facility.zone_id
+				)
 			)
 		):
 			return true
@@ -1652,6 +1857,23 @@ func _has_any_active_worker_task() -> bool:
 			ant.feeding_task != null
 			and ant.feeding_task.state
 				!= BroodFeedingTaskModel.State.IDLE
+		):
+			return true
+		if (
+			ant.waste_cleanup_task != null
+			and ant.waste_cleanup_task.state
+				!= WasteCleanupTaskModel.State.IDLE
+		):
+			return true
+		if (
+			ant.scout_task != null
+			and ant.scout_task.state != ScoutTaskModel.State.IDLE
+		):
+			return true
+		if (
+			ant.migration_task != null
+			and ant.migration_task.state
+				!= MigrationTaskModel.State.IDLE
 		):
 			return true
 	return false

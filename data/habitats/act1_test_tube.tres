@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="HabitatScenarioData" load_steps=10 format=3]
+[gd_resource type="Resource" script_class="HabitatScenarioData" load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/habitat_scenario_data.gd" id="1_scenario"]
 [ext_resource type="Script" path="res://scripts/core/habitat_zone_data.gd" id="2_zone"]
@@ -7,6 +7,7 @@
 [ext_resource type="Resource" path="res://data/behaviors/founding_care_prototype.tres" id="6_care"]
 [ext_resource type="Resource" path="res://data/facilities/act1_layout_catalog.tres" id="7_layout"]
 [ext_resource type="Resource" path="res://data/behaviors/act1_environment_prototype.tres" id="8_environment"]
+[ext_resource type="Resource" path="res://data/behaviors/colony_work_prototype.tres" id="9_work"]
 
 [sub_resource type="Resource" id="Resource_nest_zone"]
 script = ExtResource("2_zone")
@@ -59,3 +60,4 @@ protein_portions = 2
 founding_care_data = ExtResource("6_care")
 facility_catalog_data = ExtResource("7_layout")
 environment_data = ExtResource("8_environment")
+colony_work_data = ExtResource("9_work")

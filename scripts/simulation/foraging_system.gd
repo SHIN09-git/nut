@@ -397,6 +397,11 @@ func has_valid_ownership(state: ColonyState) -> bool:
 		)
 		if feeding_active and task.state != ForagingTaskModel.State.IDLE:
 			return false
+		if (
+			_has_colony_work_task(worker)
+			and task.state != ForagingTaskModel.State.IDLE
+		):
+			return false
 
 		if task.state == ForagingTaskModel.State.IDLE:
 			if not _is_idle_task_clean(task):
@@ -805,7 +810,7 @@ func _is_pre_collection_source_valid(
 	if source == null or not source.has_available_portion():
 		return false
 	var zone: HabitatZoneState = state.get_zone(source.zone_id)
-	return zone != null and zone.available
+	return zone != null and zone.available and zone.discovered
 
 
 func _is_worker_available(
@@ -822,6 +827,20 @@ func _is_worker_available(
 			or worker.feeding_task.state
 				== BroodFeedingTaskModel.State.IDLE
 		)
+		and not _has_colony_work_task(worker)
+	)
+
+
+func _has_colony_work_task(worker: AntModel) -> bool:
+	return (
+		worker.waste_cleanup_task != null
+		and worker.waste_cleanup_task.state
+			!= WasteCleanupTaskModel.State.IDLE
+		or worker.scout_task != null
+		and worker.scout_task.state != ScoutTaskModel.State.IDLE
+		or worker.migration_task != null
+		and worker.migration_task.state
+			!= MigrationTaskModel.State.IDLE
 	)
 
 

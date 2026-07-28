@@ -21,6 +21,7 @@ var campaign_state: CampaignState
 var nutrition_state: ColonyNutritionState
 var act1_state: Act1State
 var layout_state: HabitatLayoutState
+var colony_work_state: ColonyWorkState
 var _next_entity_id: int = 1
 var _next_observation_event_id: int = 1
 var _observation_events: Array[ObservationEvent] = []
@@ -59,6 +60,9 @@ func initialize_habitat(
 	)
 	if layout_state == null:
 		return false
+	queen.assign_zone(config.nest_zone_id, 0)
+	if config.colony_work_config != null:
+		colony_work_state = ColonyWorkState.new()
 
 	if config.supports_nutrition_growth():
 		if config.nutrition_config == null or not config.lifecycle_active:

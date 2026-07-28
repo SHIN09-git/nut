@@ -7,6 +7,8 @@ var light_exposure: float
 var pollution: float
 var connected_zone_ids: Array[StringName] = []
 var available: bool = true
+var discovered: bool = true
+var discovered_tick: int = 0
 
 
 func _init(
@@ -15,7 +17,9 @@ func _init(
 	new_connected_zone_ids: Array[StringName],
 	new_available: bool,
 	new_light_exposure: float = 0.5,
-	new_pollution: float = 0.0
+	new_pollution: float = 0.0,
+	new_discovered: bool = true,
+	new_discovered_tick: int = 0
 ) -> void:
 	zone_id = new_zone_id
 	humidity = clampf(new_humidity, 0.0, 1.0)
@@ -23,6 +27,8 @@ func _init(
 	pollution = clampf(new_pollution, 0.0, 1.0)
 	connected_zone_ids.assign(new_connected_zone_ids)
 	available = new_available
+	discovered = new_discovered
+	discovered_tick = new_discovered_tick
 
 
 static func from_data(zone_data: HabitatZoneData) -> HabitatZoneState:
@@ -34,7 +40,9 @@ static func from_data(zone_data: HabitatZoneData) -> HabitatZoneState:
 		zone_data.connected_zone_ids,
 		zone_data.available,
 		zone_data.initial_light_exposure,
-		zone_data.initial_pollution
+		zone_data.initial_pollution,
+		zone_data.initially_discovered,
+		0 if zone_data.initially_discovered else -1
 	)
 
 
@@ -45,7 +53,9 @@ func duplicate_state() -> HabitatZoneState:
 		connected_zone_ids,
 		available,
 		light_exposure,
-		pollution
+		pollution,
+		discovered,
+		discovered_tick
 	)
 
 
@@ -56,7 +66,9 @@ func duplicate_environment_state() -> HabitatZoneState:
 		[],
 		available,
 		light_exposure,
-		pollution
+		pollution,
+		discovered,
+		discovered_tick
 	)
 
 
@@ -85,6 +97,14 @@ func set_pollution(value: float) -> bool:
 	if not is_finite(value):
 		return false
 	pollution = clampf(value, 0.0, 1.0)
+	return true
+
+
+func mark_discovered(tick: int) -> bool:
+	if discovered or tick < 0:
+		return false
+	discovered = true
+	discovered_tick = tick
 	return true
 
 

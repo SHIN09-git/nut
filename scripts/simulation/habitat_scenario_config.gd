@@ -25,6 +25,7 @@ var protein_portions: int
 var founding_care_config: FoundingCareConfig
 var facility_catalog_config: FacilityCatalogConfig
 var environment_config: EnvironmentConfig
+var colony_work_config: ColonyWorkConfig
 var initial_zone_connections: Dictionary[StringName, Array] = {}
 
 
@@ -99,6 +100,12 @@ static func from_data(
 			scenario_data.environment_data
 		)
 		if config.environment_config == null:
+			return null
+	if scenario_data.colony_work_data != null:
+		config.colony_work_config = ColonyWorkConfig.from_data(
+			scenario_data.colony_work_data
+		)
+		if config.colony_work_config == null:
 			return null
 	return config
 

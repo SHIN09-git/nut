@@ -17,6 +17,8 @@
 - 遮光套不再是布局之外的重复状态：高层遮光动作在同一 Tick 同时创建稳定 `FacilityState`、消耗冻结库存并启用蚁后护理。
 - R8 为巢室、补水、糖液／蛋白站、垃圾托盘、连接与遮光定义冻结强类型效果；不使用通用效果字典。
 - `EnvironmentSystem` 在命令之后、生命周期和任务之前推进湿度、光照、污染产生／传播与垃圾收集。新增巢室使用稳定动态区域 ID，连接与闸门决定可达关系。
+- R9 使用三个专用确定性任务处理废物批次搬运、新区域往返侦察和群落迁移；幼体按稳定 ID 先迁移，蚁后最后迁入，不使用行为树或 ECS。
+- 垃圾托盘可清理时，工具栏显示清理按钮；按钮只提交稳定设施 ID，权威清理在下一固定 Tick 应用。
 - 布局视图以区域底色、污染颗粒、垃圾容量和开关线条投影环境快照；精确环境数值只显示在开发 F3 层。
 - 遮光与糖液操作都先进入命令队列，在下一连续固定 Tick 开始时按启动时冻结的配置应用。
 - `GameSnapshot` 分离群落、营养、章节与 `Act1Snapshot`；UI 和 `Act1TestTubeView` 只读取快照。
@@ -25,7 +27,7 @@
 - 支持暂停、1×、4×、16×；倍速只改变现实时间内处理的 Tick 数，不改变单 Tick 语义。`Esc` 或“菜单”打开暂停菜单。
 - 标题页提供新游戏、继续、档案、设置和退出；一个主档案支持显式保存、完整备份、损坏回退和确认删除。
 - 设置独立保存到 `user://settings.json`，包括主音量、分辨率、窗口模式、UI 缩放、简体中文／临时英文和减少动效。
-- 存档 schema 为 `r8.authority.v6`。旧 R7／R6／R5／R4／R2 档案沿显式单向迁移链恢复；R7 设施目录会获得冻结效果，既有区域和动态觅食盒会迁移环境值与稳定连接，旧组合观察档案仍路由到原 `CombinedObservationController`。
+- 存档 schema 为 `r9.authority.v7`。旧 R8／R7／R6／R5／R4／R2 档案沿显式单向迁移链恢复；R8 档案会获得冻结工作配置、区域发现状态、迁巢状态与空闲任务，旧组合观察档案仍路由到原 `CombinedObservationController`。
 - R5 的糖／蛋白守恒、糖短缺减速、育幼喂食和资源约束生命周期继续作为权威基础与回归覆盖；Act 1 当前只开放糖液操作，蛋白放置留给后续章节。
 - 旧的连续组合观察、双室湿度、独立糖水和生命周期场景仍保留，用于旧档恢复、回归与调试。
 
@@ -36,6 +38,7 @@
 - `data/behaviors/founding_care_prototype.tres`
 - `data/behaviors/act1_nutrition_prototype.tres`
 - `data/behaviors/act1_environment_prototype.tres`
+- `data/behaviors/colony_work_prototype.tres`
 - `data/facilities/act1_layout_catalog.tres`
 - `data/habitats/combined_observation_slice.tres`
 - `data/habitats/combined_observation_sequence.tres`
@@ -142,14 +145,14 @@ New-Item -ItemType Directory -Force -Path '.\builds\windows'
 
 - 当前 R6 自动真实 UI 路径验证了两章因果闭环，但仍是压缩候选，尚未用 5～7 名新玩家证明 35～60 分钟目标；不会通过无信息等待填充时长。
 - v0.2 计划要求的 7 名有效首次接触测试者数据尚未取得，外部理解度 Gate 保持 `INCOMPLETE`。用户于 2026-07-28 明确豁免它作为继续开发的前置条件；这不等于通过。
-- 正式 Act 1 目前覆盖单后护理、第一工蚁、首次糖液照护和基础模块布局；R8 环境与设施效果已经作为权威基础实现，但蛋白、补水、垃圾设施尚未进入正式章节 UI，后四章也未实现。
-- 垃圾托盘当前只被动收集污染；废物清理、区域侦察和迁巢工蚁任务属于 R9。温度没有独立闭环证据，继续延期。
+- 正式 Act 1 目前覆盖单后护理、第一工蚁、首次糖液照护和基础模块布局；R8 环境效果与 R9 工作任务已经作为权威基础实现，但蛋白、补水、垃圾设施及完整清理／侦察／迁巢流程尚未编排进正式章节，后四章也未实现。
+- 温度没有区别于湿度的独立闭环证据，继续延期。
 - 工蚁名称和个人行动记录仍属于旧组合观察的会话注释；显示设置独立跨程序保存。
 - 物种与节奏参数均未经科学审校；临时英文尚未完成人工终校。
 - 尚无正式素材、音频、Steam、第三方插件或发布授权。
 
-v0.1 发布基线见 `docs/validation/v0.1_baseline_001.md`；M2 身份验证见 `docs/validation/worker_identity_001.md`；M3 糖水验证见 `docs/validation/sugar_foraging_001.md`；M4 连续体验验证见 `docs/validation/v0_2_combined_001.md`；R0-A／R0-B 与 M5 记录位于 `docs/validation/`；R1～R6 分别见同目录的 `v1_r1_…` 至 `v1_r6_…`；R7 与 R8 分别见 `docs/validation/v1_r7_modular_layout_001.md` 和 `docs/validation/v1_r8_facilities_environment_001.md`。
+v0.1 发布基线见 `docs/validation/v0.1_baseline_001.md`；M2 身份验证见 `docs/validation/worker_identity_001.md`；M3 糖水验证见 `docs/validation/sugar_foraging_001.md`；M4 连续体验验证见 `docs/validation/v0_2_combined_001.md`；R0-A／R0-B 与 M5 记录位于 `docs/validation/`；R1～R6 分别见同目录的 `v1_r1_…` 至 `v1_r6_…`；R7～R9 分别见同目录的 `v1_r7_…`、`v1_r8_…` 与 `v1_r9_…` 验证记录。
 
-未来 3～4 小时完整独立游戏的章节、设施、音画、验证与发行路线见 `CODEX_V1_MASTER_PLAN.md`；当前存档 schema 见 `docs/architecture/SAVE_SCHEMA_R8.md`，R7／R6／R5／R4／R2 文档保留为历史基线。这些计划不表示未来能力已经实现；当前可运行事实仍以本 README、`GDD.md` 和 `ARCHITECTURE.md` 为准。
+未来 3～4 小时完整独立游戏的章节、设施、音画、验证与发行路线见 `CODEX_V1_MASTER_PLAN.md`；当前存档 schema 见 `docs/architecture/SAVE_SCHEMA_R9.md`，R8／R7／R6／R5／R4／R2 文档保留为历史基线。这些计划不表示未来能力已经实现；当前可运行事实仍以本 README、`GDD.md` 和 `ARCHITECTURE.md` 为准。
 
 开始修改前请阅读 `AGENTS.md`、`GDD.md` 和 `ARCHITECTURE.md`。`sucai/` 仅作内部观察参考，授权确认前不得作为发行素材。

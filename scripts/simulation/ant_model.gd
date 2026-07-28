@@ -18,6 +18,9 @@ var protein_supported_growth_ticks: int = 0
 var worker_task: WorkerTaskModel
 var foraging_task: ForagingTaskModel
 var feeding_task: BroodFeedingTaskModel
+var waste_cleanup_task: WasteCleanupTaskModel
+var scout_task: ScoutTaskModel
+var migration_task: MigrationTaskModel
 
 
 func _init(
@@ -42,6 +45,9 @@ func configure_brood(
 	worker_task = null
 	foraging_task = null
 	feeding_task = null
+	waste_cleanup_task = null
+	scout_task = null
+	migration_task = null
 
 
 func configure_worker(
@@ -54,6 +60,9 @@ func configure_worker(
 	worker_task = WorkerTaskModel.new()
 	worker_task.next_decision_tick = next_decision_tick
 	foraging_task = ForagingTaskModel.new()
+	waste_cleanup_task = WasteCleanupTaskModel.new()
+	scout_task = ScoutTaskModel.new()
+	migration_task = MigrationTaskModel.new()
 	protein_supported_growth_ticks = 0
 
 

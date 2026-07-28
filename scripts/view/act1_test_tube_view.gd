@@ -26,6 +26,10 @@ const PORT_COLOR: Color = Color(0.36, 0.39, 0.34, 0.98)
 const SUGAR_COLOR: Color = Color(0.95, 0.72, 0.28, 0.96)
 const SUGAR_GLOW: Color = Color(1.0, 0.86, 0.48, 0.30)
 const CARE_GLOW: Color = Color(0.91, 0.78, 0.48, 0.22)
+const WASTE_COLOR: Color = Color(0.48, 0.30, 0.14, 0.96)
+const WASTE_GLOW: Color = Color(0.70, 0.48, 0.22, 0.26)
+const SCOUT_GLOW: Color = Color(0.42, 0.76, 0.67, 0.30)
+const MIGRATION_GLOW: Color = Color(0.93, 0.66, 0.30, 0.28)
 const WORKER_SELECTION_RADIUS: float = 28.0
 
 var _ant_views: Dictionary[int, AntView] = {}
@@ -284,6 +288,7 @@ func _validate_snapshot(snapshot: GameSnapshot) -> bool:
 		or snapshot.nutrition == null
 		or snapshot.act1 == null
 		or snapshot.layout == null
+		or snapshot.work == null
 		or snapshot.act1.queen_care == null
 		or snapshot.colony.scenario_id != &"act1_test_tube"
 		or snapshot.colony.zones.size() < 3
@@ -361,7 +366,17 @@ func _calculate_positions(
 	for ant: AntSnapshot in snapshot.colony.ants:
 		if ant.life_stage == AntModel.LifeStage.WORKER:
 			continue
-		positions[ant.entity_id] = _get_brood_position(ant.entity_id)
+		if ant.carrier_ant_id >= 0 and positions.has(ant.carrier_ant_id):
+			positions[ant.entity_id] = (
+				positions[ant.carrier_ant_id] + Vector2(13.0, -12.0)
+			)
+		elif not ant.zone_id.is_empty():
+			positions[ant.entity_id] = (
+				_get_zone_position(ant.zone_id, ant.entity_id)
+				+ _get_brood_slot_offset(ant.entity_id)
+			)
+		else:
+			positions[ant.entity_id] = _get_brood_position(ant.entity_id)
 	return positions
 
 
@@ -369,6 +384,98 @@ func _get_worker_position(
 	worker: AntSnapshot,
 	snapshot: GameSnapshot
 ) -> Vector2:
+	if (
+		worker.waste_cleanup_task != null
+		and worker.waste_cleanup_task.state
+			!= WasteCleanupTaskModel.State.IDLE
+	):
+		var waste: WasteCleanupTaskSnapshot = worker.waste_cleanup_task
+		match waste.state:
+			WasteCleanupTaskModel.State.MOVING_TO_WASTE:
+				return _get_route_position(
+					waste.route_zone_ids,
+					waste.origin_zone_id,
+					waste.source_zone_id,
+					waste.get_progress(),
+					worker.entity_id
+				)
+			WasteCleanupTaskModel.State.PICKING_UP:
+				return _get_zone_position(
+					waste.source_zone_id,
+					worker.entity_id
+				)
+			WasteCleanupTaskModel.State.CARRYING_TO_TRAY:
+				return _get_route_position(
+					waste.route_zone_ids,
+					waste.source_zone_id,
+					waste.target_zone_id,
+					waste.get_progress(),
+					worker.entity_id
+				)
+			WasteCleanupTaskModel.State.DROPPING:
+				return _get_zone_position(
+					waste.target_zone_id,
+					worker.entity_id
+				)
+	if (
+		worker.scout_task != null
+		and worker.scout_task.state != ScoutTaskModel.State.IDLE
+	):
+		var scout: ScoutTaskSnapshot = worker.scout_task
+		match scout.state:
+			ScoutTaskModel.State.MOVING_TO_ZONE:
+				return _get_route_position(
+					scout.route_zone_ids,
+					scout.origin_zone_id,
+					scout.target_zone_id,
+					scout.get_progress(),
+					worker.entity_id
+				)
+			ScoutTaskModel.State.OBSERVING:
+				return _get_zone_position(
+					scout.target_zone_id,
+					worker.entity_id
+				)
+			ScoutTaskModel.State.RETURNING:
+				return _get_route_position(
+					scout.route_zone_ids,
+					scout.target_zone_id,
+					scout.origin_zone_id,
+					scout.get_progress(),
+					worker.entity_id
+				)
+	if (
+		worker.migration_task != null
+		and worker.migration_task.state != MigrationTaskModel.State.IDLE
+	):
+		var migration: MigrationTaskSnapshot = worker.migration_task
+		match migration.state:
+			MigrationTaskModel.State.MOVING_TO_MEMBER:
+				return _get_route_position(
+					migration.route_zone_ids,
+					migration.origin_zone_id,
+					migration.member_origin_zone_id,
+					migration.get_progress(),
+					worker.entity_id
+				)
+			MigrationTaskModel.State.PICKING_UP:
+				return _get_zone_position(
+					migration.member_origin_zone_id,
+					worker.entity_id
+				)
+			MigrationTaskModel.State.CARRYING_TO_ZONE:
+				return _get_route_position(
+					migration.route_zone_ids,
+					migration.member_origin_zone_id,
+					migration.target_zone_id,
+					migration.get_progress(),
+					worker.entity_id
+				)
+			MigrationTaskModel.State.DROPPING:
+				return _get_zone_position(
+					migration.target_zone_id,
+					worker.entity_id
+				)
 	if (
 		worker.feeding_task != null
 		and worker.feeding_task.state != BroodFeedingTaskModel.State.IDLE
@@ -418,11 +525,32 @@ func _calculate_queen_position(
 	snapshot: GameSnapshot,
 	positions: Dictionary[int, Vector2]
 ) -> Vector2:
-	var base: Vector2 = _get_nest_rect().position + (
-		_get_nest_rect().size * Vector2(0.28, 0.42)
+	if (
+		snapshot.colony.queen_carrier_ant_id >= 0
+		and positions.has(snapshot.colony.queen_carrier_ant_id)
+	):
+		return (
+			positions[snapshot.colony.queen_carrier_ant_id]
+			+ Vector2(20.0, -24.0)
+		)
+	var base: Vector2 = (
+		_get_nest_rect().position
+		+ _get_nest_rect().size * Vector2(0.28, 0.42)
 	)
+	if (
+		not snapshot.colony.queen_zone_id.is_empty()
+		and snapshot.colony.queen_zone_id != &"test_tube_nest"
+	):
+		base = (
+			_get_zone_position(snapshot.colony.queen_zone_id, 0)
+			+ Vector2(-20.0, -18.0)
+		)
 	var care: QueenCareSnapshot = snapshot.act1.queen_care
-	if not care.light_cover_applied or care.target_brood_id < 0:
+	if (
+		snapshot.colony.queen_zone_id != &"test_tube_nest"
+		or not care.light_cover_applied
+		or care.target_brood_id < 0
+	):
 		return base
 	var target: Vector2 = positions.get(
 		care.target_brood_id,
@@ -479,6 +607,16 @@ func _get_brood_position(entity_id: int) -> Vector2:
 	return nest.position + nest.size * slot
 
 
+func _get_brood_slot_offset(entity_id: int) -> Vector2:
+	var offsets: Array[Vector2] = [
+		Vector2(-14.0, 14.0),
+		Vector2(2.0, 17.0),
+		Vector2(16.0, 10.0),
+		Vector2(-4.0, 26.0),
+	]
+	return offsets[posmod(entity_id - 1, offsets.size())]
+
+
 func _get_zone_position(zone_id: StringName, entity_id: int) -> Vector2:
 	var tube: Rect2 = _get_tube_rect()
 	var ratio: float = 0.42
@@ -486,11 +624,52 @@ func _get_zone_position(zone_id: StringName, entity_id: int) -> Vector2:
 		ratio = 0.68
 	elif zone_id == &"micro_feeding_port":
 		ratio = 0.88
+	elif zone_id != &"test_tube_nest":
+		var stable_slot: int = posmod(String(zone_id).hash(), 4)
+		ratio = 0.76 + float(stable_slot % 2) * 0.13
+		return Vector2(
+			lerpf(tube.position.x, tube.end.x, ratio),
+			tube.position.y
+			+ tube.size.y * (0.38 + float(stable_slot / 2) * 0.24)
+			+ float(posmod(entity_id, 3) - 1) * 8.0
+		)
 	return Vector2(
 		lerpf(tube.position.x, tube.end.x, ratio),
 		tube.position.y + tube.size.y * (
 			0.58 + float(posmod(entity_id, 3) - 1) * 0.07
 		)
+	)
+
+
+func _get_route_position(
+	route_zone_ids: Array[StringName],
+	start_zone_id: StringName,
+	end_zone_id: StringName,
+	progress: float,
+	entity_id: int
+) -> Vector2:
+	var points: Array[Vector2] = []
+	for zone_id: StringName in route_zone_ids:
+		points.append(_get_zone_position(zone_id, entity_id))
+	if points.is_empty():
+		points.append(_get_zone_position(start_zone_id, entity_id))
+		points.append(_get_zone_position(end_zone_id, entity_id))
+	else:
+		var start: Vector2 = _get_zone_position(start_zone_id, entity_id)
+		var finish: Vector2 = _get_zone_position(end_zone_id, entity_id)
+		if not points[0].is_equal_approx(start):
+			points.push_front(start)
+		if not points[-1].is_equal_approx(finish):
+			points.append(finish)
+	if points.size() == 1:
+		return points[0]
+	var scaled: float = clampf(progress, 0.0, 1.0) * float(
+		points.size() - 1
+	)
+	var segment: int = mini(int(floor(scaled)), points.size() - 2)
+	return points[segment].lerp(
+		points[segment + 1],
+		scaled - float(segment)
 	)
 
 
@@ -556,6 +735,7 @@ func _draw() -> void:
 		5.0,
 		true
 	)
+	_draw_dynamic_zones(tube)
 	_draw_environment_clues(tube)
 	if (
 		_latest_snapshot != null
@@ -613,6 +793,65 @@ func _draw() -> void:
 					3.0,
 					true
 				)
+			if (
+				ant.waste_cleanup_task != null
+				and ant.waste_cleanup_task.carried_amount > 0.0
+			):
+				var waste_position: Vector2 = (
+					worker_position + Vector2(8.0, -13.0)
+				)
+				draw_circle(waste_position, 9.0, WASTE_GLOW)
+				draw_circle(waste_position, 4.5, WASTE_COLOR)
+			if (
+				ant.scout_task != null
+				and ant.scout_task.state == ScoutTaskModel.State.OBSERVING
+			):
+				draw_circle(worker_position, 27.0, SCOUT_GLOW)
+				draw_arc(
+					worker_position,
+					22.0,
+					0.0,
+					TAU,
+					24,
+					SCOUT_GLOW,
+					3.0,
+					true
+				)
+			if (
+				ant.migration_task != null
+				and ant.migration_task.state
+					!= MigrationTaskModel.State.IDLE
+			):
+				draw_circle(worker_position, 25.0, MIGRATION_GLOW)
+				draw_arc(
+					worker_position,
+					20.0,
+					0.0,
+					TAU,
+					24,
+					MIGRATION_GLOW,
+					3.0,
+					true
+				)
+				if ant.migration_task.carried_entity_id >= 0:
+					var carried_position: Vector2 = (
+						_previous_queen_position.lerp(
+							_current_queen_position,
+							_interpolation_alpha
+						)
+						if ant.migration_task.carried_entity_id
+							== _latest_snapshot.colony.queen_entity_id
+						else _get_display_position(
+							ant.migration_task.carried_entity_id
+						)
+					)
+					draw_line(
+						worker_position,
+						carried_position,
+						Color(0.95, 0.72, 0.38, 0.72),
+						2.0,
+						true
+					)
 		if (
 			_latest_snapshot.act1.queen_care.care_state
 			== Act1State.QueenCareState.BROOD_CARE
@@ -635,16 +874,56 @@ func _draw() -> void:
 	_draw_tube_outline(tube)
 
 
+func _draw_dynamic_zones(tube: Rect2) -> void:
+	if _latest_snapshot == null:
+		return
+	var base_zones: Array[StringName] = [
+		&"test_tube_nest",
+		&"tube_passage",
+		&"micro_feeding_port",
+	]
+	for zone: HabitatZoneSnapshot in _latest_snapshot.colony.zones:
+		if zone.zone_id in base_zones or not zone.available:
+			continue
+		var center: Vector2 = _get_zone_position(zone.zone_id, 0)
+		var chamber: Rect2 = Rect2(
+			center - Vector2(48.0, 31.0),
+			Vector2(96.0, 62.0)
+		)
+		var fill: Color = Color(0.075, 0.13, 0.115, 1.0)
+		var edge: Color = Color(0.48, 0.58, 0.52, 1.0)
+		if zone.discovered:
+			fill = fill.lerp(
+				Color(0.16, 0.45, 0.48, 1.0),
+				clampf(zone.humidity, 0.0, 1.0) * 0.72
+			)
+			edge = Color(0.68, 0.88, 0.74, 1.0)
+		draw_line(
+			Vector2(tube.end.x - tube.size.y * 0.20, tube.get_center().y),
+			chamber.position + Vector2(0.0, chamber.size.y * 0.5),
+			GLASS_EDGE if zone.discovered else Color(0.22, 0.28, 0.25, 0.7),
+			5.0,
+			true
+		)
+		draw_rect(chamber, fill, true)
+		draw_rect(chamber, edge, false, 3.0, true)
+		draw_circle(center, 5.0, edge)
+		if not zone.discovered:
+			for index: int in 3:
+				draw_circle(
+					center + Vector2(float(index - 1) * 13.0, 0.0),
+					3.0,
+					Color(0.48, 0.56, 0.51, 0.54)
+				)
+
+
 func _draw_environment_clues(tube: Rect2) -> void:
 	if _latest_snapshot == null:
 		return
 	for zone: HabitatZoneSnapshot in _latest_snapshot.colony.zones:
 		if (
-			zone.zone_id not in [
-				&"test_tube_nest",
-				&"tube_passage",
-				&"micro_feeding_port",
-			]
+			not zone.available
+			or not zone.discovered
 			or zone.pollution <= 0.015
 		):
 			continue
@@ -657,7 +936,11 @@ func _draw_environment_clues(tube: Rect2) -> void:
 				float(posmod(index * 11 + 5, 23)) - 11.0
 			)
 			var point: Vector2 = center + offset
-			if tube.has_point(point):
+			if tube.has_point(point) or zone.zone_id not in [
+				&"test_tube_nest",
+				&"tube_passage",
+				&"micro_feeding_port",
+			]:
 				draw_circle(
 					point,
 					2.0 + float(posmod(index, 2)),

@@ -50,7 +50,12 @@ func advance(state: ColonyState) -> void:
 				if zone != null:
 					var remaining_capacity: float = maxf(
 						0.0,
-						effect.waste_capacity - facility.waste_stored
+						effect.waste_capacity
+							- facility.waste_stored
+							- _get_reserved_incoming_waste(
+								state,
+								facility.facility_id
+							)
 					)
 					var captured: float = minf(
 						zone.pollution,
@@ -167,3 +172,19 @@ func _approach(current: float, target: float, amount: float) -> float:
 	if current < target:
 		return minf(target, current + amount)
 	return maxf(target, current - amount)
+
+
+func _get_reserved_incoming_waste(
+	state: ColonyState,
+	facility_id: int
+) -> float:
+	var reserved: float = 0.0
+	for worker: AntModel in state.ants:
+		var task: WasteCleanupTaskModel = worker.waste_cleanup_task
+		if (
+			task != null
+			and task.state != WasteCleanupTaskModel.State.IDLE
+			and task.target_tray_facility_id == facility_id
+		):
+			reserved += task.reserved_amount
+	return reserved

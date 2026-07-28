@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="ColonyWorkData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/colony_work_data.gd" id="1_work"]
+
+[resource]
+script = ExtResource("1_work")
+data_status = &"prototype_pacing_fixture"
+scientifically_validated = false
+waste_source_pollution_min = 0.08
+waste_batch_amount = 0.04
+waste_decision_interval_ticks = 20
+waste_travel_ticks_per_connection = 12
+waste_pickup_duration_ticks = 8
+waste_drop_duration_ticks = 8
+scout_decision_interval_ticks = 20
+scout_travel_ticks_per_connection = 14
+scout_observe_duration_ticks = 20
+migration_min_improvement = 0.18
+migration_pollution_max = 0.2
+migration_target_stable_ticks = 30
+migration_minimum_zone_dwell_ticks = 60
+migration_decision_interval_ticks = 20
+migration_travel_ticks_per_connection = 16
+migration_pickup_duration_ticks = 8
+migration_drop_duration_ticks = 8

@@ -321,6 +321,7 @@ func _test_pending_inference_save_and_previous_schema_migration() -> void:
 		"2026-07-28T12:01:00Z"
 	)
 	previous["state_schema_id"] = SimulationStateCodec.PREVIOUS_SCHEMA_ID
+	SaveFixtureDowngrade.strip_r9_fields(previous)
 	previous["state_payload"].erase("campaign")
 	previous["state_payload"].erase("nutrition")
 	previous["state_payload"].erase("act1")

@@ -20,6 +20,9 @@ var task_duration_ticks: int
 var foraging_task: ForagingTaskSnapshot
 var protein_supported_growth_ticks: int
 var feeding_task: BroodFeedingTaskSnapshot
+var waste_cleanup_task: WasteCleanupTaskSnapshot
+var scout_task: ScoutTaskSnapshot
+var migration_task: MigrationTaskSnapshot
 
 
 func _init(
@@ -41,7 +44,10 @@ func _init(
 	new_task_duration_ticks: int = 0,
 	new_foraging_task: ForagingTaskSnapshot = null,
 	new_protein_supported_growth_ticks: int = 0,
-	new_feeding_task: BroodFeedingTaskSnapshot = null
+	new_feeding_task: BroodFeedingTaskSnapshot = null,
+	new_waste_cleanup_task: WasteCleanupTaskSnapshot = null,
+	new_scout_task: ScoutTaskSnapshot = null,
+	new_migration_task: MigrationTaskSnapshot = null
 ) -> void:
 	entity_id = new_entity_id
 	life_stage = new_life_stage
@@ -65,6 +71,9 @@ func _init(
 		0
 	)
 	feeding_task = new_feeding_task
+	waste_cleanup_task = new_waste_cleanup_task
+	scout_task = new_scout_task
+	migration_task = new_migration_task
 
 
 func get_stage_progress() -> float:

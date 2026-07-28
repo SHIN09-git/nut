@@ -171,6 +171,15 @@ func assign_idle_workers(state: ColonyState) -> void:
 			and worker.worker_task.state != WorkerTaskModel.State.IDLE
 		):
 			reserved_brood_ids[worker.worker_task.target_brood_id] = true
+		if (
+			worker.migration_task != null
+			and worker.migration_task.state
+				!= MigrationTaskModel.State.IDLE
+			and worker.migration_task.target_entity_id >= 0
+		):
+			reserved_brood_ids[
+				worker.migration_task.target_entity_id
+			] = true
 
 	for worker: AntModel in state.ants:
 		if (
@@ -186,6 +195,7 @@ func assign_idle_workers(state: ColonyState) -> void:
 				and worker.feeding_task.state
 					!= BroodFeedingTaskModel.State.IDLE
 			)
+			or _has_colony_work_task(worker)
 			or state.simulation_tick < worker.worker_task.next_decision_tick
 		):
 			continue
@@ -241,6 +251,36 @@ func has_valid_ownership(state: ColonyState) -> bool:
 				!= BroodFeedingTaskModel.State.IDLE
 		):
 			return false
+		if (
+			task.state != WorkerTaskModel.State.IDLE
+			and _has_colony_work_task(ant)
+		):
+			return false
+		if (
+			ant.migration_task != null
+			and ant.migration_task.state
+				!= MigrationTaskModel.State.IDLE
+			and ant.migration_task.target_entity_id >= 0
+		):
+			reservation_counts[
+				ant.migration_task.target_entity_id
+			] = (
+				int(reservation_counts.get(
+					ant.migration_task.target_entity_id,
+					0
+				))
+				+ 1
+			)
+			if ant.migration_task.carried_entity_id >= 0:
+				carrier_counts[
+					ant.migration_task.carried_entity_id
+				] = (
+					int(carrier_counts.get(
+						ant.migration_task.carried_entity_id,
+						0
+					))
+					+ 1
+				)
 		if task.state == WorkerTaskModel.State.IDLE:
 			if (
 				task.target_brood_id != -1
@@ -308,6 +348,19 @@ func has_valid_ownership(state: ColonyState) -> bool:
 	return true
 
 
+func _has_colony_work_task(worker: AntModel) -> bool:
+	return (
+		worker.waste_cleanup_task != null
+		and worker.waste_cleanup_task.state
+			!= WasteCleanupTaskModel.State.IDLE
+		or worker.scout_task != null
+		and worker.scout_task.state != ScoutTaskModel.State.IDLE
+		or worker.migration_task != null
+		and worker.migration_task.state
+			!= MigrationTaskModel.State.IDLE
+	)
+
+
 func is_humidity_comfortable(humidity: float) -> bool:
 	if not is_ready():
 		return false
@@ -357,6 +410,7 @@ func _find_best_relocation_zone(
 	for candidate: HabitatZoneState in state.zones:
 		if (
 			not candidate.available
+			or not candidate.discovered
 			or candidate.zone_id == source_zone_id
 			or not state.are_zones_directly_connected(
 				source_zone_id,

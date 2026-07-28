@@ -4,6 +4,9 @@ extends RefCounted
 const ACT1_SCENE: PackedScene = preload(
 	"res://scenes/main/act1_test_tube.tscn"
 )
+const ACT1_SCENARIO_DATA: HabitatScenarioData = preload(
+	"res://data/habitats/act1_test_tube.tres"
+)
 
 var _assertion_count: int = 0
 var _failure_count: int = 0
@@ -14,6 +17,8 @@ func run(scene_root: Node) -> void:
 	_scene_root = scene_root
 	_test_real_controls_complete_both_chapters()
 	_test_pause_and_f3_boundaries()
+	_test_colony_work_projection()
+	_test_waste_tray_clean_button_boundary()
 	_test_supported_viewport_layouts()
 
 
@@ -230,6 +235,108 @@ func _test_pause_and_f3_boundaries() -> void:
 	_destroy_controller(controller)
 
 
+func _test_colony_work_projection() -> void:
+	var controller: Act1TestTubeController = _create_controller(
+		Vector2(1280, 720)
+	)
+	var snapshot: GameSnapshot = controller.get_latest_snapshot()
+	var worker: AntSnapshot = snapshot.colony.ants[0]
+	var brood: AntSnapshot = snapshot.colony.ants[1]
+	worker.life_stage = AntModel.LifeStage.WORKER
+	worker.zone_id = &"test_tube_nest"
+	var task := MigrationTaskModel.new()
+	task.begin(
+		MigrationTaskModel.State.CARRYING_TO_ZONE,
+		&"test_tube_nest",
+		&"test_tube_nest",
+		brood.entity_id,
+		&"tube_passage",
+		[&"test_tube_nest", &"tube_passage"],
+		10
+	)
+	task.carried_entity_id = brood.entity_id
+	task.elapsed_ticks = 5
+	worker.migration_task = MigrationTaskSnapshot.new(task)
+	brood.zone_id = &""
+	brood.carrier_ant_id = worker.entity_id
+	var view: Act1TestTubeView = controller.get_node(
+		"%Act1TestTubeView"
+	) as Act1TestTubeView
+	_expect_true(
+		view.apply_snapshot(snapshot),
+		"Act 1 view accepts a migration task snapshot"
+	)
+	view.set_interpolation_alpha(1.0)
+	var worker_view: AntView = view.get_ant_view(worker.entity_id)
+	var brood_view: AntView = view.get_ant_view(brood.entity_id)
+	_expect_true(
+		worker_view != null and brood_view != null,
+		"migration keeps stable worker and brood view nodes"
+	)
+	if worker_view != null and brood_view != null:
+		_expect_vector_near(
+			brood_view.position,
+			worker_view.position + Vector2(13.0, -12.0),
+			0.01,
+			"carried brood follows the snapshot-derived worker position"
+		)
+	_destroy_controller(controller)
+
+
+func _test_waste_tray_clean_button_boundary() -> void:
+	var scenario: HabitatScenarioData = (
+		ACT1_SCENARIO_DATA.duplicate(true) as HabitatScenarioData
+	)
+	var tray := InitialFacilityData.new()
+	tray.facility_id = 3
+	tray.type_id = &"waste_tray"
+	tray.slot = Vector2i(1, 3)
+	tray.orientation = 0
+	tray.zone_id = &"test_tube_nest"
+	tray.available = true
+	tray.player_removable = false
+	scenario.facility_catalog_data.initial_facilities.append(tray)
+	var controller: Act1TestTubeController = _create_controller(
+		Vector2(1280, 720),
+		1.0,
+		scenario
+	)
+	(controller.get_node("%StartObservationButton") as Button).pressed.emit()
+	controller._process(SimulationClock.FIXED_STEP_SECONDS)
+	var clean_button: Button = controller.get_node(
+		"%CleanWasteButton"
+	) as Button
+	_expect_true(
+		clean_button.visible and not clean_button.disabled,
+		"clean tool appears when the authoritative tray is cleanable"
+	)
+	var before: FacilitySnapshot = (
+		controller.get_latest_snapshot().layout.get_facility(3)
+	)
+	var stored_before: float = before.waste_fill_ratio
+	clean_button.pressed.emit()
+	var submitted: GameSnapshot = controller.get_latest_snapshot()
+	_expect_int(
+		submitted.work.clean_action_pending_facility_id,
+		3,
+		"clean button submits the stable tray ID"
+	)
+	_expect_true(
+		is_equal_approx(
+			submitted.layout.get_facility(3).waste_fill_ratio,
+			stored_before
+		),
+		"clean button does not change tray state in the submission Tick"
+	)
+	controller._process(SimulationClock.FIXED_STEP_SECONDS)
+	_expect_int(
+		controller.get_latest_snapshot().work.cleaned_waste_tray_count,
+		1,
+		"clean action is applied by the simulation on the next Tick"
+	)
+	_destroy_controller(controller)
+
+
 func _test_supported_viewport_layouts() -> void:
 	for viewport_size: Vector2 in [
 		Vector2(1280, 720),
@@ -425,7 +532,8 @@ func _process_until(
 
 func _create_controller(
 	viewport_size: Vector2,
-	ui_scale: float = 1.0
+	ui_scale: float = 1.0,
+	scenario_data: HabitatScenarioData = null
 ) -> Act1TestTubeController:
 	var controller: Act1TestTubeController = (
 		ACT1_SCENE.instantiate() as Act1TestTubeController
@@ -438,6 +546,8 @@ func _create_controller(
 		false
 	)
 	controller.exit_application_on_request = false
+	if scenario_data != null:
+		controller.habitat_scenario_data_source = scenario_data
 	_scene_root.add_child(controller)
 	controller.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	controller.position = Vector2.ZERO
@@ -473,6 +583,18 @@ func _expect_true(actual: bool, message: String) -> void:
 func _expect_int(actual: int, expected: int, message: String) -> void:
 	_assertion_count += 1
 	if actual == expected:
+		return
+	_record_failure(message, str(expected), str(actual))
+
+
+func _expect_vector_near(
+	actual: Vector2,
+	expected: Vector2,
+	tolerance: float,
+	message: String
+) -> void:
+	_assertion_count += 1
+	if actual.distance_to(expected) <= tolerance:
 		return
 	_record_failure(message, str(expected), str(actual))
 

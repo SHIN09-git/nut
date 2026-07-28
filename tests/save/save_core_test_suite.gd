@@ -566,6 +566,7 @@ func _test_legacy_schema_migration() -> void:
 		TEST_TIMESTAMP
 	)
 	legacy["state_schema_id"] = SimulationStateCodec.LEGACY_SCHEMA_ID
+	SaveFixtureDowngrade.strip_r9_fields(legacy)
 	legacy["pending_commands"] = [
 		ColonySimulation.PendingCommandType.CONTINUE_OBSERVATION_ACTION,
 	]

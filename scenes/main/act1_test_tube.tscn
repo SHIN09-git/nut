@@ -312,6 +312,13 @@ custom_minimum_size = Vector2(180, 48)
 layout_mode = 2
 text = "在喂食口滴糖水"
 
+[node name="CleanWasteButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRow"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(170, 48)
+layout_mode = 2
+text = "清理垃圾托盘"
+
 [node name="ToolSpacer" type="Control" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRow"]
 layout_mode = 2
 size_flags_horizontal = 3

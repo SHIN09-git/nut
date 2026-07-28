@@ -327,6 +327,7 @@ func _test_r6_save_migrates_to_r7_layout_authority() -> void:
 	)
 	previous["state_schema_id"] = SimulationStateCodec.R6_SCHEMA_ID
 	previous["game_version"] = "0.6.0-dev"
+	SaveFixtureDowngrade.strip_r9_fields(previous)
 	previous["frozen_config_bundle"]["habitat"].erase(
 		"facility_catalog_config"
 	)
