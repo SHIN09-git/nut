@@ -19,6 +19,8 @@ var _scene_root: Node
 func run(scene_root: Node) -> void:
 	_scene_root = scene_root
 	_test_scene_instantiates_at_target_size()
+	_test_preparation_gate_freezes_tick_and_projection()
+	_test_pre_event_copy_roles_do_not_leak()
 	_test_card_projection_uses_frozen_snapshot_ids()
 	_test_real_viewport_path_reaches_summary_and_restarts()
 	_test_pause_and_f3_freeze_projection()
@@ -49,12 +51,33 @@ func _test_scene_instantiates_at_target_size() -> void:
 	var debug_panel: Control = controller.get_node_or_null(
 		"%DebugPanel"
 	) as Control
+	var preparation_gate: Control = controller.get_node_or_null(
+		"%PreparationGate"
+	) as Control
+	var start_button: Button = controller.get_node_or_null(
+		"%StartObservationButton"
+	) as Button
+	var pause_button: Button = controller.get_node_or_null(
+		"%PauseButton"
+	) as Button
+	var speed_4x_button: Button = controller.get_node_or_null(
+		"%Speed4xButton"
+	) as Button
+	var speed_16x_button: Button = controller.get_node_or_null(
+		"%Speed16xButton"
+	) as Button
 
 	_expect_true(habitat_view != null, "combined scene contains one HabitatView")
 	_expect_true(worker_panel != null, "combined scene reuses the identity panel")
 	_expect_true(stage_button != null, "combined scene has one staged action control")
 	_expect_true(completion_panel != null, "combined scene has a summary panel")
 	_expect_true(debug_panel != null, "combined scene has an F3 diagnostic panel")
+	_expect_true(
+		controller.get_node_or_null("%DebugToggleButton") == null,
+		"ordinary layout does not expose a debug button"
+	)
+	_expect_true(preparation_gate != null, "combined scene has a preparation gate")
+	_expect_true(start_button != null, "preparation gate has one start affordance")
 	_expect_true(
 		controller._fatal_simulation_error.is_empty(),
 		"combined scene starts without a simulation error"
@@ -89,11 +112,251 @@ func _test_scene_instantiates_at_target_size() -> void:
 		)
 	if stage_button != null:
 		_expect_true(stage_button.disabled, "intervention is gated during the prelude")
+	if preparation_gate != null:
+		_expect_true(preparation_gate.visible, "preparation gate starts visible")
+	if start_button != null:
+		_expect_true(not start_button.disabled, "start affordance is initially available")
+	if pause_button != null:
+		_expect_true(pause_button.disabled, "pause is locked before observation starts")
+	if speed_4x_button != null:
+		_expect_true(speed_4x_button.disabled, "4x is locked before observation starts")
+	if speed_16x_button != null:
+		_expect_true(speed_16x_button.disabled, "16x is locked before observation starts")
+	_expect_true(
+		controller._simulation_clock.is_paused(),
+		"application clock starts frozen behind the preparation gate"
+	)
+	_expect_int(
+		controller._simulation_clock.get_speed_multiplier(),
+		SimulationClock.NORMAL_SPEED,
+		"preparation gate fixes the application clock at 1x"
+	)
 	if completion_panel != null:
 		_expect_true(not completion_panel.visible, "summary starts hidden")
 	if debug_panel != null:
 		_expect_true(not debug_panel.visible, "F3 starts hidden")
 
+	_destroy_controller(controller)
+
+
+func _test_preparation_gate_freezes_tick_and_projection() -> void:
+	var controller: CombinedObservationController = _create_controller()
+	var habitat_view: CombinedHabitatView = controller.get_node(
+		"%CombinedHabitatView"
+	) as CombinedHabitatView
+	var start_button: Button = controller.get_node(
+		"%StartObservationButton"
+	) as Button
+	var pause_button: Button = controller.get_node("%PauseButton") as Button
+	var speed_4x_button: Button = controller.get_node(
+		"%Speed4xButton"
+	) as Button
+	var speed_16x_button: Button = controller.get_node(
+		"%Speed16xButton"
+	) as Button
+	var stage_button: Button = controller.get_node(
+		"%StageActionButton"
+	) as Button
+	var first_ant_id: int = (
+		controller._latest_snapshot.sequence.first_worker_entity_id
+	)
+	var ant_view: AntView = habitat_view.get_ant_view(first_ant_id)
+	var queen_view: QueenView = habitat_view.get_queen_view()
+	var initial_ant_position: Vector2 = ant_view.position
+	var initial_queen_position: Vector2 = queen_view.position
+	var initial_signature: String = (
+		SimulationSnapshotSignature.canonical_game_snapshot(
+			controller._latest_snapshot
+		)
+	)
+
+	_click_control(pause_button)
+	_click_control(speed_4x_button)
+	_click_control(speed_16x_button)
+	_click_control(stage_button)
+	controller._process(3.0)
+
+	_expect_true(
+		controller.is_preparation_gate_active(),
+		"preparation gate remains active until the start affordance is used"
+	)
+	_expect_int(
+		controller._latest_snapshot.simulation_tick,
+		0,
+		"processing time behind the preparation gate does not advance Tick"
+	)
+	_expect_string(
+		SimulationSnapshotSignature.canonical_game_snapshot(
+			controller._latest_snapshot
+		),
+		initial_signature,
+		"locked controls cannot mutate the initial simulation snapshot"
+	)
+	_expect_int(
+		controller._simulation_clock.get_speed_multiplier(),
+		SimulationClock.NORMAL_SPEED,
+		"locked speed controls cannot leave 1x"
+	)
+	_expect_true(
+		controller._simulation_clock.is_paused(),
+		"locked pause control cannot release the application clock"
+	)
+	_expect_true(
+		habitat_view.are_visuals_paused(),
+		"preparation gate freezes habitat projection"
+	)
+	_expect_float(
+		habitat_view.get_interpolation_alpha(),
+		0.0,
+		"preparation gate holds interpolation at its initial boundary"
+	)
+	_expect_vector2(
+		ant_view.position,
+		initial_ant_position,
+		"late pupa projection does not move before start"
+	)
+	_expect_vector2(
+		queen_view.position,
+		initial_queen_position,
+		"queen projection does not move before start"
+	)
+
+	_press_start_button(controller)
+	_expect_true(
+		not controller.is_preparation_gate_active(),
+		"start button signal releases the preparation gate"
+	)
+	_expect_true(
+		not controller._simulation_clock.is_paused(),
+		"start affordance releases only the application clock"
+	)
+	_expect_true(
+		not habitat_view.are_visuals_paused(),
+		"start affordance releases visual interpolation"
+	)
+	_expect_int(
+		controller._latest_snapshot.simulation_tick,
+		0,
+		"starting observation does not submit a simulation command"
+	)
+	controller._process(SimulationClock.FIXED_STEP_SECONDS)
+	_expect_int(
+		controller._latest_snapshot.simulation_tick,
+		1,
+		"first post-start fixed step advances to Tick one"
+	)
+	_destroy_controller(controller)
+
+
+func _test_pre_event_copy_roles_do_not_leak() -> void:
+	var controller: CombinedObservationController = _create_controller()
+	var instruction_label: Label = controller.get_node(
+		"%InstructionLabel"
+	) as Label
+	var feedback_label: Label = controller.get_node(
+		"%FeedbackLabel"
+	) as Label
+	var worker_prompt_label: Label = controller.get_node(
+		"%WorkerPromptLabel"
+	) as Label
+	var selected_worker_content: Control = controller.get_node(
+		"%SelectedWorkerContent"
+	) as Control
+	var name_edit: LineEdit = controller.get_node(
+		"%WorkerNameEdit"
+	) as LineEdit
+	var footer: Label = controller.get_node(
+		"SafeArea/Content/Footer"
+	) as Label
+	var card_labels: Array[Label] = [
+		controller.get_node("%EmergenceCardLabel") as Label,
+		controller.get_node("%HumidityCardLabel") as Label,
+		controller.get_node("%SugarCardLabel") as Label,
+	]
+
+	for card_label: Label in card_labels:
+		_expect_copy_role(
+			card_label,
+			CombinedObservationController.COPY_ROLE_NEUTRAL_PLACEHOLDER,
+			"locked observation card exposes only a neutral placeholder"
+		)
+		_expect_string(
+			card_label.text,
+			CombinedObservationController.LOCKED_CARD_TEXT,
+			"locked observation card does not reveal its conclusion"
+		)
+	_expect_copy_role(
+		instruction_label,
+		CombinedObservationController.COPY_ROLE_OBSERVATION_CUE,
+		"founding instruction is an observable clue"
+	)
+	_expect_copy_role(
+		feedback_label,
+		CombinedObservationController.COPY_ROLE_OBSERVATION_CUE,
+		"founding feedback is an observable clue"
+	)
+	_expect_copy_role(
+		worker_prompt_label,
+		CombinedObservationController.COPY_ROLE_OBSERVATION_CUE,
+		"unselected identity prompt is a neutral observation cue"
+	)
+	_expect_copy_role(
+		footer,
+		CombinedObservationController.COPY_ROLE_SYSTEM_STATUS,
+		"ordinary footer contains status information only"
+	)
+	_expect_true(
+		not selected_worker_content.visible,
+		"identity controls remain hidden until independent worker selection"
+	)
+	_expect_true(
+		not name_edit.is_visible_in_tree(),
+		"naming affordance is absent before independent worker selection"
+	)
+
+	_press_start_button(controller)
+	var emergence_ticks: int = (
+		SPECIES_A_DATA.pupa_duration_ticks
+		- COMBINED_SCENARIO_DATA.sequence_data
+			.first_worker_initial_pupa_age_ticks
+	)
+	for step_index: int in range(emergence_ticks):
+		controller._process(SimulationClock.FIXED_STEP_SECONDS)
+
+	_expect_int(
+		controller._latest_snapshot.sequence.phase,
+		ScenarioSequenceSnapshot.Phase.IDENTITY_OBSERVATION,
+		"identity copy audit begins only after emergence evidence exists"
+	)
+	_expect_copy_role(
+		instruction_label,
+		CombinedObservationController.COPY_ROLE_OBSERVATION_CUE,
+		"identity instruction remains an observation cue"
+	)
+	_expect_copy_role(
+		feedback_label,
+		CombinedObservationController.COPY_ROLE_OBSERVATION_CUE,
+		"identity feedback remains an observation cue"
+	)
+	_expect_copy_role(
+		card_labels[0],
+		CombinedObservationController.COPY_ROLE_POST_EVENT_CONCLUSION,
+		"emergence conclusion appears only after its event"
+	)
+	for locked_card_index: int in range(1, card_labels.size()):
+		_expect_copy_role(
+			card_labels[locked_card_index],
+			CombinedObservationController.COPY_ROLE_NEUTRAL_PLACEHOLDER,
+			"future card %d remains neutral" % locked_card_index
+		)
+	_expect_true(
+		not selected_worker_content.visible,
+		"identity phase does not force or preselect a worker"
+	)
+	_expect_true(
+		not name_edit.is_visible_in_tree(),
+		"identity phase does not expose naming before selection"
+	)
 	_destroy_controller(controller)
 
 
@@ -119,6 +382,7 @@ func _test_card_projection_uses_frozen_snapshot_ids() -> void:
 		&"post_ready_mutation"
 	)
 
+	_press_start_button(controller)
 	for step_index: int in range(emergence_ticks):
 		controller._process(SimulationClock.FIXED_STEP_SECONDS)
 	var snapshot: GameSnapshot = controller._latest_snapshot
@@ -180,6 +444,7 @@ func _test_real_viewport_path_reaches_summary_and_restarts() -> void:
 	)
 	_expect_true(stable_view != null, "the late pupa has its stable AntView")
 
+	_press_start_button(controller)
 	var emergence_ticks: int = (
 		SPECIES_A_DATA.pupa_duration_ticks
 		- COMBINED_SCENARIO_DATA.sequence_data
@@ -207,6 +472,10 @@ func _test_real_viewport_path_reaches_summary_and_restarts() -> void:
 	_expect_true(
 		habitat_view.get_ant_view(first_worker_id) == stable_view,
 		"pupa-to-worker projection reuses the exact AntView instance"
+	)
+	_expect_pre_event_guidance_roles(
+		controller,
+		"identity phase"
 	)
 
 	_click_control(habitat_view, stable_view.position)
@@ -253,14 +522,18 @@ func _test_real_viewport_path_reaches_summary_and_restarts() -> void:
 		ScenarioSequenceSnapshot.Phase.HUMIDITY_OBSERVATION,
 		"the queued continue command applies on the next fixed Tick"
 	)
+	_expect_pre_event_guidance_roles(
+		controller,
+		"initial humidity phase"
+	)
 
 	var carrying_seen: bool = false
-	var humidity_deadline: int = controller._latest_snapshot.simulation_tick + 1000
-	while (
-		not controller._latest_snapshot.colony.water_action_available
-		and controller._latest_snapshot.simulation_tick < humidity_deadline
-		and controller._fatal_simulation_error.is_empty()
-	):
+	for humidity_step: int in range(1000):
+		if (
+			controller._latest_snapshot.colony.water_action_available
+			or not controller._fatal_simulation_error.is_empty()
+		):
+			break
 		for ant: AntSnapshot in controller._latest_snapshot.colony.ants:
 			if (
 				ant.life_stage == AntModel.LifeStage.WORKER
@@ -276,6 +549,10 @@ func _test_real_viewport_path_reaches_summary_and_restarts() -> void:
 	_expect_true(
 		habitat_view.get_ant_view(first_worker_id) == stable_view,
 		"humidity relocation keeps the first worker AntView"
+	)
+	_expect_pre_event_guidance_roles(
+		controller,
+		"watering affordance"
 	)
 
 	for water_index: int in range(3):
@@ -315,15 +592,13 @@ func _test_real_viewport_path_reaches_summary_and_restarts() -> void:
 			"applied water click uses the frozen configured amount"
 		)
 
-	var sugar_phase_deadline: int = (
-		controller._latest_snapshot.simulation_tick + 1200
-	)
-	while (
-		controller._latest_snapshot.sequence.phase
-			== ScenarioSequenceSnapshot.Phase.HUMIDITY_OBSERVATION
-		and controller._latest_snapshot.simulation_tick < sugar_phase_deadline
-		and controller._fatal_simulation_error.is_empty()
-	):
+	for sugar_phase_step: int in range(1200):
+		if (
+			controller._latest_snapshot.sequence.phase
+				!= ScenarioSequenceSnapshot.Phase.HUMIDITY_OBSERVATION
+			or not controller._fatal_simulation_error.is_empty()
+		):
+			break
 		controller._process(SimulationClock.FIXED_STEP_SECONDS)
 	_expect_int(
 		controller._latest_snapshot.sequence.phase,
@@ -333,6 +608,10 @@ func _test_real_viewport_path_reaches_summary_and_restarts() -> void:
 	_expect_true(
 		controller._latest_snapshot.observations.has_card(&"brood_humidity_response"),
 		"stable humidity unlocks the second observation card"
+	)
+	_expect_pre_event_guidance_roles(
+		controller,
+		"pre-placement sugar phase"
 	)
 
 	_click_control(stage_button)
@@ -356,14 +635,18 @@ func _test_real_viewport_path_reaches_summary_and_restarts() -> void:
 		1,
 		"the next fixed Tick creates one configured food source"
 	)
+	_expect_pre_event_guidance_roles(
+		controller,
+		"post-placement evidence collection"
+	)
 
-	var summary_deadline: int = controller._latest_snapshot.simulation_tick + 1000
 	var carried_sugar_seen: bool = false
-	while (
-		not controller._latest_snapshot.sequence.completed
-		and controller._latest_snapshot.simulation_tick < summary_deadline
-		and controller._fatal_simulation_error.is_empty()
-	):
+	for summary_step: int in range(1000):
+		if (
+			controller._latest_snapshot.sequence.completed
+			or not controller._fatal_simulation_error.is_empty()
+		):
+			break
 		var worker: AntSnapshot = controller._latest_snapshot.colony.find_ant(
 			first_worker_id
 		)
@@ -394,6 +677,16 @@ func _test_real_viewport_path_reaches_summary_and_restarts() -> void:
 	_expect_true(
 		completion_panel.visible,
 		"completed snapshot reveals the summary panel"
+	)
+	_expect_copy_role(
+		controller.get_node("%InstructionLabel") as Label,
+		CombinedObservationController.COPY_ROLE_POST_EVENT_CONCLUSION,
+		"summary instruction may state the completed conclusion"
+	)
+	_expect_copy_role(
+		controller.get_node("%FeedbackLabel") as Label,
+		CombinedObservationController.COPY_ROLE_POST_EVENT_CONCLUSION,
+		"summary feedback may state the completed conclusion"
 	)
 	_expect_true(
 		habitat_view.get_ant_view(first_worker_id) == stable_view,
@@ -453,8 +746,27 @@ func _test_real_viewport_path_reaches_summary_and_restarts() -> void:
 		"restart restores 1x"
 	)
 	_expect_true(
-		not controller._simulation_clock.is_paused(),
-		"restart restores an unpaused clock"
+		controller._simulation_clock.is_paused(),
+		"restart returns to the frozen preparation clock"
+	)
+	_expect_true(
+		controller.is_preparation_gate_active(),
+		"restart returns to the preparation gate"
+	)
+	_expect_true(
+		(controller.get_node("%PreparationGate") as Control).visible,
+		"restart makes the preparation gate visible again"
+	)
+	_press_start_button(controller)
+	_expect_true(
+		not controller.is_preparation_gate_active(),
+		"restarted session can begin through the same start affordance"
+	)
+	controller._process(SimulationClock.FIXED_STEP_SECONDS)
+	_expect_int(
+		controller._latest_snapshot.simulation_tick,
+		1,
+		"restarted session advances normally after its start affordance"
 	)
 
 	_destroy_controller(controller)
@@ -472,6 +784,7 @@ func _test_pause_and_f3_freeze_projection() -> void:
 	)
 	var ant_view: AntView = habitat_view.get_ant_view(first_ant_id)
 
+	_press_start_button(controller)
 	controller._process(SimulationClock.FIXED_STEP_SECONDS * 2.0)
 	_click_control(pause_button)
 	var paused_tick: int = controller._latest_snapshot.simulation_tick
@@ -501,6 +814,66 @@ func _test_pause_and_f3_freeze_projection() -> void:
 	_push_key(controller.get_viewport(), KEY_F3)
 	_expect_true(not debug_panel.visible, "second F3 closes the diagnostic layer")
 	_destroy_controller(controller)
+
+
+func _expect_pre_event_guidance_roles(
+	controller: CombinedObservationController,
+	context: String
+) -> void:
+	_expect_role_in(
+		controller.get_node("%InstructionLabel") as Label,
+		[
+			CombinedObservationController.COPY_ROLE_OBSERVATION_CUE,
+			CombinedObservationController.COPY_ROLE_ACTION_AFFORDANCE,
+		],
+		"%s instruction does not state a conclusion" % context
+	)
+	_expect_role_in(
+		controller.get_node("%FeedbackLabel") as Label,
+		[
+			CombinedObservationController.COPY_ROLE_OBSERVATION_CUE,
+			CombinedObservationController.COPY_ROLE_ACTION_AFFORDANCE,
+		],
+		"%s feedback does not state a conclusion" % context
+	)
+
+
+func _expect_copy_role(
+	label: Label,
+	expected: StringName,
+	message: String
+) -> void:
+	var actual: StringName = StringName(
+		label.get_meta(
+			CombinedObservationController.COPY_ROLE_META_KEY,
+			&""
+		)
+	)
+	_expect_string_name(actual, expected, message)
+
+
+func _expect_role_in(
+	label: Label,
+	allowed_roles: Array[StringName],
+	message: String
+) -> void:
+	_assertion_count += 1
+	var actual: StringName = StringName(
+		label.get_meta(
+			CombinedObservationController.COPY_ROLE_META_KEY,
+			&""
+		)
+	)
+	if allowed_roles.has(actual):
+		return
+	_record_failure(message, str(allowed_roles), String(actual))
+
+
+func _press_start_button(controller: CombinedObservationController) -> void:
+	var start_button: Button = controller.get_node(
+		"%StartObservationButton"
+	) as Button
+	start_button.pressed.emit()
 
 
 func _create_controller() -> CombinedObservationController:

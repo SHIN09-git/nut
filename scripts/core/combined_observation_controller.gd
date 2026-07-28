@@ -7,6 +7,14 @@ const SPECIES_A_DATA: SpeciesData = preload(
 const COMBINED_SCENARIO_DATA: HabitatScenarioData = preload(
 	"res://data/habitats/combined_observation_slice.tres"
 )
+const COPY_ROLE_META_KEY: StringName = &"evidence_copy_role"
+const COPY_ROLE_OBSERVATION_CUE: StringName = &"observation_cue"
+const COPY_ROLE_ACTION_AFFORDANCE: StringName = &"action_affordance"
+const COPY_ROLE_NEUTRAL_PLACEHOLDER: StringName = &"neutral_placeholder"
+const COPY_ROLE_POST_EVENT_CONCLUSION: StringName = &"post_event_conclusion"
+const COPY_ROLE_SYSTEM_STATUS: StringName = &"system_status"
+const COPY_ROLE_ERROR: StringName = &"error"
+const LOCKED_CARD_TEXT: String = "○  尚未记录"
 
 var _simulation_clock: SimulationClock
 var _colony_simulation: ColonySimulation
@@ -14,6 +22,7 @@ var _latest_snapshot: GameSnapshot
 var _player_annotation_state: PlayerAnnotationState
 var _sugar_tool_armed: bool = false
 var _fatal_simulation_error: String = ""
+var _preparation_gate_active: bool = true
 
 # Tests may replace these before _ready(). Both Resources are consumed only
 # while ColonySimulation freezes the configuration at session construction.
@@ -41,11 +50,12 @@ var habitat_scenario_data_source: HabitatScenarioData = (
 @onready var _restart_button: Button = %RestartButton
 @onready var _debug_panel: PanelContainer = %DebugPanel
 @onready var _debug_label: Label = %DebugLabel
-@onready var _debug_toggle_button: Button = %DebugToggleButton
 @onready var _pause_button: Button = %PauseButton
 @onready var _speed_1x_button: Button = %Speed1xButton
 @onready var _speed_4x_button: Button = %Speed4xButton
 @onready var _speed_16x_button: Button = %Speed16xButton
+@onready var _preparation_gate: Control = %PreparationGate
+@onready var _start_observation_button: Button = %StartObservationButton
 
 
 func _ready() -> void:
@@ -77,7 +87,9 @@ func _ready() -> void:
 	_pause_button.pressed.connect(_on_pause_button_pressed)
 	_stage_action_button.pressed.connect(_on_stage_action_button_pressed)
 	_restart_button.pressed.connect(_on_restart_button_pressed)
-	_debug_toggle_button.pressed.connect(_toggle_debug_panel)
+	_start_observation_button.pressed.connect(
+		_on_start_observation_button_pressed
+	)
 	_speed_1x_button.pressed.connect(
 		_on_speed_button_pressed.bind(SimulationClock.NORMAL_SPEED)
 	)
@@ -88,11 +100,15 @@ func _ready() -> void:
 		_on_speed_button_pressed.bind(SimulationClock.VERY_FAST_SPEED)
 	)
 
+	_simulation_clock.set_paused(true)
 	_apply_game_snapshot()
+	_enter_preparation_gate()
 
 
 func _process(delta: float) -> void:
 	if _simulation_clock == null or not _fatal_simulation_error.is_empty():
+		return
+	if _preparation_gate_active:
 		return
 	_simulation_clock.advance(delta)
 	if _fatal_simulation_error.is_empty():
@@ -105,7 +121,7 @@ func _input(event: InputEvent) -> void:
 	var key_event: InputEventKey = event as InputEventKey
 	if key_event == null or not key_event.pressed or key_event.echo:
 		return
-	if key_event.keycode == KEY_F3:
+	if key_event.keycode == KEY_F3 and _debug_controls_available():
 		_toggle_debug_panel()
 		get_viewport().set_input_as_handled()
 	elif key_event.keycode == KEY_ESCAPE and _sugar_tool_armed:
@@ -126,6 +142,8 @@ func _on_simulation_tick_requested(
 
 
 func _on_pause_button_pressed() -> void:
+	if _preparation_gate_active:
+		return
 	var paused: bool = _simulation_clock.toggle_paused()
 	if paused and _sugar_tool_armed:
 		_cancel_sugar_tool("观察已暂停，放置操作已取消。")
@@ -135,28 +153,38 @@ func _on_pause_button_pressed() -> void:
 
 
 func _on_stage_action_button_pressed() -> void:
-	if _latest_snapshot == null or _stage_action_button.disabled:
+	if (
+		_preparation_gate_active
+		or _latest_snapshot == null
+		or _stage_action_button.disabled
+	):
 		return
 	match _latest_snapshot.sequence.phase:
 		ScenarioSequenceSnapshot.Phase.IDENTITY_OBSERVATION:
 			if _colony_simulation.submit_continue_observation_action():
 				_apply_game_snapshot()
-				_feedback_label.text = (
-					"观察意图已提交；下一次模拟更新后进入环境观察。"
+				_set_copy(
+					_feedback_label,
+					"观察动作已提交，将在下一次更新时生效。",
+					COPY_ROLE_ACTION_AFFORDANCE
 				)
 		ScenarioSequenceSnapshot.Phase.HUMIDITY_OBSERVATION:
 			if _colony_simulation.submit_water_action():
 				_apply_game_snapshot()
-				_feedback_label.text = (
-					"补水动作已提交；水分会在下一次模拟更新时渗入。"
+				_set_copy(
+					_feedback_label,
+					"补水动作已提交，将在下一次更新时生效。",
+					COPY_ROLE_ACTION_AFFORDANCE
 				)
 		ScenarioSequenceSnapshot.Phase.SUGAR_FORAGING:
 			if _sugar_tool_armed:
 				_cancel_sugar_tool("已取消放置糖水。")
 			elif _can_arm_sugar_tool():
 				_set_sugar_tool_armed(true)
-				_feedback_label.text = (
-					"请在右侧觅食区点击落点；点击其他区域或按 Esc 取消。"
+				_set_copy(
+					_feedback_label,
+					"在右侧觅食区选择落点；按 Esc 可以取消。",
+					COPY_ROLE_ACTION_AFFORDANCE
 				)
 				_update_control_state()
 
@@ -172,8 +200,10 @@ func _on_sugar_drop_requested() -> void:
 		return
 	_set_sugar_tool_armed(false)
 	_apply_game_snapshot()
-	_feedback_label.text = (
-		"糖水放置动作已提交；下一次模拟更新后才会出现在觅食区。"
+	_set_copy(
+		_feedback_label,
+		"糖水放置动作已提交，将在下一次更新时生效。",
+		COPY_ROLE_ACTION_AFFORDANCE
 	)
 
 
@@ -214,13 +244,35 @@ func _on_restart_button_pressed() -> void:
 	_restart_session()
 
 
+func _on_start_observation_button_pressed() -> void:
+	if (
+		not _preparation_gate_active
+		or not _fatal_simulation_error.is_empty()
+		or _simulation_clock == null
+	):
+		return
+	_preparation_gate_active = false
+	_preparation_gate.visible = false
+	_start_observation_button.disabled = true
+	_simulation_clock.set_speed_multiplier(SimulationClock.NORMAL_SPEED)
+	_simulation_clock.set_paused(false)
+	_habitat_view.set_visuals_paused(false)
+	_update_control_state()
+	_update_debug_panel()
+
+
 func _on_speed_button_pressed(multiplier: int) -> void:
+	if _preparation_gate_active:
+		return
 	_simulation_clock.set_speed_multiplier(multiplier)
 	_update_control_state()
 	_update_debug_panel()
 
 
 func _toggle_debug_panel() -> void:
+	if not _debug_controls_available():
+		_debug_panel.visible = false
+		return
 	_debug_panel.visible = not _debug_panel.visible
 	_update_control_state()
 	_update_debug_panel()
@@ -287,19 +339,22 @@ func _update_worker_observation_panel() -> void:
 func _update_observation_cards() -> void:
 	if _latest_snapshot == null:
 		return
-	_emergence_card_label.text = _format_card(
+	_set_card_copy(
+		_emergence_card_label,
 		_latest_snapshot.observations.has_card(
 			_latest_snapshot.sequence.first_worker_observation_card_id
 		),
 		"第一只工蚁羽化"
 	)
-	_humidity_card_label.text = _format_card(
+	_set_card_copy(
+		_humidity_card_label,
 		_latest_snapshot.observations.has_card(
 			_latest_snapshot.sequence.brood_humidity_observation_card_id
 		),
 		"工蚁把幼体搬向更合适的湿度"
 	)
-	_sugar_card_label.text = _format_card(
+	_set_card_copy(
+		_sugar_card_label,
 		_latest_snapshot.observations.has_card(
 			_latest_snapshot.sequence.sugar_foraging_observation_card_id
 		),
@@ -319,58 +374,100 @@ func _update_player_guidance() -> void:
 	match phase:
 		ScenarioSequenceSnapshot.Phase.FOUNDING_PRELUDE:
 			_tool_heading.text = "建群序幕"
-			_instruction_label.text = (
-				"观察蚁后身旁的晚期蛹。它已经接近羽化，留意轮廓变化。"
+			_set_copy(
+				_instruction_label,
+				"观察蚁后身旁的晚期蛹，比较它和其他幼体的轮廓。",
+				COPY_ROLE_OBSERVATION_CUE
 			)
-			_feedback_label.text = "此时不需要干预，新的工蚁很快会出现。"
+			_set_copy(
+				_feedback_label,
+				"画面中的变化会随着观察推进。",
+				COPY_ROLE_OBSERVATION_CUE
+			)
 		ScenarioSequenceSnapshot.Phase.IDENTITY_OBSERVATION:
 			_tool_heading.text = "认识个体"
-			_instruction_label.text = (
-				"点击刚羽化的工蚁。你可以给它起名，也可以直接继续观察。"
+			_set_copy(
+				_instruction_label,
+				"留意新出现的个体与周围幼体在轮廓和行动上的差异。",
+				COPY_ROLE_OBSERVATION_CUE
 			)
-			_feedback_label.text = (
-				"选中与命名只属于本局记录，不会改变工蚁的自主行为。"
+			_set_copy(
+				_feedback_label,
+				"个体观察区会保留你主动选择的对象。",
+				COPY_ROLE_OBSERVATION_CUE
 			)
 		ScenarioSequenceSnapshot.Phase.HUMIDITY_OBSERVATION:
 			_tool_heading.text = "巢室环境"
 			if not _latest_snapshot.colony.water_action_unlocked:
-				_instruction_label.text = (
-					"先观察工蚁如何重新安置幼体；第一次搬运完成后再干预。"
+				_set_copy(
+					_instruction_label,
+					"比较两个巢室的凝水、幼体分布和工蚁行动。",
+					COPY_ROLE_OBSERVATION_CUE
 				)
-				_feedback_label.text = "留意两个巢室的凝水与幼体位置。"
+				_set_copy(
+					_feedback_label,
+					"持续观察同一批幼体的位置变化。",
+					COPY_ROLE_OBSERVATION_CUE
+				)
 			elif _latest_snapshot.colony.water_target_comfortable:
-				_instruction_label.text = (
-					"水分已经明显增加。继续看工蚁是否重新评估幼体位置。"
+				_set_copy(
+					_instruction_label,
+					"比较补水前后的凝水、幼体位置与工蚁路线。",
+					COPY_ROLE_OBSERVATION_CUE
 				)
-				_feedback_label.text = "不需要继续补水，等待群落恢复稳定。"
+				_set_copy(
+					_feedback_label,
+					"继续观察，直到画面中的搬运停止。",
+					COPY_ROLE_OBSERVATION_CUE
+				)
 			else:
-				_instruction_label.text = (
-					"育幼室的凝水仍少。少量补水，观察搬运方向是否改变。"
+				_set_copy(
+					_instruction_label,
+					"比较育幼室与相邻巢室的凝水和幼体分布。",
+					COPY_ROLE_OBSERVATION_CUE
 				)
-				_feedback_label.text = (
-					"每次补水都先进入命令队列，并在下一固定 Tick 生效。"
+				_set_copy(
+					_feedback_label,
+					"你可以少量补水，再观察工蚁行动是否变化。",
+					COPY_ROLE_ACTION_AFFORDANCE
 				)
 		ScenarioSequenceSnapshot.Phase.SUGAR_FORAGING:
 			_tool_heading.text = "糖水觅食"
 			if _latest_snapshot.scenario.place_action_count == 0:
-				_instruction_label.text = (
-					"在右侧觅食区放一滴糖水，观察哪只工蚁自主发现它。"
+				_set_copy(
+					_instruction_label,
+					"观察巢室与右侧觅食区，寻找可干预的落点。",
+					COPY_ROLE_OBSERVATION_CUE
 				)
 				if not _sugar_tool_armed:
-					_feedback_label.text = (
-						"先启用糖水工具，再在觅食区选择落点。"
+					_set_copy(
+						_feedback_label,
+						"启用工具后，可以在觅食区选择落点。",
+						COPY_ROLE_ACTION_AFFORDANCE
 					)
 			else:
-				_instruction_label.text = (
-					"继续追踪工蚁发现、采集、返巢和分享的完整往返。"
+				_set_copy(
+					_instruction_label,
+					"糖水已经出现在觅食区，留意工蚁的路线和停留位置。",
+					COPY_ROLE_OBSERVATION_CUE
 				)
-				_feedback_label.text = "无需指定工蚁，群落会自行分配任务。"
+				_set_copy(
+					_feedback_label,
+					"观察卡会在证据充分后解锁。",
+					COPY_ROLE_OBSERVATION_CUE
+				)
 		ScenarioSequenceSnapshot.Phase.OBSERVATION_SUMMARY:
 			_tool_heading.text = "观察总结"
-			_instruction_label.text = (
-				"同一只工蚁经历了羽化、幼体搬运与糖水觅食。"
+			_set_copy(
+				_instruction_label,
+				"同一只工蚁经历了羽化、幼体搬运与糖水觅食。",
+				COPY_ROLE_POST_EVENT_CONCLUSION
 			)
-			_feedback_label.text = "三条因果线索已经记录完成。"
+			_set_copy(
+				_feedback_label,
+				"三条因果线索已经记录完成。",
+				COPY_ROLE_POST_EVENT_CONCLUSION
+			)
 			_completion_label.text = _build_completion_summary()
 
 
@@ -393,22 +490,42 @@ func _update_control_state() -> void:
 	var speed_multiplier: int = _simulation_clock.get_speed_multiplier()
 	var paused: bool = _simulation_clock.is_paused()
 	var completed: bool = _latest_snapshot.sequence.completed
-	_status_label.text = (
-		"已暂停 · %d×" % speed_multiplier
-		if paused
-		else (
-			"观察完成 · %d×" % speed_multiplier
-			if completed
-			else "观察中 · %d×" % speed_multiplier
+	if _preparation_gate_active:
+		_set_copy(
+			_status_label,
+			"准备观察 · 1×",
+			COPY_ROLE_SYSTEM_STATUS
 		)
+		_pause_button.text = "暂停"
+		for gated_button: Button in [
+			_pause_button,
+			_stage_action_button,
+			_restart_button,
+			_speed_1x_button,
+			_speed_4x_button,
+			_speed_16x_button,
+		]:
+			gated_button.disabled = true
+		_start_observation_button.disabled = false
+		return
+	_set_copy(
+		_status_label,
+		(
+			"已暂停 · %d×" % speed_multiplier
+			if paused
+			else (
+				"观察完成 · %d×" % speed_multiplier
+				if completed
+				else "观察中 · %d×" % speed_multiplier
+			)
+		),
+		COPY_ROLE_SYSTEM_STATUS
 	)
 	_pause_button.text = "继续" if paused else "暂停"
+	_pause_button.disabled = false
 	_speed_1x_button.disabled = speed_multiplier == SimulationClock.NORMAL_SPEED
 	_speed_4x_button.disabled = speed_multiplier == SimulationClock.FAST_SPEED
 	_speed_16x_button.disabled = speed_multiplier == SimulationClock.VERY_FAST_SPEED
-	_debug_toggle_button.text = (
-		"关闭调试" if _debug_panel.visible else "F3 调试"
-	)
 
 	match _latest_snapshot.sequence.phase:
 		ScenarioSequenceSnapshot.Phase.FOUNDING_PRELUDE:
@@ -528,6 +645,7 @@ func _update_debug_panel() -> void:
 func _can_arm_sugar_tool() -> bool:
 	return (
 		_fatal_simulation_error.is_empty()
+		and not _preparation_gate_active
 		and _simulation_clock != null
 		and not _simulation_clock.is_paused()
 		and _latest_snapshot != null
@@ -547,7 +665,11 @@ func _set_sugar_tool_armed(value: bool) -> void:
 func _cancel_sugar_tool(feedback_text: String) -> void:
 	_set_sugar_tool_armed(false)
 	if _feedback_label != null:
-		_feedback_label.text = feedback_text
+		_set_copy(
+			_feedback_label,
+			feedback_text,
+			COPY_ROLE_ACTION_AFFORDANCE
+		)
 	_update_control_state()
 
 
@@ -569,14 +691,16 @@ func _restart_session() -> void:
 	_fatal_simulation_error = ""
 	_latest_snapshot = null
 	_player_annotation_state.reset_session()
+	_preparation_gate_active = true
 	_simulation_clock.reset()
+	_simulation_clock.set_paused(true)
 	_set_sugar_tool_armed(false)
 	_debug_panel.visible = false
 	_debug_label.text = "等待第一份模拟快照……"
 	_worker_observation_panel.reset_panel()
 	_habitat_view.reset_projection()
-	_habitat_view.set_visuals_paused(false)
 	_apply_game_snapshot()
+	_enter_preparation_gate()
 
 
 func _build_completion_summary() -> String:
@@ -625,8 +749,52 @@ func _get_phase_name(phase: int) -> String:
 			return "UNKNOWN"
 
 
-func _format_card(unlocked: bool, label_text: String) -> String:
-	return "%s  %s" % ["✓" if unlocked else "○", label_text]
+func _enter_preparation_gate() -> void:
+	_preparation_gate_active = true
+	_preparation_gate.visible = true
+	_start_observation_button.disabled = not _fatal_simulation_error.is_empty()
+	_debug_panel.visible = false
+	_set_sugar_tool_armed(false)
+	if _simulation_clock != null:
+		_simulation_clock.set_speed_multiplier(SimulationClock.NORMAL_SPEED)
+		_simulation_clock.set_paused(true)
+	if _habitat_view != null:
+		_habitat_view.set_interpolation_alpha(0.0)
+		_habitat_view.set_visuals_paused(true)
+	_update_control_state()
+	_update_debug_panel()
+
+
+func is_preparation_gate_active() -> bool:
+	return _preparation_gate_active
+
+
+func _debug_controls_available() -> bool:
+	return OS.is_debug_build()
+
+
+func _set_card_copy(
+	label: Label,
+	unlocked: bool,
+	unlocked_text: String
+) -> void:
+	if unlocked:
+		_set_copy(
+			label,
+			"✓  %s" % unlocked_text,
+			COPY_ROLE_POST_EVENT_CONCLUSION
+		)
+	else:
+		_set_copy(
+			label,
+			LOCKED_CARD_TEXT,
+			COPY_ROLE_NEUTRAL_PLACEHOLDER
+		)
+
+
+func _set_copy(label: Label, text: String, role: StringName) -> void:
+	label.text = text
+	label.set_meta(COPY_ROLE_META_KEY, role)
 
 
 func _format_optional_id(entity_id: int) -> String:
@@ -642,5 +810,6 @@ func _set_fatal_simulation_error(message: String) -> void:
 		_habitat_view.set_sugar_tool_armed(false)
 	_sugar_tool_armed = false
 	if is_node_ready():
-		_instruction_label.text = message
+		_set_copy(_instruction_label, message, COPY_ROLE_ERROR)
+		_start_observation_button.disabled = true
 		_update_control_state()

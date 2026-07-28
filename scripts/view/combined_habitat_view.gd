@@ -241,6 +241,10 @@ func are_visuals_paused() -> bool:
 	return _visuals_paused
 
 
+func get_interpolation_alpha() -> float:
+	return _interpolation_alpha
+
+
 func set_interpolation_alpha(value: float) -> void:
 	if _visuals_paused:
 		return

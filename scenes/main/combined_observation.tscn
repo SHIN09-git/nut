@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/combined_observation_controller.gd" id="1_controller"]
 [ext_resource type="PackedScene" path="res://scenes/habitat/combined_habitat.tscn" id="2_habitat"]
@@ -63,6 +63,18 @@ corner_radius_top_left = 8
 corner_radius_top_right = 8
 corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_gate"]
+bg_color = Color(0.066, 0.082, 0.074, 0.98)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.48, 0.43, 0.29, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
 
 [node name="CombinedObservation" type="Control"]
 layout_mode = 3
@@ -170,12 +182,6 @@ custom_minimum_size = Vector2(52, 40)
 layout_mode = 2
 text = "16×"
 
-[node name="DebugToggleButton" type="Button" parent="SafeArea/Content/Header/Margin/Row"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(78, 40)
-layout_mode = 2
-text = "F3 调试"
-
 [node name="Body" type="HBoxContainer" parent="SafeArea/Content"]
 layout_mode = 2
 size_flags_vertical = 3
@@ -240,9 +246,10 @@ custom_minimum_size = Vector2(260, 0)
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_colors/font_color = Color(0.73, 0.77, 0.69, 1)
-text = "第一只工蚁羽化后，点击它持续观察。"
+text = "观察不同个体的轮廓与行动。"
 vertical_alignment = 1
 autowrap_mode = 2
+metadata/evidence_copy_role = &"observation_cue"
 
 [node name="SelectedWorkerContent" type="VBoxContainer" parent="SafeArea/Content/Body/LeftColumn/WorkerIdentityPanel/Margin/Content/Summary"]
 unique_name_in_owner = true
@@ -302,9 +309,10 @@ layout_mode = 2
 size_flags_vertical = 3
 theme_override_colors/font_color = Color(0.73, 0.77, 0.69, 1)
 theme_override_font_sizes/font_size = 12
-text = "选择工蚁后，这里会留下它最近的行动。"
+text = "个体的行动记录会在这里出现。"
 vertical_alignment = 1
 autowrap_mode = 2
+metadata/evidence_copy_role = &"neutral_placeholder"
 
 [node name="SidePanel" type="PanelContainer" parent="SafeArea/Content/Body"]
 custom_minimum_size = Vector2(310, 0)
@@ -341,9 +349,10 @@ theme_override_styles/panel = SubResource("StyleBox_card")
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.78, 0.79, 0.69, 1)
-text = "○  第一只工蚁羽化"
+text = "○  尚未记录"
 horizontal_alignment = 1
 vertical_alignment = 1
+metadata/evidence_copy_role = &"neutral_placeholder"
 
 [node name="HumidityCard" type="PanelContainer" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent/ObservationCards"]
 custom_minimum_size = Vector2(0, 40)
@@ -356,10 +365,11 @@ custom_minimum_size = Vector2(270, 40)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.78, 0.79, 0.69, 1)
 theme_override_font_sizes/font_size = 12
-text = "○  工蚁把幼体搬向更合适的湿度"
+text = "○  尚未记录"
 horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 2
+metadata/evidence_copy_role = &"neutral_placeholder"
 
 [node name="SugarCard" type="PanelContainer" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent/ObservationCards"]
 custom_minimum_size = Vector2(0, 40)
@@ -372,10 +382,11 @@ custom_minimum_size = Vector2(270, 40)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.78, 0.79, 0.69, 1)
 theme_override_font_sizes/font_size = 12
-text = "○  工蚁把糖水带回巢内分享"
+text = "○  尚未记录"
 horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 2
+metadata/evidence_copy_role = &"neutral_placeholder"
 
 [node name="Rule" type="HSeparator" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
 layout_mode = 2
@@ -387,6 +398,7 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.77, 0.8, 0.72, 1)
 text = "观察蚁后身旁的晚期蛹。"
 autowrap_mode = 2
+metadata/evidence_copy_role = &"observation_cue"
 
 [node name="FeedbackLabel" type="Label" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
 unique_name_in_owner = true
@@ -396,6 +408,7 @@ theme_override_colors/font_color = Color(0.61, 0.69, 0.66, 1)
 theme_override_font_sizes/font_size = 12
 text = "此时不需要干预。"
 autowrap_mode = 2
+metadata/evidence_copy_role = &"observation_cue"
 
 [node name="Spacer" type="Control" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
 layout_mode = 2
@@ -451,9 +464,10 @@ custom_minimum_size = Vector2(0, 22)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.61, 0.69, 0.66, 1)
 theme_override_font_sizes/font_size = 12
-text = "F3 显示诊断层  ·  原型节奏参数不代表真实物种数据"
+text = "原型节奏参数不代表真实物种数据"
 horizontal_alignment = 1
 vertical_alignment = 1
+metadata/evidence_copy_role = &"system_status"
 
 [node name="DebugPanel" type="PanelContainer" parent="."]
 unique_name_in_owner = true
@@ -505,3 +519,74 @@ theme_override_colors/font_color = Color(0.75, 0.81, 0.75, 1)
 theme_override_font_sizes/font_size = 12
 text = "等待第一份模拟快照……"
 autowrap_mode = 2
+
+[node name="PreparationGate" type="Control" parent="."]
+unique_name_in_owner = true
+z_index = 50
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Dim" type="ColorRect" parent="PreparationGate"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.015, 0.022, 0.02, 0.62)
+
+[node name="Center" type="CenterContainer" parent="PreparationGate"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Panel" type="PanelContainer" parent="PreparationGate/Center"]
+custom_minimum_size = Vector2(430, 0)
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBox_gate")
+
+[node name="Margin" type="MarginContainer" parent="PreparationGate/Center/Panel"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 28
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 28
+theme_override_constants/margin_bottom = 24
+
+[node name="Content" type="VBoxContainer" parent="PreparationGate/Center/Panel/Margin"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 14
+
+[node name="Heading" type="Label" parent="PreparationGate/Center/Panel/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
+theme_override_font_sizes/font_size = 24
+text = "准备连续观察"
+horizontal_alignment = 1
+
+[node name="Description" type="Label" parent="PreparationGate/Center/Panel/Margin/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.73, 0.77, 0.69, 1)
+text = "先熟悉栖息地和观察面板。准备好后，从静止的画面开始记录变化。"
+horizontal_alignment = 1
+autowrap_mode = 2
+metadata/evidence_copy_role = &"observation_cue"
+
+[node name="StartObservationButton" type="Button" parent="PreparationGate/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+text = "开始观察"
+metadata/evidence_copy_role = &"action_affordance"

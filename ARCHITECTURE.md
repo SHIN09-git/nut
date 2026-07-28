@@ -1,8 +1,8 @@
 # 《玻璃蚁国》技术架构
 
-> 文档版本：0.9｜更新日期：2026-07-27
+> 文档版本：1.0｜更新日期：2026-07-28
 >
-> 本文描述当前已经实现的 M4 连续组合观察，以及仍保留的生命周期、湿度搬运和糖水觅食独立调试／验证路径。
+> 本文描述当前已经实现并完成 R0-A 证据有效性修正的 M4 连续组合观察，以及仍保留的生命周期、湿度搬运和糖水觅食独立调试／验证路径。
 
 ## 1. 固定技术决定
 
@@ -21,6 +21,10 @@
 ## 2. 数据流与命令边界
 
 ```text
+PreparationGate（应用层，Tick 0）
+    └── StartObservationButton → 只释放 SimulationClock
+                               （不进入模拟命令队列）
+    ↓
 CombinedObservationController
     ├── 身份阶段按钮 → submit_continue_observation_action()
     ├── 湿度阶段按钮 → submit_water_action()
@@ -48,16 +52,19 @@ GameSnapshot
             ├── CombinedHabitatView
             ├── CombinedObservationController 的阶段 UI
             ├── PlayerAnnotationState → WorkerObservationPanel
-            └── F3 DebugPanel
+            └── 开发调试构建中的 F3 DebugPanel
 ```
 
 提交命令时不会直接修改权威状态。控制器在提交成功后立即重新取同 Tick 快照，所以 UI 可以先看到 `continue_action_pending`、`water_action_pending` 或 `place_action_pending`；命令效果只会在下一合法固定 Tick 出现。`ColonySimulation` 在消费命令前拒绝非连续 Tick，因此错误推进不会丢失已提交输入。
+
+准备门是 `CombinedObservationController` 的应用层状态，不属于 `ColonyState`、命令队列或五阶段 `ScenarioProgressState`。门内 `SimulationClock` 保持 Tick 0、1×和暂停，View 插值系数固定为 0，蚁后与蚂蚁视觉暂停；开始按钮只解除这些暂停。首工的生命周期边界仍由冻结 Resource 和模拟 Tick 决定。重开先创建全新模拟会话，再回到同一个准备门。
 
 组合会话从开始到总结始终持有同一个 `SimulationClock`、同一个 `ColonySimulation` 和其中同一个 `ColonyState`。`ScenarioDirector` 只持有冻结配置并协调阶段，不拥有第二套权威状态，也不会在阶段切换时替换时钟、重载场景或重建首工。
 
 `CombinedObservationController` 只负责：
 
 - 推进 `SimulationClock`。
+- 协调 Tick 0 准备门，并在开始前冻结时钟、插值和视觉。
 - 把阶段 UI 操作转换成无参数高层模拟命令。
 - 每个成功固定 Tick 后创建并交付一份 `GameSnapshot`。
 - 把快照交给 `CombinedHabitatView`、会话注释层、观察面板和调试 UI。
@@ -358,6 +365,8 @@ IDLE
 
 `CombinedObservationController` 从 `ScenarioSequenceSnapshot` 投影五阶段标题、阶段按钮、三张观察卡和总结面板；从 `ColonySnapshot`、`ForagingScenarioSnapshot` 与 `ObservationJournalSnapshot` 投影对应的环境、工具和事件状态。UI 只组合快照，不能直接推进阶段或修改群落状态。
 
+玩家可见的阶段说明、反馈和观察卡同时携带小型 `evidence_copy_role` 元数据：`observation_cue`、`action_affordance`、`neutral_placeholder`、`post_event_conclusion`、`system_status` 或 `error`。锁定卡只能使用中性占位，事件完成后才能切换为结论角色；场景测试检查角色和节点状态，不绑定完整中文句子。这是当前场景的证据边界，不是通用本地化或文案框架。
+
 ### 独立湿度显示层
 
 `HabitatView`：
@@ -376,7 +385,7 @@ IDLE
 - 鼠标命中使用当前插值后的 `AntView.position`；只接受工蚁，重叠时先选最近者，距离相同按稳定实体 ID。
 - `AntView` 只投影是否选中的静态轮廓，不拥有选择事实。
 
-普通 UI 不显示精确湿度、任务枚举、目标 ID 或生命周期倒计时。F3 诊断层读取相同快照并显示精确内部状态。
+普通 UI 不显示精确湿度、任务枚举、目标 ID、生命周期倒计时或调试入口。F3 诊断层读取相同快照并显示精确内部状态，但组合场景只在 `OS.is_debug_build()` 为真时响应 F3；普通布局没有按钮或底部提示。release 外测构建的实际禁用证据属于后续 R0-B。
 
 ### 会话身份层
 
