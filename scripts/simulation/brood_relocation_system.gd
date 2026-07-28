@@ -4,10 +4,15 @@ extends RefCounted
 const IMPROVEMENT_EPSILON: float = 0.000001
 
 var _config: BroodCareConfig
+var _environment_system: EnvironmentSystem
 
 
-func _init(config: BroodCareConfig) -> void:
+func _init(
+	config: BroodCareConfig,
+	environment_system: EnvironmentSystem = null
+) -> void:
 	_config = config
+	_environment_system = environment_system
 
 
 func is_ready() -> bool:
@@ -346,7 +351,7 @@ func _find_best_relocation_zone(
 	if source_zone == null or not source_zone.available:
 		return null
 
-	var source_penalty: float = _get_humidity_penalty(source_zone.humidity)
+	var source_penalty: float = _get_zone_penalty(source_zone)
 	var best_zone: HabitatZoneState
 	var best_penalty: float = source_penalty
 	for candidate: HabitatZoneState in state.zones:
@@ -359,9 +364,7 @@ func _find_best_relocation_zone(
 			)
 		):
 			continue
-		var candidate_penalty: float = _get_humidity_penalty(
-			candidate.humidity
-		)
+		var candidate_penalty: float = _get_zone_penalty(candidate)
 		var improvement: float = source_penalty - candidate_penalty
 		if (
 			improvement + IMPROVEMENT_EPSILON
@@ -399,7 +402,7 @@ func _find_best_available_zone(
 			)
 		):
 			continue
-		var penalty: float = _get_humidity_penalty(candidate.humidity)
+		var penalty: float = _get_zone_penalty(candidate)
 		if (
 			best_zone == null
 			or penalty < best_penalty - IMPROVEMENT_EPSILON
@@ -433,8 +436,8 @@ func _is_pre_pickup_task_valid(
 	):
 		return false
 	return (
-		_get_humidity_penalty(source_zone.humidity)
-		- _get_humidity_penalty(target_zone.humidity)
+		_get_zone_penalty(source_zone)
+		- _get_zone_penalty(target_zone)
 		+ IMPROVEMENT_EPSILON
 		>= _config.relocation_min_improvement
 	)
@@ -531,3 +534,14 @@ func _get_humidity_penalty(humidity: float) -> float:
 	if humidity > _config.brood_humidity_max:
 		return humidity - _config.brood_humidity_max
 	return 0.0
+
+
+func _get_zone_penalty(zone: HabitatZoneState) -> float:
+	if zone == null:
+		return INF
+	var penalty: float = _get_humidity_penalty(zone.humidity)
+	if _environment_system != null:
+		penalty += _environment_system.get_brood_pollution_penalty(
+			zone.pollution
+		)
+	return penalty

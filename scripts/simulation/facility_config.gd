@@ -9,6 +9,7 @@ var ports: Array[FacilityPortConfig] = []
 var placement_layer: FacilityData.PlacementLayer
 var requires_connection: bool
 var player_removable: bool
+var effect_config: FacilityEffectConfig
 
 
 static func from_data(data: FacilityData) -> FacilityConfig:
@@ -27,6 +28,9 @@ static func from_data(data: FacilityData) -> FacilityConfig:
 	config.placement_layer = data.placement_layer
 	config.requires_connection = data.requires_connection
 	config.player_removable = data.player_removable
+	config.effect_config = FacilityEffectConfig.from_data(data.effect_data)
+	if config.effect_config == null:
+		return null
 	return config
 
 

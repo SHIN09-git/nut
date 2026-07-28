@@ -276,3 +276,7 @@
 "R7_LAYOUT_ACTION_PENDING","布局变更已提交，将在下一观察步生效。","Layout change submitted; it will apply on the next observation step.","R7"
 "R7_FACILITY_CONNECTOR_TUBE","连接管","Connector tube","R7"
 "R7_FACILITY_CONNECTOR_GATE","连接闸门","Connector gate","R7"
+"R8_FACILITY_HYDRATION","补水模块","Hydration module","R8"
+"R8_FACILITY_SUGAR_STATION","糖液台","Sugar station","R8"
+"R8_FACILITY_PROTEIN_DISH","蛋白皿","Protein dish","R8"
+"R8_FACILITY_WASTE_TRAY","废物盘","Waste tray","R8"

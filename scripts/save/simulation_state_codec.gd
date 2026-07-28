@@ -1,7 +1,8 @@
 class_name SimulationStateCodec
 extends RefCounted
 
-const CURRENT_SCHEMA_ID: String = "r7.authority.v5"
+const CURRENT_SCHEMA_ID: String = "r8.authority.v6"
+const R7_SCHEMA_ID: String = "r7.authority.v5"
 const R6_SCHEMA_ID: String = "r6.authority.v4"
 const R5_SCHEMA_ID: String = "r5.authority.v3"
 const R4_SCHEMA_ID: String = "r4.authority.v2"
@@ -204,6 +205,9 @@ static func _encode_habitat(config: HabitatScenarioConfig) -> Dictionary:
 		"facility_catalog_config": _encode_facility_catalog_config(
 			config.facility_catalog_config
 		),
+		"environment_config": _encode_environment_config(
+			config.environment_config
+		),
 	}
 
 
@@ -378,6 +382,9 @@ static func _encode_facility_catalog_config(
 			"placement_layer": config.placement_layer,
 			"requires_connection": config.requires_connection,
 			"player_removable": config.player_removable,
+			"effect_config": _encode_facility_effect_config(
+				config.effect_config
+			),
 		})
 	var initial_facilities: Array[Dictionary] = []
 	for initial: InitialFacilityConfig in catalog.initial_facilities:
@@ -404,6 +411,57 @@ static func _encode_facility_catalog_config(
 		"initial_facilities": initial_facilities,
 		"initial_supplies": supplies,
 	}
+
+
+static func _encode_environment_config(
+	config: EnvironmentConfig
+) -> Variant:
+	if config == null:
+		return null
+	return {
+		"pollution_diffusion_per_tick":
+			config.pollution_diffusion_per_tick,
+		"brood_pollution_comfort_max":
+			config.brood_pollution_comfort_max,
+		"brood_pollution_penalty_weight":
+			config.brood_pollution_penalty_weight,
+		"queen_care_light_max": config.queen_care_light_max,
+	}
+
+
+static func _encode_facility_effect_config(
+	config: FacilityEffectConfig
+) -> Dictionary:
+	var result: Dictionary = {"kind": config.kind}
+	match config.kind:
+		FacilityEffectConfig.Kind.HABITAT_ZONE:
+			result["initial_humidity"] = config.initial_humidity
+			result["initial_light_exposure"] = (
+				config.initial_light_exposure
+			)
+			result["initial_pollution"] = config.initial_pollution
+			result["pollution_per_tick"] = config.pollution_per_tick
+		FacilityEffectConfig.Kind.HYDRATION:
+			result["target_humidity"] = config.target_humidity
+			result["humidity_per_tick"] = config.humidity_per_tick
+		FacilityEffectConfig.Kind.FOOD_STATION:
+			result["accepts_sugar"] = config.accepts_sugar
+			result["accepts_protein"] = config.accepts_protein
+			result["portion_capacity"] = config.portion_capacity
+			result["host_zone_required"] = config.host_zone_required
+		FacilityEffectConfig.Kind.WASTE_TRAY:
+			result["capacity"] = config.waste_capacity
+			result["capture_per_tick"] = config.waste_capture_per_tick
+		FacilityEffectConfig.Kind.CONNECTOR:
+			result["gated"] = config.connector_gated
+		FacilityEffectConfig.Kind.LIGHT_COVER:
+			result["target_light_exposure"] = (
+				config.target_light_exposure
+			)
+			result["transition_per_tick"] = (
+				config.light_transition_per_tick
+			)
+	return result
 
 
 static func _encode_nutrition_state(
@@ -512,6 +570,8 @@ static func _encode_config_zone(
 	return {
 		"zone_id": String(zone.zone_id),
 		"humidity": zone.humidity,
+		"light_exposure": zone.light_exposure,
+		"pollution": zone.pollution,
 		"connected_zone_ids":
 			_strings_from_names(connected_zone_ids),
 		"available": zone.available,
@@ -522,6 +582,8 @@ static func _encode_state_zone(zone: HabitatZoneState) -> Dictionary:
 	return {
 		"zone_id": String(zone.zone_id),
 		"humidity": zone.humidity,
+		"light_exposure": zone.light_exposure,
+		"pollution": zone.pollution,
 		"available": zone.available,
 	}
 
@@ -539,6 +601,7 @@ static func _encode_layout_state(layout: HabitatLayoutState) -> Variant:
 			"zone_id": String(facility.zone_id),
 			"available": facility.available,
 			"player_removable": facility.player_removable,
+			"waste_stored": facility.waste_stored,
 		})
 	var connections: Array[Dictionary] = []
 	for connection: HabitatConnectionState in (
@@ -734,6 +797,7 @@ static func _decode_habitat_data(value: Variant) -> Dictionary:
 		"protein_portions",
 		"founding_care_config",
 		"facility_catalog_config",
+		"environment_config",
 	]
 	if not _is_dictionary_with_keys(value, keys):
 		return _failure("Habitat configuration is invalid")
@@ -838,6 +902,12 @@ static func _decode_habitat_data(value: Variant) -> Dictionary:
 	if not catalog_result.get("ok", false):
 		return catalog_result
 	habitat.facility_catalog_data = catalog_result["catalog_data"]
+	var environment_result: Dictionary = _decode_environment_data(
+		value["environment_config"]
+	)
+	if not environment_result.get("ok", false):
+		return environment_result
+	habitat.environment_data = environment_result["environment_data"]
 	if not habitat.is_valid():
 		return _failure("Frozen habitat configuration is not valid")
 	return {"ok": true, "error": "", "habitat_data": habitat}
@@ -846,12 +916,21 @@ static func _decode_habitat_data(value: Variant) -> Dictionary:
 static func _decode_zone_data(value: Variant) -> Dictionary:
 	if not _is_dictionary_with_keys(
 		value,
-		["zone_id", "humidity", "connected_zone_ids", "available"]
+		[
+			"zone_id",
+			"humidity",
+			"light_exposure",
+			"pollution",
+			"connected_zone_ids",
+			"available",
+		]
 	):
 		return _failure("Zone configuration is invalid")
 	if (
 		typeof(value["zone_id"]) != TYPE_STRING
 		or not _is_finite_number(value["humidity"])
+		or not _is_finite_number(value["light_exposure"])
+		or not _is_finite_number(value["pollution"])
 		or typeof(value["connected_zone_ids"]) != TYPE_ARRAY
 		or typeof(value["available"]) != TYPE_BOOL
 	):
@@ -864,11 +943,45 @@ static func _decode_zone_data(value: Variant) -> Dictionary:
 	var zone: HabitatZoneData = HabitatZoneData.new()
 	zone.zone_id = StringName(value["zone_id"])
 	zone.initial_humidity = float(value["humidity"])
+	zone.initial_light_exposure = float(value["light_exposure"])
+	zone.initial_pollution = float(value["pollution"])
 	zone.connected_zone_ids.assign(connections_result["values"])
 	zone.available = bool(value["available"])
 	if not zone.is_valid():
 		return _failure("Frozen zone configuration is not valid")
 	return {"ok": true, "error": "", "zone_data": zone}
+
+
+static func _decode_environment_data(value: Variant) -> Dictionary:
+	if value == null:
+		return {"ok": true, "error": "", "environment_data": null}
+	var keys: Array[String] = [
+		"pollution_diffusion_per_tick",
+		"brood_pollution_comfort_max",
+		"brood_pollution_penalty_weight",
+		"queen_care_light_max",
+	]
+	if not _is_dictionary_with_keys(value, keys):
+		return _failure("Environment configuration is invalid")
+	for key: String in keys:
+		if not _is_finite_number(value[key]):
+			return _failure("Environment configuration is non-finite")
+	var data: EnvironmentData = EnvironmentData.new()
+	data.data_status = &"prototype_pacing_fixture"
+	data.scientifically_validated = false
+	data.pollution_diffusion_per_tick = float(
+		value["pollution_diffusion_per_tick"]
+	)
+	data.brood_pollution_comfort_max = float(
+		value["brood_pollution_comfort_max"]
+	)
+	data.brood_pollution_penalty_weight = float(
+		value["brood_pollution_penalty_weight"]
+	)
+	data.queen_care_light_max = float(value["queen_care_light_max"])
+	if not data.is_valid():
+		return _failure("Frozen environment configuration is not valid")
+	return {"ok": true, "error": "", "environment_data": data}
 
 
 static func _decode_foraging_data(value: Variant) -> Dictionary:
@@ -1129,6 +1242,7 @@ static func _decode_facility_data(value: Variant) -> Dictionary:
 			"placement_layer",
 			"requires_connection",
 			"player_removable",
+			"effect_config",
 		]
 	):
 		return _failure("Facility type configuration is invalid")
@@ -1177,9 +1291,159 @@ static func _decode_facility_data(value: Variant) -> Dictionary:
 	data.placement_layer = int(value["placement_layer"])
 	data.requires_connection = bool(value["requires_connection"])
 	data.player_removable = bool(value["player_removable"])
+	var effect_result: Dictionary = _decode_facility_effect_data(
+		value["effect_config"]
+	)
+	if not effect_result.get("ok", false):
+		return effect_result
+	data.effect_data = effect_result["effect_data"]
 	if not data.is_valid():
 		return _failure("Frozen facility type is not valid")
 	return {"ok": true, "error": "", "facility_data": data}
+
+
+static func _decode_facility_effect_data(value: Variant) -> Dictionary:
+	if typeof(value) != TYPE_DICTIONARY or not value.has("kind"):
+		return _failure("Facility effect configuration is invalid")
+	if not _is_integral_number(value["kind"]):
+		return _failure("Facility effect kind is invalid")
+	var kind: int = int(value["kind"])
+	var data: FacilityEffectData
+	match kind:
+		FacilityEffectConfig.Kind.HABITAT_ZONE:
+			if not _is_dictionary_with_keys(value, [
+				"kind",
+				"initial_humidity",
+				"initial_light_exposure",
+				"initial_pollution",
+				"pollution_per_tick",
+			]):
+				return _failure("Habitat-zone facility effect is invalid")
+			for key: String in [
+				"initial_humidity",
+				"initial_light_exposure",
+				"initial_pollution",
+				"pollution_per_tick",
+			]:
+				if not _is_finite_number(value[key]):
+					return _failure(
+						"Habitat-zone facility effect is non-finite"
+					)
+			var zone_data: HabitatZoneFacilityEffectData = (
+				HabitatZoneFacilityEffectData.new()
+			)
+			zone_data.initial_humidity = float(value["initial_humidity"])
+			zone_data.initial_light_exposure = float(
+				value["initial_light_exposure"]
+			)
+			zone_data.initial_pollution = float(value["initial_pollution"])
+			zone_data.pollution_per_tick = float(
+				value["pollution_per_tick"]
+			)
+			data = zone_data
+		FacilityEffectConfig.Kind.HYDRATION:
+			if not _is_dictionary_with_keys(value, [
+				"kind",
+				"target_humidity",
+				"humidity_per_tick",
+			]):
+				return _failure("Hydration facility effect is invalid")
+			if (
+				not _is_finite_number(value["target_humidity"])
+				or not _is_finite_number(value["humidity_per_tick"])
+			):
+				return _failure("Hydration facility effect is non-finite")
+			var hydration_data: HydrationFacilityEffectData = (
+				HydrationFacilityEffectData.new()
+			)
+			hydration_data.target_humidity = float(
+				value["target_humidity"]
+			)
+			hydration_data.humidity_per_tick = float(
+				value["humidity_per_tick"]
+			)
+			data = hydration_data
+		FacilityEffectConfig.Kind.FOOD_STATION:
+			if not _is_dictionary_with_keys(value, [
+				"kind",
+				"accepts_sugar",
+				"accepts_protein",
+				"portion_capacity",
+				"host_zone_required",
+			]):
+				return _failure("Food-station facility effect is invalid")
+			if (
+				typeof(value["accepts_sugar"]) != TYPE_BOOL
+				or typeof(value["accepts_protein"]) != TYPE_BOOL
+				or not _is_positive_int(value["portion_capacity"])
+				or typeof(value["host_zone_required"]) != TYPE_BOOL
+			):
+				return _failure("Food-station facility effect has bad data")
+			var food_data: FoodStationFacilityEffectData = (
+				FoodStationFacilityEffectData.new()
+			)
+			food_data.accepts_sugar = bool(value["accepts_sugar"])
+			food_data.accepts_protein = bool(value["accepts_protein"])
+			food_data.portion_capacity = int(value["portion_capacity"])
+			food_data.host_zone_required = bool(
+				value["host_zone_required"]
+			)
+			data = food_data
+		FacilityEffectConfig.Kind.WASTE_TRAY:
+			if not _is_dictionary_with_keys(value, [
+				"kind",
+				"capacity",
+				"capture_per_tick",
+			]):
+				return _failure("Waste-tray facility effect is invalid")
+			if (
+				not _is_finite_number(value["capacity"])
+				or not _is_finite_number(value["capture_per_tick"])
+			):
+				return _failure("Waste-tray facility effect is non-finite")
+			var waste_data: WasteTrayFacilityEffectData = (
+				WasteTrayFacilityEffectData.new()
+			)
+			waste_data.capacity = float(value["capacity"])
+			waste_data.capture_per_tick = float(value["capture_per_tick"])
+			data = waste_data
+		FacilityEffectConfig.Kind.CONNECTOR:
+			if not _is_dictionary_with_keys(value, ["kind", "gated"]):
+				return _failure("Connector facility effect is invalid")
+			if typeof(value["gated"]) != TYPE_BOOL:
+				return _failure("Connector facility effect has bad data")
+			var connector_data: ConnectorFacilityEffectData = (
+				ConnectorFacilityEffectData.new()
+			)
+			connector_data.gated = bool(value["gated"])
+			data = connector_data
+		FacilityEffectConfig.Kind.LIGHT_COVER:
+			if not _is_dictionary_with_keys(value, [
+				"kind",
+				"target_light_exposure",
+				"transition_per_tick",
+			]):
+				return _failure("Light-cover facility effect is invalid")
+			if (
+				not _is_finite_number(value["target_light_exposure"])
+				or not _is_finite_number(value["transition_per_tick"])
+			):
+				return _failure("Light-cover facility effect is non-finite")
+			var cover_data: LightCoverFacilityEffectData = (
+				LightCoverFacilityEffectData.new()
+			)
+			cover_data.target_light_exposure = float(
+				value["target_light_exposure"]
+			)
+			cover_data.transition_per_tick = float(
+				value["transition_per_tick"]
+			)
+			data = cover_data
+		_:
+			return _failure("Facility effect kind is unsupported")
+	if data == null or not data.is_valid():
+		return _failure("Frozen facility effect is not valid")
+	return {"ok": true, "error": "", "effect_data": data}
 
 
 static func _decode_initial_facility_data(value: Variant) -> Dictionary:
@@ -1793,7 +2057,13 @@ static func _decode_feeding_task(value: Variant) -> Dictionary:
 static func _decode_zone_state(value: Variant) -> Dictionary:
 	if not _is_dictionary_with_keys(
 		value,
-		["zone_id", "humidity", "available"]
+		[
+			"zone_id",
+			"humidity",
+			"light_exposure",
+			"pollution",
+			"available",
+		]
 	):
 		return _failure("Zone state is invalid")
 	if (
@@ -1801,6 +2071,12 @@ static func _decode_zone_state(value: Variant) -> Dictionary:
 		or not _is_finite_number(value["humidity"])
 		or float(value["humidity"]) < 0.0
 		or float(value["humidity"]) > 1.0
+		or not _is_finite_number(value["light_exposure"])
+		or float(value["light_exposure"]) < 0.0
+		or float(value["light_exposure"]) > 1.0
+		or not _is_finite_number(value["pollution"])
+		or float(value["pollution"]) < 0.0
+		or float(value["pollution"]) > 1.0
 		or typeof(value["available"]) != TYPE_BOOL
 	):
 		return _failure("Zone state contains invalid data")
@@ -1811,7 +2087,9 @@ static func _decode_zone_state(value: Variant) -> Dictionary:
 			StringName(value["zone_id"]),
 			float(value["humidity"]),
 			[],
-			bool(value["available"])
+			bool(value["available"]),
+			float(value["light_exposure"]),
+			float(value["pollution"])
 		),
 	}
 
@@ -1903,6 +2181,7 @@ static func _decode_facility_state(value: Variant) -> Dictionary:
 			"zone_id",
 			"available",
 			"player_removable",
+			"waste_stored",
 		]
 	):
 		return _failure("Facility state is invalid")
@@ -1915,6 +2194,8 @@ static func _decode_facility_state(value: Variant) -> Dictionary:
 		or typeof(value["zone_id"]) != TYPE_STRING
 		or typeof(value["available"]) != TYPE_BOOL
 		or typeof(value["player_removable"]) != TYPE_BOOL
+		or not _is_finite_number(value["waste_stored"])
+		or float(value["waste_stored"]) < 0.0
 	):
 		return _failure("Facility state contains invalid data")
 	return {
@@ -1927,7 +2208,8 @@ static func _decode_facility_state(value: Variant) -> Dictionary:
 			int(value["orientation"]),
 			StringName(value["zone_id"]),
 			bool(value["available"]),
-			bool(value["player_removable"])
+			bool(value["player_removable"]),
+			float(value["waste_stored"])
 		),
 	}
 
@@ -2204,6 +2486,12 @@ static func _has_valid_core_state(simulation: ColonySimulation) -> bool:
 			or not _is_finite_number(zone.humidity)
 			or zone.humidity < 0.0
 			or zone.humidity > 1.0
+			or not _is_finite_number(zone.light_exposure)
+			or zone.light_exposure < 0.0
+			or zone.light_exposure > 1.0
+			or not _is_finite_number(zone.pollution)
+			or zone.pollution < 0.0
+			or zone.pollution > 1.0
 		):
 			return false
 		zone_ids[zone.zone_id] = true
@@ -2425,7 +2713,6 @@ static func _state_graph_matches_frozen_config(
 	var config: HabitatScenarioConfig = simulation._habitat_config
 	if (
 		config == null
-		or state.zones.size() != config.zones.size()
 		or (
 			config.is_combined_observation()
 			!= (state.scenario_progress != null)
@@ -2444,12 +2731,14 @@ static func _state_graph_matches_frozen_config(
 		)
 	):
 		return false
-	for zone_index: int in state.zones.size():
+	if state.zones.size() < config.zones.size():
+		return false
+	for zone_index: int in config.zones.size():
 		var state_zone: HabitatZoneState = state.zones[zone_index]
 		var config_zone: HabitatZoneState = config.zones[zone_index]
 		if state_zone.zone_id != config_zone.zone_id:
 			return false
-	return true
+	return simulation._has_valid_layout_state(state)
 
 
 static func _has_valid_pending_commands(
@@ -2682,7 +2971,10 @@ static func _can_restore_sugar_command(
 	):
 		return false
 	var zone: HabitatZoneState = simulation._state.get_zone(
-		simulation._habitat_config.sugar_placement_zone_id
+		simulation._find_food_station_zone_id(
+			FoodSourceState.FoodType.SUGAR_WATER,
+			simulation._habitat_config.sugar_placement_zone_id
+		)
 	)
 	return zone != null and zone.available
 
@@ -2696,7 +2988,10 @@ static func _can_restore_protein_command(
 	):
 		return false
 	var zone: HabitatZoneState = simulation._state.get_zone(
-		simulation._habitat_config.protein_placement_zone_id
+		simulation._find_food_station_zone_id(
+			FoodSourceState.FoodType.PROTEIN,
+			simulation._habitat_config.protein_placement_zone_id
+		)
 	)
 	return (
 		zone != null

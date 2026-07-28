@@ -589,6 +589,7 @@ func _test_legacy_schema_migration() -> void:
 	legacy_habitat.erase("protein_portions")
 	legacy_habitat.erase("founding_care_config")
 	legacy_habitat.erase("facility_catalog_config")
+	_strip_r8_environment_fields(legacy)
 	legacy["frozen_config_hash"] = CanonicalSaveJson.sha256(
 		legacy["frozen_config_bundle"]
 	)
@@ -596,7 +597,8 @@ func _test_legacy_schema_migration() -> void:
 	var load_result: Dictionary = service.load_envelope(legacy)
 	_expect_true(
 		load_result.get("ok", false),
-		"legacy v0 state migrates through the explicit chain"
+		"legacy v0 state migrates through the explicit chain: %s"
+			% load_result.get("error", "")
 	)
 	if not load_result.get("ok", false):
 		return
@@ -640,6 +642,17 @@ func _restore_legacy_zone_connections(envelope: Dictionary) -> void:
 			String(zone["zone_id"]),
 			[]
 		)
+
+
+func _strip_r8_environment_fields(envelope: Dictionary) -> void:
+	var habitat: Dictionary = envelope["frozen_config_bundle"]["habitat"]
+	habitat.erase("environment_config")
+	for zone: Dictionary in habitat["zones"]:
+		zone.erase("light_exposure")
+		zone.erase("pollution")
+	for zone: Dictionary in envelope["state_payload"]["zones"]:
+		zone.erase("light_exposure")
+		zone.erase("pollution")
 
 
 func _test_atomic_commit_and_backup_recovery() -> void:

@@ -338,6 +338,7 @@ func _test_pending_inference_save_and_previous_schema_migration() -> void:
 	previous_habitat.erase("protein_portions")
 	previous_habitat.erase("founding_care_config")
 	previous_habitat.erase("facility_catalog_config")
+	_strip_r8_environment_fields(previous)
 	previous["next_ids"].erase("facility_id")
 	previous["next_ids"].erase("connection_id")
 	previous["frozen_config_hash"] = CanonicalSaveJson.sha256(
@@ -353,7 +354,8 @@ func _test_pending_inference_save_and_previous_schema_migration() -> void:
 	var migration_result: Dictionary = service.load_envelope(previous)
 	_expect_true(
 		migration_result.get("ok", false),
-		"r2.authority.v1 migrates through the explicit R4 schema step"
+		"r2.authority.v1 migrates through the explicit R4 schema step: %s"
+			% migration_result.get("error", "")
 	)
 	if migration_result.get("ok", false):
 		_expect_true(
@@ -379,6 +381,17 @@ func _restore_legacy_zone_connections(envelope: Dictionary) -> void:
 			String(zone["zone_id"]),
 			[]
 		)
+
+
+func _strip_r8_environment_fields(envelope: Dictionary) -> void:
+	var habitat: Dictionary = envelope["frozen_config_bundle"]["habitat"]
+	habitat.erase("environment_config")
+	for zone: Dictionary in habitat["zones"]:
+		zone.erase("light_exposure")
+		zone.erase("pollution")
+	for zone: Dictionary in envelope["state_payload"]["zones"]:
+		zone.erase("light_exposure")
+		zone.erase("pollution")
 
 
 func _test_invalid_campaign_authority_is_rejected() -> void:

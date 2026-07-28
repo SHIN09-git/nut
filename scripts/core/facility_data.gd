@@ -17,6 +17,7 @@ enum PlacementLayer {
 )
 @export var requires_connection: bool = true
 @export var player_removable: bool = true
+@export var effect_data: FacilityEffectData
 
 
 func is_valid() -> bool:
@@ -31,6 +32,8 @@ func is_valid() -> bool:
 		or allowed_orientations.is_empty()
 		or placement_layer < PlacementLayer.BASE
 		or placement_layer > PlacementLayer.OVERLAY
+		or effect_data == null
+		or not effect_data.is_valid()
 	):
 		return false
 	var seen_orientations: Dictionary[int, bool] = {}

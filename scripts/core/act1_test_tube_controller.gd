@@ -669,6 +669,27 @@ func _update_debug() -> void:
 			_habitat_view.get_layout_camera_zoom(),
 		]
 	)
+	for zone: HabitatZoneSnapshot in _latest_snapshot.colony.zones:
+		lines.append(
+			"zone=%s humidity=%.3f light=%.3f pollution=%.3f"
+			% [
+				String(zone.zone_id),
+				zone.humidity,
+				zone.light_exposure,
+				zone.pollution,
+			]
+		)
+	for facility: FacilitySnapshot in _latest_snapshot.layout.facilities:
+		lines.append(
+			"facility=%d type=%s zone=%s effect=%d waste=%.3f"
+			% [
+				facility.facility_id,
+				String(facility.type_id),
+				String(facility.zone_id),
+				facility.effect_kind,
+				facility.waste_fill_ratio,
+			]
+		)
 	for ant: AntSnapshot in _latest_snapshot.colony.ants:
 		lines.append(
 			"#%03d stage=%d zone=%s forage=%d feed=%d"
@@ -871,7 +892,10 @@ func _set_fatal_error(message: String) -> void:
 	_fatal_error = message
 	if _simulation_clock != null:
 		_simulation_clock.set_paused(true)
-	_status_label.text = tr("ERROR_SIMULATION_PAUSED") % message
+	_status_label.text = "%s %s" % [
+		tr("ERROR_INCOMPLETE_SNAPSHOT"),
+		message,
+	]
 	_status_label.modulate = Color(1.0, 0.55, 0.46)
 
 

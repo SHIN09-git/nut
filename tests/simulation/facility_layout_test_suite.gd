@@ -330,6 +330,7 @@ func _test_r6_save_migrates_to_r7_layout_authority() -> void:
 	previous["frozen_config_bundle"]["habitat"].erase(
 		"facility_catalog_config"
 	)
+	_strip_r8_environment_fields(previous)
 	previous["state_payload"].erase("layout")
 	_restore_r6_zone_connections(previous)
 	previous["next_ids"].erase("facility_id")
@@ -346,7 +347,8 @@ func _test_r6_save_migrates_to_r7_layout_authority() -> void:
 	var result: Dictionary = service.load_envelope(previous)
 	_expect_true(
 		result.get("ok", false),
-		"R6 save migrates through the explicit R7 layout step"
+		"R6 save migrates through the explicit R7 layout step: %s"
+			% result.get("error", "")
 	)
 	if not result.get("ok", false):
 		return
@@ -424,6 +426,17 @@ func _restore_r6_zone_connections(envelope: Dictionary) -> void:
 			String(zone["zone_id"]),
 			[]
 		)
+
+
+func _strip_r8_environment_fields(envelope: Dictionary) -> void:
+	var habitat: Dictionary = envelope["frozen_config_bundle"]["habitat"]
+	habitat.erase("environment_config")
+	for zone: Dictionary in habitat["zones"]:
+		zone.erase("light_exposure")
+		zone.erase("pollution")
+	for zone: Dictionary in envelope["state_payload"]["zones"]:
+		zone.erase("light_exposure")
+		zone.erase("pollution")
 
 
 func _sort_names(first: StringName, second: StringName) -> bool:

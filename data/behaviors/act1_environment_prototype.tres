@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="EnvironmentData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/environment_data.gd" id="1_environment"]
+
+[resource]
+script = ExtResource("1_environment")
+data_status = &"prototype_pacing_fixture"
+scientifically_validated = false
+pollution_diffusion_per_tick = 0.002
+brood_pollution_comfort_max = 0.3
+brood_pollution_penalty_weight = 1.0
+queen_care_light_max = 0.25

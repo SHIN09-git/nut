@@ -3,14 +3,17 @@ extends RefCounted
 
 var _config: FoundingCareConfig
 var _habitat_config: HabitatScenarioConfig
+var _environment_system: EnvironmentSystem
 
 
 func _init(
 	config: FoundingCareConfig,
-	habitat_config: HabitatScenarioConfig
+	habitat_config: HabitatScenarioConfig,
+	environment_system: EnvironmentSystem = null
 ) -> void:
 	_config = config
 	_habitat_config = habitat_config
+	_environment_system = environment_system
 
 
 func is_ready() -> bool:
@@ -44,7 +47,7 @@ func advance(state: ColonyState) -> void:
 	var act1: Act1State = state.act1_state
 	_update_first_worker(state, act1)
 	_update_first_worker_care(state, act1)
-	if not act1.light_cover_applied:
+	if not _is_care_environment_ready(state):
 		_reset_care_cycle(act1)
 		return
 	_update_pupa_observation(state, act1)
@@ -101,7 +104,7 @@ func has_valid_state(state: ColonyState) -> bool:
 		or act1.pupa_stable_ticks > _config.pupa_observation_ticks
 	):
 		return false
-	if not act1.light_cover_applied:
+	if not _is_care_environment_ready(state):
 		if (
 			act1.queen_care_state != Act1State.QueenCareState.RESTING
 			or act1.queen_care_elapsed_ticks != 0
@@ -135,6 +138,24 @@ func has_valid_state(state: ColonyState) -> bool:
 	):
 		return false
 	return true
+
+
+func _is_care_environment_ready(state: ColonyState) -> bool:
+	if state == null or state.act1_state == null:
+		return false
+	if not state.act1_state.light_cover_applied:
+		return false
+	if _environment_system == null:
+		return true
+	var nest_zone: HabitatZoneState = state.get_zone(
+		_habitat_config.nest_zone_id
+	)
+	return (
+		nest_zone != null
+		and _environment_system.is_queen_care_light_comfortable(
+			nest_zone.light_exposure
+		)
+	)
 
 
 func _update_queen_care(state: ColonyState, act1: Act1State) -> void:

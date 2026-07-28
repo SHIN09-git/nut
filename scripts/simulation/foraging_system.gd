@@ -36,9 +36,23 @@ func is_ready() -> bool:
 
 
 func apply_configured_sugar_placement(state: ColonyState) -> FoodSourceState:
+	return apply_sugar_placement(
+		state,
+		_sugar_placement_zone_id,
+		_sugar_portions
+	)
+
+
+func apply_sugar_placement(
+	state: ColonyState,
+	zone_id: StringName,
+	portions: int
+) -> FoodSourceState:
 	if (
 		state == null
 		or not is_ready()
+		or zone_id.is_empty()
+		or portions <= 0
 		or (
 			state.nutrition_state == null
 			and state.total_sugar_portions_placed > 0
@@ -53,22 +67,22 @@ func apply_configured_sugar_placement(state: ColonyState) -> FoodSourceState:
 	):
 		return null
 	var placement_zone: HabitatZoneState = state.get_zone(
-		_sugar_placement_zone_id
+		zone_id
 	)
 	if placement_zone == null or not placement_zone.available:
 		return null
 
 	var source: FoodSourceState = state.create_food_source(
-		_sugar_placement_zone_id,
-		_sugar_portions,
+		zone_id,
+		portions,
 		FoodSourceState.FoodType.SUGAR_WATER
 	)
 	if source == null:
 		return null
-	state.total_sugar_portions_placed += _sugar_portions
+	state.total_sugar_portions_placed += portions
 	if state.nutrition_state != null:
 		state.nutrition_state.total_sugar_portions_supplied += (
-			_sugar_portions
+			portions
 		)
 	return source
 
@@ -76,9 +90,23 @@ func apply_configured_sugar_placement(state: ColonyState) -> FoodSourceState:
 func apply_configured_protein_placement(
 	state: ColonyState
 ) -> FoodSourceState:
+	return apply_protein_placement(
+		state,
+		_scenario_config.protein_placement_zone_id,
+		_scenario_config.protein_portions
+	)
+
+
+func apply_protein_placement(
+	state: ColonyState,
+	zone_id: StringName,
+	portions: int
+) -> FoodSourceState:
 	if (
 		state == null
 		or not is_ready()
+		or zone_id.is_empty()
+		or portions <= 0
 		or state.nutrition_state == null
 		or not _scenario_config.supports_nutrition_growth()
 		or has_available_source_type(
@@ -88,22 +116,22 @@ func apply_configured_protein_placement(
 	):
 		return null
 	var placement_zone: HabitatZoneState = state.get_zone(
-		_scenario_config.protein_placement_zone_id
+		zone_id
 	)
 	if placement_zone == null or not placement_zone.available:
 		return null
 	var source: FoodSourceState = state.create_food_source(
-		_scenario_config.protein_placement_zone_id,
-		_scenario_config.protein_portions,
+		zone_id,
+		portions,
 		FoodSourceState.FoodType.PROTEIN
 	)
 	if source == null:
 		return null
 	state.nutrition_state.total_protein_portions_placed += (
-		_scenario_config.protein_portions
+		portions
 	)
 	state.nutrition_state.total_protein_portions_supplied += (
-		_scenario_config.protein_portions
+		portions
 	)
 	return source
 

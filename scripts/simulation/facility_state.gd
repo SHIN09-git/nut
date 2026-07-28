@@ -8,6 +8,7 @@ var orientation: int
 var zone_id: StringName
 var available: bool
 var player_removable: bool
+var waste_stored: float
 
 
 func _init(
@@ -17,7 +18,8 @@ func _init(
 	new_orientation: int,
 	new_zone_id: StringName = &"",
 	new_available: bool = true,
-	new_player_removable: bool = true
+	new_player_removable: bool = true,
+	new_waste_stored: float = 0.0
 ) -> void:
 	facility_id = new_facility_id
 	type_id = new_type_id
@@ -26,6 +28,7 @@ func _init(
 	zone_id = new_zone_id
 	available = new_available
 	player_removable = new_player_removable
+	waste_stored = new_waste_stored
 
 
 func copy_state() -> FacilityState:
@@ -36,5 +39,6 @@ func copy_state() -> FacilityState:
 		orientation,
 		zone_id,
 		available,
-		player_removable
+		player_removable,
+		waste_stored
 	)

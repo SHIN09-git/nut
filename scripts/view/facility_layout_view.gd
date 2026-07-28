@@ -28,6 +28,12 @@ const VALID_PREVIEW_COLOR: Color = Color(0.32, 0.72, 0.47, 0.48)
 const INVALID_PREVIEW_COLOR: Color = Color(0.82, 0.29, 0.25, 0.46)
 const TEXT_COLOR: Color = Color(0.82, 0.87, 0.79, 1.0)
 const MUTED_TEXT_COLOR: Color = Color(0.56, 0.65, 0.60, 1.0)
+const HUMIDITY_COLOR: Color = Color(0.20, 0.54, 0.72, 0.88)
+const POLLUTION_COLOR: Color = Color(0.67, 0.47, 0.22, 0.9)
+const SUGAR_COLOR: Color = Color(0.96, 0.73, 0.28, 0.95)
+const PROTEIN_COLOR: Color = Color(0.78, 0.34, 0.24, 0.95)
+const CONNECTION_COLOR: Color = Color(0.46, 0.65, 0.56, 0.8)
+const CLOSED_CONNECTION_COLOR: Color = Color(0.75, 0.28, 0.24, 0.9)
 
 var _snapshot: HabitatLayoutSnapshot
 var _camera_zoom: float = 1.0
@@ -426,6 +432,7 @@ func _draw() -> void:
 		return
 	_facility_hit_rects.clear()
 	_draw_grid()
+	_draw_connections()
 	for facility: FacilitySnapshot in _snapshot.facilities:
 		if facility.available:
 			_draw_facility(facility)
@@ -463,6 +470,18 @@ func _draw_facility(facility: FacilitySnapshot) -> void:
 	var fill: Color = (
 		FACILITY_COLOR if facility.player_removable else FIXED_FACILITY_COLOR
 	)
+	if facility.effect_kind == FacilityEffectConfig.Kind.HABITAT_ZONE:
+		fill = fill.lerp(
+			HUMIDITY_COLOR,
+			clampf(facility.zone_humidity, 0.0, 1.0) * 0.28
+		)
+		fill = fill.lerp(
+			POLLUTION_COLOR,
+			clampf(facility.zone_pollution, 0.0, 1.0) * 0.42
+		)
+		fill = fill.lightened(
+			clampf(facility.zone_light_exposure, 0.0, 1.0) * 0.08
+		)
 	draw_rect(rect, fill, true)
 	draw_rect(
 		rect,
@@ -491,6 +510,34 @@ func _draw_facility(facility: FacilitySnapshot) -> void:
 				SELECTED_COLOR,
 				5.0
 			)
+		&"hydration_module":
+			draw_circle(
+				center,
+				maxf(6.0, 12.0 * _camera_zoom),
+				HUMIDITY_COLOR
+			)
+			draw_line(
+				center + Vector2(0.0, -16.0 * _camera_zoom),
+				center + Vector2(0.0, 10.0 * _camera_zoom),
+				Color(0.72, 0.90, 0.96, 0.9),
+				3.0
+			)
+		&"sugar_station":
+			draw_circle(center, maxf(6.0, 11.0 * _camera_zoom), SUGAR_COLOR)
+		&"protein_dish":
+			draw_circle(center, maxf(6.0, 11.0 * _camera_zoom), PROTEIN_COLOR)
+		&"waste_tray":
+			var tray: Rect2 = rect.grow(-11.0 * _camera_zoom)
+			draw_rect(tray, FACILITY_EDGE, false, 3.0)
+			var fill_height: float = tray.size.y * facility.waste_fill_ratio
+			draw_rect(
+				Rect2(
+					Vector2(tray.position.x, tray.end.y - fill_height),
+					Vector2(tray.size.x, fill_height)
+				),
+				POLLUTION_COLOR,
+				true
+			)
 		_:
 			draw_line(
 				Vector2(rect.position.x + 8.0, center.y),
@@ -507,8 +554,56 @@ func _draw_facility(facility: FacilitySnapshot) -> void:
 		HORIZONTAL_ALIGNMENT_LEFT,
 		maxf(20.0, rect.size.x - 16.0),
 		clampi(int(12.0 * _camera_zoom), 10, 18),
-		TEXT_COLOR
+			TEXT_COLOR
 	)
+
+
+func _draw_connections() -> void:
+	if _snapshot == null:
+		return
+	for connection: HabitatConnectionSnapshot in _snapshot.connections:
+		var first: FacilitySnapshot = _find_zone_facility(
+			connection.first_zone_id
+		)
+		var second: FacilitySnapshot = _find_zone_facility(
+			connection.second_zone_id
+		)
+		if first == null or second == null:
+			continue
+		var first_center: Vector2 = _slot_rect(
+			first.slot,
+			first.footprint
+		).get_center()
+		var second_center: Vector2 = _slot_rect(
+			second.slot,
+			second.footprint
+		).get_center()
+		draw_line(
+			first_center,
+			second_center,
+			CONNECTION_COLOR if connection.open else CLOSED_CONNECTION_COLOR,
+			5.0 if connection.gated else 3.0,
+			true
+		)
+		if connection.gated:
+			var middle: Vector2 = first_center.lerp(second_center, 0.5)
+			draw_circle(
+				middle,
+				maxf(4.0, 7.0 * _camera_zoom),
+				SELECTED_COLOR if connection.open else CLOSED_CONNECTION_COLOR
+			)
+
+
+func _find_zone_facility(zone_id: StringName) -> FacilitySnapshot:
+	var fallback: FacilitySnapshot
+	for facility: FacilitySnapshot in _snapshot.facilities:
+		if facility.zone_id != zone_id:
+			continue
+		if facility.placement_layer == FacilityData.PlacementLayer.BASE:
+			return facility
+		if fallback == null:
+			fallback = facility
+	return fallback
 
 
 func _draw_placement_preview() -> void:
@@ -577,4 +672,12 @@ func _facility_label(type_id: StringName) -> String:
 			return tr("R7_FACILITY_CONNECTOR_GATE")
 		&"light_cover":
 			return tr("FACILITY_LIGHT_COVER")
+		&"hydration_module":
+			return tr("R8_FACILITY_HYDRATION")
+		&"sugar_station":
+			return tr("R8_FACILITY_SUGAR_STATION")
+		&"protein_dish":
+			return tr("R8_FACILITY_PROTEIN_DISH")
+		&"waste_tray":
+			return tr("R8_FACILITY_WASTE_TRAY")
 	return tr("FACILITY_UNKNOWN")

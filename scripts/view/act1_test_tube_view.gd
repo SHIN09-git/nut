@@ -286,7 +286,7 @@ func _validate_snapshot(snapshot: GameSnapshot) -> bool:
 		or snapshot.layout == null
 		or snapshot.act1.queen_care == null
 		or snapshot.colony.scenario_id != &"act1_test_tube"
-		or snapshot.colony.zones.size() != 3
+		or snapshot.colony.zones.size() < 3
 	):
 		return false
 	var seen_ids: Dictionary[int, bool] = {}
@@ -528,7 +528,17 @@ func _draw() -> void:
 	_draw_capsule(tube, GLASS_FILL)
 	var radius: float = tube.size.y * 0.5
 	var left_center: Vector2 = tube.position + Vector2(radius, radius)
-	draw_circle(left_center, radius - 12.0, WATER_COLOR)
+	var water_color: Color = WATER_COLOR
+	if _latest_snapshot != null:
+		var nest_environment: HabitatZoneSnapshot = (
+			_latest_snapshot.colony.find_zone(&"test_tube_nest")
+		)
+		if nest_environment != null:
+			water_color = WATER_COLOR.lerp(
+				Color(0.16, 0.62, 0.72, 0.68),
+				clampf(nest_environment.humidity, 0.0, 1.0) * 0.45
+			)
+	draw_circle(left_center, radius - 12.0, water_color)
 	var cotton_x: float = tube.position.x + tube.size.y * 0.80
 	for index: int in 7:
 		var progress: float = float(index) / 6.0
@@ -546,6 +556,7 @@ func _draw() -> void:
 		5.0,
 		true
 	)
+	_draw_environment_clues(tube)
 	if (
 		_latest_snapshot != null
 		and _latest_snapshot.act1.queen_care.light_cover_applied
@@ -622,6 +633,36 @@ func _draw() -> void:
 		true
 	)
 	_draw_tube_outline(tube)
+
+
+func _draw_environment_clues(tube: Rect2) -> void:
+	if _latest_snapshot == null:
+		return
+	for zone: HabitatZoneSnapshot in _latest_snapshot.colony.zones:
+		if (
+			zone.zone_id not in [
+				&"test_tube_nest",
+				&"tube_passage",
+				&"micro_feeding_port",
+			]
+			or zone.pollution <= 0.015
+		):
+			continue
+		var center: Vector2 = _get_zone_position(zone.zone_id, 0)
+		var count: int = clampi(ceili(zone.pollution * 18.0), 1, 14)
+		for index: int in count:
+			var offset: Vector2 = Vector2(
+				float(posmod(index * 17 + String(zone.zone_id).length(), 37))
+					- 18.0,
+				float(posmod(index * 11 + 5, 23)) - 11.0
+			)
+			var point: Vector2 = center + offset
+			if tube.has_point(point):
+				draw_circle(
+					point,
+					2.0 + float(posmod(index, 2)),
+					Color(0.48, 0.34, 0.18, 0.66)
+				)
 
 
 func _get_display_position(entity_id: int) -> Vector2:

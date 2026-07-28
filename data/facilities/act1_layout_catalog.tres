@@ -1,10 +1,23 @@
-[gd_resource type="Resource" script_class="FacilityCatalogData" load_steps=24 format=3]
+[gd_resource type="Resource" script_class="FacilityCatalogData" load_steps=42 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/facility_catalog_data.gd" id="1_catalog"]
 [ext_resource type="Script" path="res://scripts/core/facility_data.gd" id="2_facility"]
 [ext_resource type="Script" path="res://scripts/core/facility_port_data.gd" id="3_port"]
 [ext_resource type="Script" path="res://scripts/core/initial_facility_data.gd" id="4_initial"]
 [ext_resource type="Script" path="res://scripts/core/facility_supply_data.gd" id="5_supply"]
+[ext_resource type="Script" path="res://scripts/core/habitat_zone_facility_effect_data.gd" id="6_zone_effect"]
+[ext_resource type="Script" path="res://scripts/core/food_station_facility_effect_data.gd" id="7_food_effect"]
+[ext_resource type="Script" path="res://scripts/core/connector_facility_effect_data.gd" id="8_connector_effect"]
+[ext_resource type="Script" path="res://scripts/core/light_cover_facility_effect_data.gd" id="9_cover_effect"]
+[ext_resource type="Script" path="res://scripts/core/hydration_facility_effect_data.gd" id="10_hydration_effect"]
+[ext_resource type="Script" path="res://scripts/core/waste_tray_facility_effect_data.gd" id="11_waste_effect"]
+
+[sub_resource type="Resource" id="Effect_test_tube"]
+script = ExtResource("6_zone_effect")
+initial_humidity = 0.66
+initial_light_exposure = 0.78
+initial_pollution = 0.02
+pollution_per_tick = 0.00001
 
 [sub_resource type="Resource" id="Port_test_tube_east"]
 script = ExtResource("3_port")
@@ -23,6 +36,14 @@ ports = Array[ExtResource("3_port")]([SubResource("Port_test_tube_east")])
 placement_layer = 0
 requires_connection = false
 player_removable = false
+effect_data = SubResource("Effect_test_tube")
+
+[sub_resource type="Resource" id="Effect_feeding"]
+script = ExtResource("7_food_effect")
+accepts_sugar = true
+accepts_protein = true
+portion_capacity = 3
+host_zone_required = false
 
 [sub_resource type="Resource" id="Port_feeding_west"]
 script = ExtResource("3_port")
@@ -47,6 +68,14 @@ ports = Array[ExtResource("3_port")]([SubResource("Port_feeding_west"), SubResou
 placement_layer = 0
 requires_connection = true
 player_removable = false
+effect_data = SubResource("Effect_feeding")
+
+[sub_resource type="Resource" id="Effect_box"]
+script = ExtResource("6_zone_effect")
+initial_humidity = 0.46
+initial_light_exposure = 0.9
+initial_pollution = 0.01
+pollution_per_tick = 0.00002
 
 [sub_resource type="Resource" id="Port_box_west"]
 script = ExtResource("3_port")
@@ -71,6 +100,11 @@ ports = Array[ExtResource("3_port")]([SubResource("Port_box_west"), SubResource(
 placement_layer = 0
 requires_connection = true
 player_removable = true
+effect_data = SubResource("Effect_box")
+
+[sub_resource type="Resource" id="Effect_tube"]
+script = ExtResource("8_connector_effect")
+gated = false
 
 [sub_resource type="Resource" id="Port_tube_west"]
 script = ExtResource("3_port")
@@ -95,6 +129,11 @@ ports = Array[ExtResource("3_port")]([SubResource("Port_tube_west"), SubResource
 placement_layer = 0
 requires_connection = true
 player_removable = true
+effect_data = SubResource("Effect_tube")
+
+[sub_resource type="Resource" id="Effect_gate"]
+script = ExtResource("8_connector_effect")
+gated = true
 
 [sub_resource type="Resource" id="Port_gate_west"]
 script = ExtResource("3_port")
@@ -119,6 +158,12 @@ ports = Array[ExtResource("3_port")]([SubResource("Port_gate_west"), SubResource
 placement_layer = 0
 requires_connection = true
 player_removable = true
+effect_data = SubResource("Effect_gate")
+
+[sub_resource type="Resource" id="Effect_cover"]
+script = ExtResource("9_cover_effect")
+target_light_exposure = 0.12
+transition_per_tick = 0.2
 
 [sub_resource type="Resource" id="Facility_cover"]
 script = ExtResource("2_facility")
@@ -131,6 +176,83 @@ ports = Array[ExtResource("3_port")]([])
 placement_layer = 1
 requires_connection = false
 player_removable = false
+effect_data = SubResource("Effect_cover")
+
+[sub_resource type="Resource" id="Effect_hydration"]
+script = ExtResource("10_hydration_effect")
+target_humidity = 0.66
+humidity_per_tick = 0.002
+
+[sub_resource type="Resource" id="Facility_hydration"]
+script = ExtResource("2_facility")
+type_id = &"hydration_module"
+unlock_type_id = &"hydration_module"
+data_status = &"prototype_pacing_fixture"
+footprint = Vector2i(1, 1)
+allowed_orientations = Array[int]([0])
+ports = Array[ExtResource("3_port")]([])
+placement_layer = 1
+requires_connection = false
+player_removable = true
+effect_data = SubResource("Effect_hydration")
+
+[sub_resource type="Resource" id="Effect_sugar_station"]
+script = ExtResource("7_food_effect")
+accepts_sugar = true
+accepts_protein = false
+portion_capacity = 3
+host_zone_required = true
+
+[sub_resource type="Resource" id="Facility_sugar_station"]
+script = ExtResource("2_facility")
+type_id = &"sugar_station"
+unlock_type_id = &"sugar_station"
+data_status = &"prototype_pacing_fixture"
+footprint = Vector2i(1, 1)
+allowed_orientations = Array[int]([0])
+ports = Array[ExtResource("3_port")]([])
+placement_layer = 1
+requires_connection = false
+player_removable = true
+effect_data = SubResource("Effect_sugar_station")
+
+[sub_resource type="Resource" id="Effect_protein_dish"]
+script = ExtResource("7_food_effect")
+accepts_sugar = false
+accepts_protein = true
+portion_capacity = 3
+host_zone_required = true
+
+[sub_resource type="Resource" id="Facility_protein_dish"]
+script = ExtResource("2_facility")
+type_id = &"protein_dish"
+unlock_type_id = &"protein_dish"
+data_status = &"prototype_pacing_fixture"
+footprint = Vector2i(1, 1)
+allowed_orientations = Array[int]([0])
+ports = Array[ExtResource("3_port")]([])
+placement_layer = 1
+requires_connection = false
+player_removable = true
+effect_data = SubResource("Effect_protein_dish")
+
+[sub_resource type="Resource" id="Effect_waste_tray"]
+script = ExtResource("11_waste_effect")
+capacity = 0.5
+capture_per_tick = 0.001
+
+[sub_resource type="Resource" id="Facility_waste_tray"]
+script = ExtResource("2_facility")
+type_id = &"waste_tray"
+unlock_type_id = &"waste_tray"
+data_status = &"prototype_pacing_fixture"
+footprint = Vector2i(1, 1)
+allowed_orientations = Array[int]([0])
+ports = Array[ExtResource("3_port")]([])
+placement_layer = 1
+requires_connection = false
+player_removable = true
+effect_data = SubResource("Effect_waste_tray")
 
 [sub_resource type="Resource" id="Initial_test_tube"]
 script = ExtResource("4_initial")
@@ -172,11 +294,31 @@ script = ExtResource("5_supply")
 type_id = &"light_cover"
 available_count = 1
 
+[sub_resource type="Resource" id="Supply_hydration"]
+script = ExtResource("5_supply")
+type_id = &"hydration_module"
+available_count = 2
+
+[sub_resource type="Resource" id="Supply_sugar_station"]
+script = ExtResource("5_supply")
+type_id = &"sugar_station"
+available_count = 2
+
+[sub_resource type="Resource" id="Supply_protein_dish"]
+script = ExtResource("5_supply")
+type_id = &"protein_dish"
+available_count = 2
+
+[sub_resource type="Resource" id="Supply_waste_tray"]
+script = ExtResource("5_supply")
+type_id = &"waste_tray"
+available_count = 2
+
 [resource]
 script = ExtResource("1_catalog")
 data_status = &"prototype_pacing_fixture"
 scientifically_validated = false
 grid_size = Vector2i(12, 8)
-facility_types = Array[ExtResource("2_facility")]([SubResource("Facility_test_tube"), SubResource("Facility_feeding"), SubResource("Facility_box"), SubResource("Facility_tube"), SubResource("Facility_gate"), SubResource("Facility_cover")])
+facility_types = Array[ExtResource("2_facility")]([SubResource("Facility_test_tube"), SubResource("Facility_feeding"), SubResource("Facility_box"), SubResource("Facility_tube"), SubResource("Facility_gate"), SubResource("Facility_cover"), SubResource("Facility_hydration"), SubResource("Facility_sugar_station"), SubResource("Facility_protein_dish"), SubResource("Facility_waste_tray")])
 initial_facilities = Array[ExtResource("4_initial")]([SubResource("Initial_test_tube"), SubResource("Initial_feeding")])
-initial_supplies = Array[ExtResource("5_supply")]([SubResource("Supply_box"), SubResource("Supply_tube"), SubResource("Supply_gate"), SubResource("Supply_cover")])
+initial_supplies = Array[ExtResource("5_supply")]([SubResource("Supply_box"), SubResource("Supply_tube"), SubResource("Supply_gate"), SubResource("Supply_cover"), SubResource("Supply_hydration"), SubResource("Supply_sugar_station"), SubResource("Supply_protein_dish"), SubResource("Supply_waste_tray")])

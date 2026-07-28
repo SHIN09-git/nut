@@ -35,6 +35,7 @@ var _scenario_director: ScenarioDirector
 var _campaign_director: CampaignDirector
 var _act1_campaign_director: Act1CampaignDirector
 var _founding_care_system: FoundingCareSystem
+var _environment_system: EnvironmentSystem
 var _state: ColonyState
 var _pending_commands: Array[PendingSimulationCommand] = []
 var _next_pending_command_sequence_id: int = 1
@@ -75,8 +76,19 @@ func _init(
 		)
 		return
 
+	if _habitat_config.environment_config != null:
+		_environment_system = EnvironmentSystem.new(
+			_habitat_config.environment_config,
+			_habitat_config.facility_catalog_config
+		)
+		if not _environment_system.is_ready():
+			_configuration_error = (
+				"ColonySimulation could not initialize environment"
+			)
+			return
 	_brood_relocation_system = BroodRelocationSystem.new(
-		_brood_care_config
+		_brood_care_config,
+		_environment_system
 	)
 	if not _brood_relocation_system.is_ready():
 		_configuration_error = (
@@ -107,7 +119,8 @@ func _init(
 	if _habitat_config.is_act1_test_tube():
 		_founding_care_system = FoundingCareSystem.new(
 			_habitat_config.founding_care_config,
-			_habitat_config
+			_habitat_config,
+			_environment_system
 		)
 		if not _founding_care_system.is_ready():
 			_configuration_error = (
@@ -328,6 +341,8 @@ func advance_tick(tick_index: int) -> bool:
 		return true
 
 	_apply_pending_commands()
+	if _environment_system != null:
+		_environment_system.advance(_state)
 	if _is_lifecycle_active():
 		_update_existing_ants()
 		_try_lay_egg()
@@ -435,7 +450,9 @@ func create_snapshot() -> ColonySnapshot:
 			zone.zone_id,
 			zone.humidity,
 			_state.get_connected_zone_ids(zone.zone_id),
-			zone.available
+			zone.available,
+			zone.light_exposure,
+			zone.pollution
 		))
 
 	var brood_reserved_by_worker_id: Dictionary[int, int] = {}
@@ -740,6 +757,11 @@ func _has_valid_habitat_ownership(state: ColonyState) -> bool:
 		and not _act1_campaign_director.has_valid_state(state)
 	):
 		return false
+	if (
+		_environment_system != null
+		and not _environment_system.has_valid_state(state)
+	):
+		return false
 	if not _has_valid_layout_state(state):
 		return false
 	return true
@@ -754,13 +776,23 @@ func _apply_pending_commands() -> void:
 				_apply_water_action()
 			PendingCommandType.PLACE_SUGAR_ACTION:
 				if _foraging_system != null:
-					_foraging_system.apply_configured_sugar_placement(
-						_state
+					_foraging_system.apply_sugar_placement(
+						_state,
+						_find_food_station_zone_id(
+							FoodSourceState.FoodType.SUGAR_WATER,
+							_habitat_config.sugar_placement_zone_id
+						),
+						_habitat_config.sugar_portions
 					)
 			PendingCommandType.PLACE_PROTEIN_ACTION:
 				if _foraging_system != null:
-					_foraging_system.apply_configured_protein_placement(
-						_state
+					_foraging_system.apply_protein_placement(
+						_state,
+						_find_food_station_zone_id(
+							FoodSourceState.FoodType.PROTEIN,
+							_habitat_config.protein_placement_zone_id
+						),
+						_habitat_config.protein_portions
 					)
 			PendingCommandType.CONTINUE_OBSERVATION_ACTION:
 				if _scenario_director != null:
@@ -1007,7 +1039,10 @@ func _is_place_sugar_action_available() -> bool:
 	):
 		return false
 	var placement_zone: HabitatZoneState = _state.get_zone(
-		_habitat_config.sugar_placement_zone_id
+		_find_food_station_zone_id(
+			FoodSourceState.FoodType.SUGAR_WATER,
+			_habitat_config.sugar_placement_zone_id
+		)
 	)
 	return placement_zone != null and placement_zone.available
 
@@ -1025,7 +1060,10 @@ func _is_place_protein_action_available() -> bool:
 	):
 		return false
 	var placement_zone: HabitatZoneState = _state.get_zone(
-		_habitat_config.protein_placement_zone_id
+		_find_food_station_zone_id(
+			FoodSourceState.FoodType.PROTEIN,
+			_habitat_config.protein_placement_zone_id
+		)
 	)
 	return placement_zone != null and placement_zone.available
 
@@ -1196,13 +1234,15 @@ func _apply_place_facility_command(
 ) -> void:
 	if not _has_layout_authority():
 		return
-	_state.layout_state.place(
+	var facility_id: int = _state.layout_state.place(
 		_habitat_config.facility_catalog_config,
 		command.argument_id,
 		command.argument_slot,
 		command.argument_orientation,
 		_state.campaign_state.unlocked_facility_type_ids
 	)
+	if facility_id >= 0:
+		_finalize_placed_facility(facility_id)
 
 
 func _apply_light_cover_command() -> void:
@@ -1217,6 +1257,8 @@ func _apply_light_cover_command() -> void:
 	)
 	if facility_id < 0:
 		return
+	if not _finalize_placed_facility(facility_id):
+		return
 	_founding_care_system.apply_light_cover(_state)
 
 
@@ -1225,12 +1267,15 @@ func _apply_rotate_facility_command(
 ) -> void:
 	if not _has_layout_authority():
 		return
-	_state.layout_state.rotate(
+	if _state.layout_state.rotate(
 		_habitat_config.facility_catalog_config,
 		command.argument_entity_id,
 		command.argument_orientation,
 		_state.campaign_state.unlocked_facility_type_ids
-	)
+	):
+		_state.layout_state.rebuild_derived_connections(
+			_habitat_config.facility_catalog_config
+		)
 
 
 func _apply_remove_facility_command(
@@ -1238,10 +1283,73 @@ func _apply_remove_facility_command(
 ) -> void:
 	if not _can_remove_facility_now(command.argument_entity_id):
 		return
-	_state.layout_state.remove(
+	var facility: FacilityState = _state.layout_state.get_facility(
+		command.argument_entity_id
+	)
+	var type_config: FacilityConfig = (
+		_habitat_config.facility_catalog_config.get_type(facility.type_id)
+	)
+	var removed_zone: HabitatZoneState = (
+		_state.get_zone(facility.zone_id)
+		if type_config.effect_config.provides_zone()
+		else null
+	)
+	if not _state.layout_state.remove(
 		command.argument_entity_id,
 		_habitat_config.facility_catalog_config
+	):
+		return
+	if removed_zone != null:
+		_state.zones.erase(removed_zone)
+	_state.layout_state.rebuild_derived_connections(
+		_habitat_config.facility_catalog_config
 	)
+
+
+func _finalize_placed_facility(facility_id: int) -> bool:
+	var layout: HabitatLayoutState = _state.layout_state
+	var facility: FacilityState = layout.get_facility(facility_id)
+	if facility == null:
+		return false
+	var catalog: FacilityCatalogConfig = (
+		_habitat_config.facility_catalog_config
+	)
+	var type_config: FacilityConfig = catalog.get_type(facility.type_id)
+	if type_config == null or type_config.effect_config == null:
+		return false
+	var effect: FacilityEffectConfig = type_config.effect_config
+	if effect.provides_zone():
+		var zone_id: StringName = StringName(
+			"%s_%03d" % [String(facility.type_id), facility.facility_id]
+		)
+		if _state.get_zone(zone_id) != null:
+			return false
+		if not layout.assign_facility_zone(facility_id, zone_id):
+			return false
+		_state.zones.append(HabitatZoneState.new(
+			zone_id,
+			effect.initial_humidity,
+			[],
+			true,
+			effect.initial_light_exposure,
+			effect.initial_pollution
+		))
+	elif effect.requires_host_zone():
+		var host_zone_id: StringName = layout.find_host_zone_id(
+			catalog,
+			facility.type_id,
+			facility.slot,
+			facility.orientation
+		)
+		if (
+			host_zone_id.is_empty()
+			or not layout.assign_facility_zone(
+				facility_id,
+				host_zone_id
+			)
+		):
+			return false
+	return layout.rebuild_derived_connections(catalog)
 
 
 func _apply_gate_command(command: PendingSimulationCommand) -> void:
@@ -1284,6 +1392,19 @@ func _create_layout_snapshot() -> HabitatLayoutSnapshot:
 		)
 		if type_config == null:
 			continue
+		var zone: HabitatZoneState = _state.get_zone(facility.zone_id)
+		var waste_fill_ratio: float = 0.0
+		if (
+			type_config.effect_config.kind
+				== FacilityEffectConfig.Kind.WASTE_TRAY
+			and type_config.effect_config.waste_capacity > 0.0
+		):
+			waste_fill_ratio = clampf(
+				facility.waste_stored
+					/ type_config.effect_config.waste_capacity,
+				0.0,
+				1.0
+			)
 		snapshot.facilities.append(FacilitySnapshot.new(
 			facility.facility_id,
 			facility.type_id,
@@ -1293,7 +1414,12 @@ func _create_layout_snapshot() -> HabitatLayoutSnapshot:
 			type_config.placement_layer,
 			facility.zone_id,
 			facility.available,
-			facility.player_removable
+			facility.player_removable,
+			type_config.effect_config.kind,
+			zone.humidity if zone != null else 0.0,
+			zone.light_exposure if zone != null else 0.0,
+			zone.pollution if zone != null else 0.0,
+			waste_fill_ratio
 		))
 	for connection: HabitatConnectionState in (
 		_state.layout_state.get_connections_in_stable_order()
@@ -1354,9 +1480,43 @@ func _has_valid_layout_state(state: ColonyState) -> bool:
 	var zone_ids: Dictionary[StringName, bool] = {}
 	for zone: HabitatZoneState in state.zones:
 		zone_ids[zone.zone_id] = true
-	return state.layout_state.has_valid_state(
+	if not state.layout_state.has_valid_state(
 		_habitat_config.facility_catalog_config,
 		zone_ids
+	):
+		return false
+	var configured_zone_ids: Dictionary[StringName, bool] = {}
+	for configured_zone: HabitatZoneState in _habitat_config.zones:
+		configured_zone_ids[configured_zone.zone_id] = true
+	var dynamic_zone_ids: Dictionary[StringName, bool] = {}
+	for facility: FacilityState in state.layout_state.facilities.values():
+		var type_config: FacilityConfig = (
+			_habitat_config.facility_catalog_config.get_type(
+				facility.type_id
+			)
+		)
+		if type_config == null or type_config.effect_config == null:
+			return false
+		if type_config.effect_config.provides_zone():
+			if facility.zone_id.is_empty():
+				return false
+			if not configured_zone_ids.has(facility.zone_id):
+				if dynamic_zone_ids.has(facility.zone_id):
+					return false
+				dynamic_zone_ids[facility.zone_id] = true
+		elif (
+			type_config.effect_config.requires_host_zone()
+			and facility.zone_id.is_empty()
+		):
+			return false
+	for zone: HabitatZoneState in state.zones:
+		if (
+			not configured_zone_ids.has(zone.zone_id)
+			and not dynamic_zone_ids.has(zone.zone_id)
+		):
+			return false
+	return state.zones.size() == (
+		configured_zone_ids.size() + dynamic_zone_ids.size()
 	)
 
 
@@ -1366,7 +1526,34 @@ func _is_facility_referenced(facility_id: int) -> bool:
 	)
 	if facility == null:
 		return true
-	if facility.zone_id.is_empty():
+	var type_config: FacilityConfig = (
+		_habitat_config.facility_catalog_config.get_type(facility.type_id)
+	)
+	if (
+		facility.zone_id.is_empty()
+		or type_config == null
+	):
+		return false
+	if (
+		type_config.effect_config.kind
+		== FacilityEffectConfig.Kind.FOOD_STATION
+	):
+		for source: FoodSourceState in _state.food_sources:
+			if (
+				source.available
+				and source.zone_id == facility.zone_id
+				and (
+					source.food_type
+						== FoodSourceState.FoodType.SUGAR_WATER
+						and type_config.effect_config.accepts_sugar
+					or source.food_type
+						== FoodSourceState.FoodType.PROTEIN
+						and type_config.effect_config.accepts_protein
+				)
+			):
+				return true
+		return false
+	if not type_config.effect_config.provides_zone():
 		return false
 	for ant: AntModel in _state.ants:
 		if ant.zone_id == facility.zone_id:
@@ -1402,6 +1589,51 @@ func _is_facility_referenced(facility_id: int) -> bool:
 		if source.available and source.zone_id == facility.zone_id:
 			return true
 	return false
+
+
+func _find_food_station_zone_id(
+	food_type: FoodSourceState.FoodType,
+	preferred_zone_id: StringName
+) -> StringName:
+	if (
+		_state == null
+		or _state.layout_state == null
+		or _habitat_config == null
+		or _habitat_config.facility_catalog_config == null
+	):
+		return preferred_zone_id
+	var fallback: StringName = &""
+	for facility: FacilityState in (
+		_state.layout_state.get_facilities_in_stable_order()
+	):
+		if not facility.available or facility.zone_id.is_empty():
+			continue
+		var zone: HabitatZoneState = _state.get_zone(facility.zone_id)
+		var type_config: FacilityConfig = (
+			_habitat_config.facility_catalog_config.get_type(
+				facility.type_id
+			)
+		)
+		if (
+			zone == null
+			or not zone.available
+			or type_config == null
+			or type_config.effect_config.kind
+				!= FacilityEffectConfig.Kind.FOOD_STATION
+		):
+			continue
+		var accepts: bool = (
+			type_config.effect_config.accepts_sugar
+			if food_type == FoodSourceState.FoodType.SUGAR_WATER
+			else type_config.effect_config.accepts_protein
+		)
+		if not accepts:
+			continue
+		if facility.zone_id == preferred_zone_id:
+			return preferred_zone_id
+		if fallback.is_empty():
+			fallback = facility.zone_id
+	return fallback
 
 
 func _has_any_active_worker_task() -> bool:

@@ -10,6 +10,11 @@ var placement_layer: FacilityData.PlacementLayer
 var zone_id: StringName
 var available: bool
 var player_removable: bool
+var effect_kind: int
+var zone_humidity: float
+var zone_light_exposure: float
+var zone_pollution: float
+var waste_fill_ratio: float
 
 
 func _init(
@@ -21,7 +26,12 @@ func _init(
 	new_placement_layer: FacilityData.PlacementLayer,
 	new_zone_id: StringName,
 	new_available: bool,
-	new_player_removable: bool
+	new_player_removable: bool,
+	new_effect_kind: int = -1,
+	new_zone_humidity: float = 0.0,
+	new_zone_light_exposure: float = 0.0,
+	new_zone_pollution: float = 0.0,
+	new_waste_fill_ratio: float = 0.0
 ) -> void:
 	facility_id = new_facility_id
 	type_id = new_type_id
@@ -32,3 +42,8 @@ func _init(
 	zone_id = new_zone_id
 	available = new_available
 	player_removable = new_player_removable
+	effect_kind = new_effect_kind
+	zone_humidity = new_zone_humidity
+	zone_light_exposure = new_zone_light_exposure
+	zone_pollution = new_zone_pollution
+	waste_fill_ratio = new_waste_fill_ratio
