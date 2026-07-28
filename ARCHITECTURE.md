@@ -1,8 +1,8 @@
 # 《玻璃蚁国》技术架构
 
-> 文档版本：1.3｜更新日期：2026-07-28
+> 文档版本：1.4｜更新日期：2026-07-28
 >
-> 本文描述当前 v0.2 连续组合观察、R2 版本化存档核心、R3 档案与设置外壳，以及仍保留的独立调试／验证路径。
+> 本文描述当前 v0.2 连续组合观察、R4 章节与观察手册、版本化存档和档案设置外壳，以及仍保留的独立调试／验证路径。
 
 ## 1. 固定技术决定
 
@@ -17,7 +17,8 @@
 | 随机性 | 当前切片不使用随机性 |
 | 显示 | Godot 内置节点和程序化占位图形 |
 | 应用外壳 | 标题／档案／设置／确认页、暂停菜单、键盘焦点、三档 UI 缩放和减少动效 |
-| 存档核心 | 规范化 JSON、版本／清单／checksum 校验、冻结配置、主档／备份恢复和单向迁移；已接入玩家 UI |
+| 章节手册 | 两章显式枚举、证据、推论、递进提示、固定设施工具包解锁与结算；不使用任务 DSL |
+| 存档核心 | `r4.authority.v2` 规范化 JSON、版本／清单／checksum 校验、冻结配置、主档／备份恢复和单向迁移；已接入玩家 UI |
 | 测试 | 项目自建 headless runner，无第三方插件 |
 
 ## 2. 数据流与命令边界
@@ -30,13 +31,14 @@ PreparationGate（应用层，Tick 0）
 CombinedObservationController
     ├── 身份阶段按钮 → submit_continue_observation_action()
     ├── 湿度阶段按钮 → submit_water_action()
-    └── 糖水阶段有效落点 → submit_place_sugar_action()
-                              （三个入口都是无参数高层命令）
+    ├── 糖水阶段有效落点 → submit_place_sugar_action()
+    └── 手册推论按钮 → submit_campaign_inference_action(inference_id)
+                         （只有推论携带稳定 StringName 选项 ID）
     ↓
 ColonySimulation._pending_commands
     ↓ 先验证 Tick 连续，再按提交顺序消费
     ↓ 下一合法固定 Tick 开始时使用冻结配置应用
-ColonyState + ScenarioProgressState
+ColonyState + ScenarioProgressState + CampaignState
     ↓
 ScenarioDirector 受控生命周期
     ↓
@@ -44,20 +46,23 @@ ScenarioDirector 受控生命周期
     ↓
 按当前阶段分配新任务 → 更新湿度观察 → 推进组合阶段
     ↓
-校验栖息地、任务、守恒与组合进度不变量
+CampaignDirector 从已解锁观察卡收集证据并结算推论／章节
+    ↓
+校验栖息地、任务、守恒、组合进度与章节不变量
     ↓ create_game_snapshot() 深复制
 GameSnapshot
     ├── ColonySnapshot
     ├── ForagingScenarioSnapshot
     ├── ObservationJournalSnapshot
-    └── ScenarioSequenceSnapshot
+    ├── ScenarioSequenceSnapshot
+    └── CampaignSnapshot
             ├── CombinedHabitatView
             ├── CombinedObservationController 的阶段 UI
             ├── PlayerAnnotationState → WorkerObservationPanel
             └── 开发调试构建中的 F3 DebugPanel
 ```
 
-提交命令时不会直接修改权威状态。控制器在提交成功后立即重新取同 Tick 快照，所以 UI 可以先看到 `continue_action_pending`、`water_action_pending` 或 `place_action_pending`；命令效果只会在下一合法固定 Tick 出现。`ColonySimulation` 在消费命令前拒绝非连续 Tick，因此错误推进不会丢失已提交输入。
+提交命令时不会直接修改权威状态。控制器在提交成功后立即重新取同 Tick 快照，所以 UI 可以先看到 `continue_action_pending`、`water_action_pending`、`place_action_pending` 或 `inference_action_pending`；命令效果只会在下一合法固定 Tick 出现。`ColonySimulation` 在消费命令前拒绝非连续 Tick，因此错误推进不会丢失已提交输入。
 
 准备门是 `CombinedObservationController` 的应用层状态，不属于 `ColonyState`、命令队列或五阶段 `ScenarioProgressState`。门内 `SimulationClock` 保持 Tick 0、1×和暂停，View 插值系数固定为 0，蚁后与蚂蚁视觉暂停；开始按钮只解除这些暂停。首工的生命周期边界仍由冻结 Resource 和模拟 Tick 决定。重开先创建全新模拟会话，再回到同一个准备门。
 
@@ -68,6 +73,7 @@ GameSnapshot
 - 推进 `SimulationClock`。
 - 协调 Tick 0 准备门，并在开始前冻结时钟、插值和视觉。
 - 把阶段 UI 操作转换成无参数高层模拟命令。
+- 把观察手册选项转换成带稳定推论 ID 的高层模拟命令；UI 文案不是权威输入。
 - 每个成功固定 Tick 后创建并交付一份 `GameSnapshot`。
 - 把快照交给 `CombinedHabitatView`、会话注释层、观察面板和调试 UI。
 - 每个渲染帧把时钟插值系数交给 View。
@@ -77,7 +83,7 @@ GameSnapshot
 
 控制器不能访问私有 `ColonyState`，也不创建或逐只管理蚂蚁视觉节点。糖水落点的屏幕坐标只用于 View 命中判断，不进入命令或模拟。
 
-`DemoSettingsState` 只保存当前程序会话的分辨率索引、全屏请求和语言代码。`CombinedObservationController` 把该状态应用到 `DisplayServer` 与 `TranslationServer`；它不读取或修改 `ColonyState`，也不进入 `GameSnapshot`。打开暂停菜单只暂停 `SimulationClock` 并冻结 View 插值；继续时恢复合法时钟语义。分辨率、全屏和语言切换不会推进 Tick、消费命令或改变模拟快照。
+`DemoSettingsState` 保存分辨率、全屏、语言、UI 缩放、减少动效和主音量。应用外壳把它独立持久化并与 `CombinedObservationController` 共享；它不读取或修改 `ColonyState`，也不进入 `GameSnapshot`。打开暂停菜单只暂停 `SimulationClock` 并冻结 View 插值；继续时恢复合法时钟语义。显示、语言、动效和音量切换不会推进 Tick、消费命令或改变模拟快照。
 
 原有独立湿度和糖水入口继续遵守相同边界：
 
@@ -142,6 +148,7 @@ M4 在既有 `HabitatScenarioData.ScenarioKind` 末尾追加 `COMBINED_OBSERVATI
 - 已应用湿度调整次数。
 - 观察稳定 Tick 和观察记录解锁状态。
 - 组合场景中的 `ScenarioProgressState`。
+- 组合场景中的 `CampaignState`：章节、状态、进入 Tick、错误推论次数、提示层级、证据、已确认推论和设施工具包。
 - 会话内单调事件 ID 和最多 64 条的结构化观察事件历史。
 
 组合场景初始化时，蚁后固定为实体 ID 0，晚期蛹先于其余幼体创建并取得实体 ID 1。它从蛹原地转换为工蚁时不创建替代实体；`ScenarioProgressState.first_worker_entity_id` 始终指向这个 ID，`configure_worker()` 在同一个 `AntModel` 上建立 `WorkerTaskModel` 与 `ForagingTaskModel`。重开会从冻结配置重新执行同一稳定 ID 分配顺序。
@@ -170,6 +177,22 @@ FOUNDING_PRELUDE
 ```
 
 首工羽化自动完成第一段；`submit_continue_observation_action()` 在下一合法 Tick 完成身份段；湿度观察稳定条件达成后进入糖水段；糖水分享观察卡解锁后进入总结段。阶段切换不创建新 `ColonyState`。
+
+### `CampaignState` 与 `CampaignDirector`
+
+`CampaignState` 是组合场景的章节权威事实来源，归 `ColonyState` 所有。当前只使用两个显式枚举章节：
+
+```text
+FOUNDING_OBSERVATION
+    → ENVIRONMENTAL_CARE
+    → COMPLETED
+```
+
+它保存当前章节与状态、进入 Tick、完成章节数、错误推论次数、提示层级、完成 Tick，以及三个稳定 ID 集合：已收集证据、已确认推论、已解锁设施类型。初始工具包固定含试管巢和遮光套；第一章解锁微型喂食口，第二章解锁小型觅食盒。R4 只记录解锁，不创建 `FacilityState` 或摆放能力。
+
+`CampaignDirector` 是纯 `RefCounted` 协调器。每个成功 Tick 在 `ScenarioDirector` 之后运行，从已经解锁的观察卡确定性收集首工、湿度和糖水证据，并刷新“收集中／等待推论／已完成”状态。`submit_campaign_inference_action(inference_id)` 只接受当前章节的三个显式选项之一；命令在下一 Tick 应用。错误选项增加累计错误次数和最高三级提示，不倒退章节或删除证据；正确选项确认推论、解锁固定工具包并推进章节或完成本轮。
+
+章节不变量要求证据与观察卡完全对应，完成数、章节、状态、确认推论和设施集合彼此一致，完成 Tick 不越界。章节快照复制所有 ID 数组和派生可用／待处理状态；UI 不能写回。
 
 ### `HabitatZoneState`
 
@@ -218,7 +241,7 @@ SHARING
 
 ### `ObservationEvent`
 
-模拟在首工羽化、身份观察完成、幼体搬运、糖水发现、出发、采集、返程、分享、取消、各观察首次完成和整局完成时追加结构化值对象。M4 追加的事件类型包括 `FIRST_WORKER_EMERGED`、`IDENTITY_OBSERVATION_COMPLETED` 与 `OBSERVATION_SESSION_COMPLETED`；每条事件只包含：
+模拟在首工羽化、身份观察完成、幼体搬运、糖水发现、出发、采集、返程、分享、取消、各观察首次完成、推论确认／拒绝、章节完成和整局完成时追加结构化值对象。R4 追加 `CAMPAIGN_INFERENCE_REJECTED`、`CAMPAIGN_INFERENCE_CONFIRMED`、`CAMPAIGN_CHAPTER_COMPLETED` 与 `CAMPAIGN_SESSION_COMPLETED`；每条事件仍只包含：
 
 - `event_id`
 - `tick`
@@ -317,7 +340,7 @@ IDLE
 
 1. 验证 Tick 必须连续；失败时不消费命令。
 2. 写入当前 Tick。
-3. 按提交顺序应用并清空本 Tick 的身份继续／补水／糖水高层命令；湿度夹紧到有限的 0.0～1.0。
+3. 按提交顺序应用并清空本 Tick 的身份继续／补水／糖水／章节推论高层命令；湿度夹紧到有限的 0.0～1.0。
 4. 组合场景由 `ScenarioDirector` 推进指定晚期蛹；其他栖息地切片不推进生命周期，无栖息地的独立调试入口保持完整生命周期流程。
 5. 校验 `BroodRelocationSystem` 现有任务。
 6. 配有觅食系统时校验 `ForagingSystem` 现有任务。
@@ -327,8 +350,9 @@ IDLE
 10. 独立糖水场景始终允许分配觅食；组合场景只在 `SUGAR_FORAGING` 分配新的觅食任务。
 11. 与搬运分配使用同一阶段门控，更新湿度观察稳定计数与解锁状态。
 12. 组合场景在系统更新后由 `ScenarioDirector` 检查湿度／糖水完成条件并推进阶段。
-13. 校验栖息地、幼体搬运、糖水守恒与组合进度不变量。
-14. 每个成功 Tick 后，由控制器立即创建并交付一份新快照。
+13. 组合场景由 `CampaignDirector` 收集新观察证据并刷新章节状态。
+14. 校验栖息地、幼体搬运、糖水守恒、组合进度与章节不变量。
+15. 每个成功 Tick 后，由控制器立即创建并交付一份新快照。
 
 系统结果不依赖场景树处理顺序、渲染帧率或墙钟时间。
 
@@ -350,14 +374,15 @@ IDLE
 - `GameSnapshot.scenario: ForagingScenarioSnapshot`，保存场景阶段、巢室／放置区域和动作可用／待处理状态
 - `GameSnapshot.observations: ObservationJournalSnapshot`，深复制事件与已解锁卡片 ID
 - `GameSnapshot.sequence: ScenarioSequenceSnapshot`，保存五阶段、阶段进入／完成 Tick、稳定首工 ID、三张冻结观察卡 ID，以及继续命令的可用／待处理状态
+- `GameSnapshot.campaign: CampaignSnapshot`，保存两章状态、证据、确认推论、提示层级、设施工具包和推论命令可用／待处理状态
 
-`sequence` 只在组合场景存在；独立糖水场景继续使用前三个组成部分。M2 兼容路径仍保留 `ColonySnapshot.observation_events`，独立糖水控制器继续读取 `ObservationJournalSnapshot`。任何快照都不是命令入口，也不能写回模拟。
+`sequence` 与 `campaign` 只在组合场景存在；独立糖水场景继续使用前三个组成部分。M2 兼容路径仍保留 `ColonySnapshot.observation_events`，独立糖水控制器继续读取 `ObservationJournalSnapshot`。任何快照都不是命令入口，也不能写回模拟。
 
 控制器在命令提交后可以创建同 Tick 新快照来展示待处理状态；只有成功推进到下一 Tick 后，快照中的权威湿度、阶段或食物源才反映命令效果。所有数组、事件和嵌套快照都重新创建或复制，修改快照不会改变 `ColonyState`。
 
 ## 10. 版本化存档核心
 
-`SaveGameService` 只捕获最近一次成功固定 Tick 后的合法边界。`ColonySimulation` 在 Tick 执行期间拒绝捕获；保存不会暗中推进 Tick。Envelope 包含模拟 Tick、倍速、暂停、分别计数的 next IDs、按稳定 sequence 排序的待处理高层命令、权威状态和实际冻结配置。
+`SaveGameService` 只捕获最近一次成功固定 Tick 后的合法边界。`ColonySimulation` 在 Tick 执行期间拒绝捕获；保存不会暗中推进 Tick。Envelope 包含模拟 Tick、倍速、暂停、分别计数的 next IDs、按稳定 sequence 排序的待处理高层命令、权威状态和实际冻结配置。R4 的推论命令额外保存稳定 `argument_id`；其他高层命令必须保持空参数。
 
 `SimulationStateCodec` 负责纯状态编码、从冻结值重建临时强类型 Resource、重建新的 `ColonyState`，以及运行稳定 ID、有限数值、区域图、任务进度、守恒、单一所有权和组合阶段不变量。加载不读取当前 `.tres`，不保存快照、View、Tween、会话名称或显示设置。只有 Envelope、配置哈希、迁移和全部不变量成功后才返回新会话。
 
@@ -367,7 +392,7 @@ IDLE
 
 `SettingsStore` 使用独立的 `user://settings.json`，只保存显示、音量、语言、UI 缩放和减少动效；它不进入 SaveEnvelope，不参与模拟 checksum，也不随档案删除。
 
-精确 schema、迁移和恢复顺序见 `docs/architecture/SAVE_SCHEMA_R2.md`。
+当前 `r4.authority.v2` schema、R2 迁移和恢复顺序见 `docs/architecture/SAVE_SCHEMA_R4.md`；`docs/architecture/SAVE_SCHEMA_R2.md` 保留为历史基线。
 
 ## 11. 显示层
 
@@ -383,11 +408,11 @@ IDLE
 - 减少动效启用时，蚁后待机摆动和 AntView 阶段脉冲停止，位置直接投影当前快照端点；模拟 Tick 和任务结果不变。
 - 重复快照不创建重复节点；重开时 `reset_projection()` 清除旧端点、实体映射和临时糖水投影。
 
-`CombinedObservationController` 从 `ScenarioSequenceSnapshot` 投影五阶段标题、阶段按钮、三张观察卡和总结面板；从 `ColonySnapshot`、`ForagingScenarioSnapshot` 与 `ObservationJournalSnapshot` 投影对应的环境、工具和事件状态。UI 只组合快照，不能直接推进阶段或修改群落状态。
+`CombinedObservationController` 从 `ScenarioSequenceSnapshot` 投影五阶段标题、阶段按钮和三张观察卡；从 `CampaignSnapshot` 投影观察手册、目标、证据、提示、推论按钮、设施工具包和最终结算；从 `ColonySnapshot`、`ForagingScenarioSnapshot` 与 `ObservationJournalSnapshot` 投影对应的环境、工具和事件状态。UI 只组合快照，不能直接推进阶段或修改群落状态。日志正文位于滚动区，标题和关闭操作固定，在 1280×720、150% UI 缩放下仍可操作。
 
 玩家可见文本通过 `localization/v0_2.csv` 导入简体中文与临时英文翻译资源。阶段说明、反馈和观察卡仍携带小型 `evidence_copy_role` 元数据：`observation_cue`、`action_affordance`、`neutral_placeholder`、`post_event_conclusion`、`system_status` 或 `error`。翻译只改变表现文字，不改变角色或权威状态；锁定卡只能使用中性占位，事件完成后才能切换为结论角色。场景测试检查键、角色和节点状态，不绑定完整中文句子。这是当前场景的应用文案边界，不是通用内容框架。
 
-`scenes/app/game_shell.tscn` 是默认应用入口，提供标题、主档摘要、备份恢复、删除确认和设置页。暂停菜单属于游戏场景的应用层遮罩，提供继续、保存、重开当前短章、返回标题和同一组设置。显示模式只经 `DisplayServer`，音量只经 `AudioServer`，翻译只经 `TranslationServer`，UI 缩放只经 `Window.content_scale_factor` 应用；这些路径都没有模拟引用。
+`scenes/app/game_shell.tscn` 是默认应用入口，提供标题、主档摘要、备份恢复、删除确认和设置页。档案摘要优先显示权威章节与完成状态。暂停菜单属于游戏场景的应用层遮罩，提供继续、保存、重开当前短章、返回标题和同一组设置。显示模式只经 `DisplayServer`，音量只经 `AudioServer`，翻译只经 `TranslationServer`，UI 缩放只经主题缩放应用；这些路径都没有模拟引用。
 
 ### 独立湿度显示层
 
@@ -458,6 +483,7 @@ ColonyViewAdapter
 - `tests/simulation/brood_relocation_equivalence_test_suite.gd`
 - `tests/simulation/foraging_test_suite.gd`
 - `tests/simulation/combined_observation_test_suite.gd`
+- `tests/simulation/campaign_journal_test_suite.gd`
 - `tests/simulation/observation_event_test_suite.gd`
 - `tests/save/save_core_test_suite.gd`
 - `tests/save/profile_store_test_suite.gd`
@@ -471,13 +497,14 @@ ColonyViewAdapter
 - `tests/scenes/worker_identity_scene_test_suite.gd`
 - `tests/scenes/sugar_foraging_scene_test_suite.gd`
 - `tests/scenes/combined_observation_scene_test_suite.gd`
+- `tests/scenes/campaign_journal_scene_test_suite.gd`
 - `tests/scenes/demo_shell_scene_test_suite.gd`
 - `tests/scenes/game_shell_scene_test_suite.gd`
 - `tests/ui/demo_settings_state_test_suite.gd`
 - `tests/ui/settings_store_test_suite.gd`
 - `tests/ui/demo_localization_test_suite.gd`
 
-生命周期边界从 Resource 计算。湿度套件覆盖原有命令、搬运、所有权、节奏和 soak；黄金套件锁定 `BroodRelocationSystem` 拆分前后等价。糖水套件覆盖下一 Tick 命令、冻结配置、稳定选择、全部状态边界、软失效与返程恢复、份数守恒、快照隔离、三档速度、事件和 10,000 Tick soak。组合模拟套件覆盖五阶段顺序、稳定首工 ID、阶段门控、三类命令、冻结配置、精确线性拓扑、湿度闭环可完成性、快照隔离、重开和组合不变量；存档套件覆盖任务中途／生命周期／暂停／三档速度／待处理命令往返、冻结配置、checksum、内容清单、未知版本、非法值、旧 schema 迁移、原子提交、备份恢复、故障注入、隔离和载入后 10,000 Tick soak。R3 套件再覆盖真实标题→新游戏→保存→返回→继续路径、档案摘要、确认删除、坏主档回退、显式备份恢复、独立设置持久化、键盘返回和减少动效。翻译套件检查键唯一性、双语非空、资源加载和主要玩家场景不残留嵌入式中文。
+生命周期边界从 Resource 计算。湿度套件覆盖原有命令、搬运、所有权、节奏和 soak；黄金套件锁定 `BroodRelocationSystem` 拆分前后等价。糖水套件覆盖下一 Tick 命令、冻结配置、稳定选择、全部状态边界、软失效与返程恢复、份数守恒、快照隔离、三档速度、事件和 10,000 Tick soak。组合模拟套件覆盖五阶段顺序、稳定首工 ID、阶段门控、三类环境／流程命令、冻结配置、精确线性拓扑、湿度闭环可完成性、快照隔离、重开和组合不变量；R4 套件覆盖章节证据、错误提示、正确推论、设施解锁、带参数待处理命令、快照隔离、确定性、旧 schema 迁移、非法章节状态拒绝和真实日志按钮路径。存档套件覆盖任务中途／生命周期／暂停／三档速度／待处理命令往返、冻结配置、checksum、内容清单、未知版本、非法值、旧 schema 迁移、原子提交、备份恢复、故障注入、隔离和载入后 10,000 Tick soak。应用外壳套件覆盖真实标题→新游戏→保存→返回→继续路径、章节档案摘要、确认删除、坏主档回退、显式备份恢复、独立设置持久化、键盘返回和减少动效。翻译套件检查键唯一性、双语非空、资源加载和主要玩家场景不残留嵌入式中文。
 
 标准命令：
 
@@ -498,5 +525,7 @@ ColonyViewAdapter
 - 名称、选择和个人记录只存在于当前会话；显示与无障碍设置使用独立文件跨程序保留。
 - 临时英文尚未完成用户最终校对；7 名有效首次接触测试者数据未取得，外部理解度 Gate 未通过。用户已明确豁免该前置条件继续 M5，但该决定不构成外部验证证据。
 - 糖水分享只解锁观察记录，不实现饥饿、能量、蛋白质或资源经济。
-- 当前档案只覆盖已经实现的连续观察权威状态；不会自动保存，也不含名称、选择、显示设置或未来章节／设施字段。
+- 当前只有建立在五阶段 Demo 上的两个演示短章；正式六章内容尚未制作。
+- 当前档案保存章节、证据、推论、提示和设施解锁，但不会自动保存，也不含名称、选择或显示设置。
+- 设施解锁仅为稳定类型 ID 与手册显示；没有 `FacilityState`、摆放、接口或环境效果。
 - 没有镜头、直接个体命令、随机行为、正式素材或外部插件。

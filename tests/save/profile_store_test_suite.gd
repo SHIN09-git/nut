@@ -71,6 +71,15 @@ func _test_primary_backup_recovery_and_delete(store: ProfileStore) -> void:
 		5,
 		"summary reports the saved Tick"
 	)
+	_expect_int(
+		int(first_summary.get("campaign_chapter", -1)),
+		CampaignState.Chapter.FOUNDING_OBSERVATION,
+		"summary reports the authoritative campaign chapter"
+	)
+	_expect_true(
+		not bool(first_summary.get("campaign_completed", true)),
+		"summary does not confuse an active chapter with completion"
+	)
 
 	_expect_true(_advance_to(simulation, 6), "profile fixture reaches Tick 6")
 	var second: Dictionary = service.create_envelope(

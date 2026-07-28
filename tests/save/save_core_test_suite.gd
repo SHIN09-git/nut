@@ -570,6 +570,7 @@ func _test_legacy_schema_migration() -> void:
 		ColonySimulation.PendingCommandType.CONTINUE_OBSERVATION_ACTION,
 	]
 	legacy["next_ids"].erase("pending_command_sequence_id")
+	legacy["state_payload"].erase("campaign")
 	legacy = service.seal_envelope(legacy)
 	var load_result: Dictionary = service.load_envelope(legacy)
 	_expect_true(

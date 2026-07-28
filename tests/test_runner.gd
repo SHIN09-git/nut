@@ -18,6 +18,9 @@ const ForagingTestSuiteScript: Script = preload(
 const CombinedObservationTestSuiteScript: Script = preload(
 	"res://tests/simulation/combined_observation_test_suite.gd"
 )
+const CampaignJournalTestSuiteScript: Script = preload(
+	"res://tests/simulation/campaign_journal_test_suite.gd"
+)
 const ObservationEventTestSuiteScript: Script = preload(
 	"res://tests/simulation/observation_event_test_suite.gd"
 )
@@ -66,6 +69,9 @@ const SugarForagingSceneTestSuiteScript: Script = preload(
 const CombinedObservationSceneTestSuiteScript: Script = preload(
 	"res://tests/scenes/combined_observation_scene_test_suite.gd"
 )
+const CampaignJournalSceneTestSuiteScript: Script = preload(
+	"res://tests/scenes/campaign_journal_scene_test_suite.gd"
+)
 const DemoShellSceneTestSuiteScript: Script = preload(
 	"res://tests/scenes/demo_shell_scene_test_suite.gd"
 )
@@ -89,6 +95,7 @@ func _run_all_tests() -> void:
 	_run_brood_relocation_equivalence_test_suite()
 	_run_foraging_test_suite()
 	_run_combined_observation_test_suite()
+	_run_campaign_journal_test_suite()
 	_run_observation_event_test_suite()
 	_run_save_core_test_suite()
 	_run_profile_store_test_suite()
@@ -105,6 +112,7 @@ func _run_all_tests() -> void:
 	_run_worker_identity_scene_test_suite()
 	_run_sugar_foraging_scene_test_suite()
 	_run_combined_observation_scene_test_suite()
+	_run_campaign_journal_scene_test_suite()
 	_run_demo_shell_scene_test_suite()
 	_run_game_shell_scene_test_suite()
 
@@ -158,6 +166,12 @@ func _run_combined_observation_test_suite() -> void:
 	var suite: CombinedObservationTestSuite = (
 		CombinedObservationTestSuiteScript.new()
 	)
+	suite.run()
+	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
+
+
+func _run_campaign_journal_test_suite() -> void:
+	var suite: CampaignJournalTestSuite = CampaignJournalTestSuiteScript.new()
 	suite.run()
 	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
 
@@ -269,6 +283,14 @@ func _run_sugar_foraging_scene_test_suite() -> void:
 func _run_combined_observation_scene_test_suite() -> void:
 	var suite: CombinedObservationSceneTestSuite = (
 		CombinedObservationSceneTestSuiteScript.new()
+	)
+	suite.run(root)
+	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
+
+
+func _run_campaign_journal_scene_test_suite() -> void:
+	var suite: CampaignJournalSceneTestSuite = (
+		CampaignJournalSceneTestSuiteScript.new()
 	)
 	suite.run(root)
 	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())

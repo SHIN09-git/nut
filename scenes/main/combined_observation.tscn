@@ -340,6 +340,12 @@ theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
 theme_override_font_sizes/font_size = 17
 text = "UI_OBSERVATION_CARDS"
 
+[node name="JournalButton" type="Button" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 38)
+layout_mode = 2
+text = "Open Observation Journal"
+
 [node name="ObservationCards" type="VBoxContainer" parent="SafeArea/Content/Body/SidePanel/SideMargin/SideContent"]
 layout_mode = 2
 theme_override_constants/separation = 5
@@ -474,6 +480,153 @@ text = "UI_FOOTER_PROTOTYPE"
 horizontal_alignment = 1
 vertical_alignment = 1
 metadata/evidence_copy_role = &"system_status"
+
+[node name="JournalPanel" type="Control" parent="."]
+unique_name_in_owner = true
+visible = false
+z_index = 60
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Dim" type="ColorRect" parent="JournalPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+color = Color(0.015, 0.022, 0.02, 0.78)
+
+[node name="Center" type="CenterContainer" parent="JournalPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="JournalPanel/Center"]
+custom_minimum_size = Vector2(720, 640)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBox_gate")
+
+[node name="Margin" type="MarginContainer" parent="JournalPanel/Center/Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 30
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 30
+theme_override_constants/margin_bottom = 24
+
+[node name="Frame" type="VBoxContainer" parent="JournalPanel/Center/Panel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 9
+
+[node name="JournalHeading" type="Label" parent="JournalPanel/Center/Panel/Margin/Frame"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.84, 0.58, 1)
+theme_override_font_sizes/font_size = 26
+text = "Observation Journal"
+
+[node name="JournalChapterLabel" type="Label" parent="JournalPanel/Center/Panel/Margin/Frame"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.86, 0.82, 0.66, 1)
+theme_override_font_sizes/font_size = 18
+text = "Chapter"
+
+[node name="JournalStatusLabel" type="Label" parent="JournalPanel/Center/Panel/Margin/Frame"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.67, 0.74, 0.68, 1)
+text = "Status"
+
+[node name="Scroll" type="ScrollContainer" parent="JournalPanel/Center/Panel/Margin/Frame"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Body" type="VBoxContainer" parent="JournalPanel/Center/Panel/Margin/Frame/Scroll"]
+custom_minimum_size = Vector2(660, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 9
+
+[node name="JournalObjectivesLabel" type="Label" parent="JournalPanel/Center/Panel/Margin/Frame/Scroll/Body"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 76)
+layout_mode = 2
+text = "Objectives"
+autowrap_mode = 2
+metadata/evidence_copy_role = &"observation_cue"
+
+[node name="JournalEvidenceLabel" type="Label" parent="JournalPanel/Center/Panel/Margin/Frame/Scroll/Body"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 70)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.73, 0.77, 0.69, 1)
+text = "Evidence"
+autowrap_mode = 2
+metadata/evidence_copy_role = &"neutral_placeholder"
+
+[node name="JournalHintLabel" type="Label" parent="JournalPanel/Center/Panel/Margin/Frame/Scroll/Body"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.72, 0.62, 1)
+text = "Hint"
+autowrap_mode = 2
+metadata/evidence_copy_role = &"observation_cue"
+
+[node name="JournalInferenceHeading" type="Label" parent="JournalPanel/Center/Panel/Margin/Frame/Scroll/Body"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
+theme_override_font_sizes/font_size = 17
+text = "Choose an inference"
+
+[node name="InferenceButton1" type="Button" parent="JournalPanel/Center/Panel/Margin/Frame/Scroll/Body"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+clip_text = true
+text_overrun_behavior = 3
+text = "Inference 1"
+
+[node name="InferenceButton2" type="Button" parent="JournalPanel/Center/Panel/Margin/Frame/Scroll/Body"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+clip_text = true
+text_overrun_behavior = 3
+text = "Inference 2"
+
+[node name="InferenceButton3" type="Button" parent="JournalPanel/Center/Panel/Margin/Frame/Scroll/Body"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+clip_text = true
+text_overrun_behavior = 3
+text = "Inference 3"
+
+[node name="JournalFacilitiesLabel" type="Label" parent="JournalPanel/Center/Panel/Margin/Frame/Scroll/Body"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.68, 0.8, 0.7, 1)
+text = "Unlocked kit"
+autowrap_mode = 2
+
+[node name="JournalCloseButton" type="Button" parent="JournalPanel/Center/Panel/Margin/Frame"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+text = "Close"
 
 [node name="DebugPanel" type="PanelContainer" parent="."]
 unique_name_in_owner = true

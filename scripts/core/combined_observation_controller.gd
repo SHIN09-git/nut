@@ -29,6 +29,7 @@ var _fatal_simulation_error: String = ""
 var _preparation_gate_active: bool = true
 var _pause_menu_open: bool = false
 var _paused_before_menu: bool = true
+var _journal_open: bool = false
 var _demo_settings_state: DemoSettingsState
 var _ui_scale_theme: Theme
 
@@ -69,6 +70,22 @@ var shell_managed: bool = false
 @onready var _preparation_gate: Control = %PreparationGate
 @onready var _start_observation_button: Button = %StartObservationButton
 @onready var _observation_heading: Label = %ObservationHeading
+@onready var _journal_button: Button = %JournalButton
+@onready var _journal_panel: Control = %JournalPanel
+@onready var _journal_heading: Label = %JournalHeading
+@onready var _journal_chapter_label: Label = %JournalChapterLabel
+@onready var _journal_status_label: Label = %JournalStatusLabel
+@onready var _journal_objectives_label: Label = %JournalObjectivesLabel
+@onready var _journal_evidence_label: Label = %JournalEvidenceLabel
+@onready var _journal_hint_label: Label = %JournalHintLabel
+@onready var _journal_inference_heading: Label = %JournalInferenceHeading
+@onready var _inference_buttons: Array[Button] = [
+	%InferenceButton1,
+	%InferenceButton2,
+	%InferenceButton3,
+]
+@onready var _journal_facilities_label: Label = %JournalFacilitiesLabel
+@onready var _journal_close_button: Button = %JournalCloseButton
 @onready var _completion_heading: Label = %CompletionHeading
 @onready var _footer_label: Label = %Footer
 @onready var _debug_title: Label = %DebugTitle
@@ -141,6 +158,12 @@ func _ready() -> void:
 	_master_volume_slider.value_changed.connect(_on_master_volume_changed)
 	_exit_button.pressed.connect(_on_exit_button_pressed)
 	_stage_action_button.pressed.connect(_on_stage_action_button_pressed)
+	_journal_button.pressed.connect(_open_journal)
+	_journal_close_button.pressed.connect(_close_journal)
+	for inference_index: int in _inference_buttons.size():
+		_inference_buttons[inference_index].pressed.connect(
+			_on_inference_button_pressed.bind(inference_index)
+		)
 	_restart_button.pressed.connect(_on_restart_button_pressed)
 	_start_observation_button.pressed.connect(
 		_on_start_observation_button_pressed
@@ -187,7 +210,9 @@ func _input(event: InputEvent) -> void:
 		_toggle_debug_panel()
 		get_viewport().set_input_as_handled()
 	elif key_event.keycode == KEY_ESCAPE:
-		if _pause_menu_open:
+		if _journal_open:
+			_close_journal()
+		elif _pause_menu_open:
 			_close_pause_menu(false)
 		elif _sugar_tool_armed:
 			_cancel_sugar_tool(tr("FEEDBACK_SUGAR_CANCELLED"))
@@ -325,6 +350,64 @@ func _on_stage_action_button_pressed() -> void:
 				_update_control_state()
 
 
+func _open_journal() -> void:
+	if (
+		_journal_open
+		or _pause_menu_open
+		or _preparation_gate_active
+		or _latest_snapshot == null
+		or _latest_snapshot.campaign == null
+	):
+		return
+	_journal_open = true
+	_journal_panel.visible = true
+	_update_campaign_journal()
+	var focus_button: Button = _journal_close_button
+	for button: Button in _inference_buttons:
+		if button.visible and not button.disabled:
+			focus_button = button
+			break
+	focus_button.grab_focus()
+	_update_control_state()
+
+
+func _close_journal() -> void:
+	if not _journal_open:
+		return
+	_journal_open = false
+	_journal_panel.visible = false
+	_journal_button.grab_focus()
+	_update_control_state()
+
+
+func _on_inference_button_pressed(index: int) -> void:
+	if (
+		not _journal_open
+		or _latest_snapshot == null
+		or _latest_snapshot.campaign == null
+		or index < 0
+		or index >= _inference_buttons.size()
+	):
+		return
+	var button: Button = _inference_buttons[index]
+	var inference_id: StringName = StringName(
+		button.get_meta(&"campaign_inference_id", "")
+	)
+	if (
+		inference_id.is_empty()
+		or not _colony_simulation.submit_campaign_inference_action(
+			inference_id
+		)
+	):
+		return
+	_apply_game_snapshot()
+	_set_copy(
+		_feedback_label,
+		tr("CAMPAIGN_INFERENCE_SUBMITTED"),
+		COPY_ROLE_ACTION_AFFORDANCE
+	)
+
+
 func _on_sugar_drop_requested() -> void:
 	if (
 		not _sugar_tool_armed
@@ -373,7 +456,8 @@ func _on_worker_name_commit_requested(worker_name: String) -> void:
 func _on_restart_button_pressed() -> void:
 	if (
 		_latest_snapshot == null
-		or not _latest_snapshot.sequence.completed
+		or _latest_snapshot.campaign == null
+		or not _latest_snapshot.campaign.completed
 		or _restart_button.disabled
 	):
 		return
@@ -399,7 +483,7 @@ func _on_start_observation_button_pressed() -> void:
 
 
 func _on_speed_button_pressed(multiplier: int) -> void:
-	if _preparation_gate_active or _pause_menu_open:
+	if _preparation_gate_active or _pause_menu_open or _journal_open:
 		return
 	_simulation_clock.set_speed_multiplier(multiplier)
 	_update_control_state()
@@ -423,6 +507,7 @@ func _apply_game_snapshot() -> void:
 		or _latest_snapshot.scenario == null
 		or _latest_snapshot.observations == null
 		or _latest_snapshot.sequence == null
+		or _latest_snapshot.campaign == null
 	):
 		_set_fatal_simulation_error(
 			tr("ERROR_INCOMPLETE_SNAPSHOT")
@@ -448,6 +533,7 @@ func _apply_game_snapshot() -> void:
 
 	_update_worker_observation_panel()
 	_update_observation_cards()
+	_update_campaign_journal()
 	_update_player_guidance()
 	_update_control_state()
 	_update_debug_panel()
@@ -499,6 +585,168 @@ func _update_observation_cards() -> void:
 	)
 
 
+func _update_campaign_journal() -> void:
+	if _latest_snapshot == null or _latest_snapshot.campaign == null:
+		return
+	var campaign: CampaignSnapshot = _latest_snapshot.campaign
+	_journal_chapter_label.text = _campaign_chapter_name(campaign.chapter)
+	_journal_status_label.text = _campaign_status_text(campaign)
+	_journal_objectives_label.text = _campaign_objectives_text(campaign)
+	_journal_evidence_label.text = _campaign_evidence_text(campaign)
+	_journal_hint_label.text = _campaign_hint_text(campaign)
+	_journal_facilities_label.text = _campaign_facilities_text(campaign)
+	var inference_ids: Array[StringName] = campaign.available_inference_ids
+	for index: int in _inference_buttons.size():
+		var button: Button = _inference_buttons[index]
+		var has_choice: bool = index < inference_ids.size()
+		button.visible = has_choice
+		button.disabled = (
+			not has_choice
+			or not campaign.inference_action_available
+			or campaign.inference_action_pending
+		)
+		if not has_choice:
+			button.remove_meta(&"campaign_inference_id")
+			continue
+		var inference_id: StringName = inference_ids[index]
+		button.set_meta(&"campaign_inference_id", inference_id)
+		button.text = _campaign_inference_text(inference_id)
+	_journal_inference_heading.visible = not campaign.completed
+
+
+func _campaign_chapter_name(chapter: int) -> String:
+	return (
+		tr("CAMPAIGN_CHAPTER_FOUNDING")
+		if chapter == CampaignState.Chapter.FOUNDING_OBSERVATION
+		else tr("CAMPAIGN_CHAPTER_ENVIRONMENT")
+	)
+
+
+func _campaign_status_text(campaign: CampaignSnapshot) -> String:
+	if campaign.completed:
+		return tr("CAMPAIGN_STATUS_COMPLETE")
+	if campaign.inference_action_pending:
+		return tr("CAMPAIGN_STATUS_INFERENCE_PENDING")
+	if campaign.status == CampaignState.Status.AWAITING_INFERENCE:
+		return tr("CAMPAIGN_STATUS_AWAITING_INFERENCE")
+	return tr("CAMPAIGN_STATUS_COLLECTING")
+
+
+func _campaign_objectives_text(campaign: CampaignSnapshot) -> String:
+	if campaign.chapter == CampaignState.Chapter.FOUNDING_OBSERVATION:
+		return tr("CAMPAIGN_OBJECTIVES_FOUNDING") % [
+			_campaign_check(
+				campaign.has_evidence(CampaignState.EVIDENCE_FIRST_WORKER)
+			),
+			_campaign_check(
+				campaign.has_confirmed_inference(
+					CampaignState.INFERENCE_FIRST_WORKER
+				)
+			),
+		]
+	return tr("CAMPAIGN_OBJECTIVES_ENVIRONMENT") % [
+		_campaign_check(
+			campaign.has_evidence(
+				CampaignState.EVIDENCE_HUMIDITY_RELOCATION
+			)
+		),
+		_campaign_check(
+			campaign.has_evidence(CampaignState.EVIDENCE_SUGAR_SHARING)
+		),
+		_campaign_check(
+			campaign.has_confirmed_inference(
+				CampaignState.INFERENCE_ENVIRONMENT
+			)
+		),
+	]
+
+
+func _campaign_evidence_text(campaign: CampaignSnapshot) -> String:
+	var lines: PackedStringArray = [tr("CAMPAIGN_EVIDENCE_HEADING")]
+	for evidence_id: StringName in campaign.collected_evidence_ids:
+		lines.append("• " + _campaign_evidence_name(evidence_id))
+	if campaign.collected_evidence_ids.is_empty():
+		lines.append("• " + tr("CAMPAIGN_EVIDENCE_NONE"))
+	return "\n".join(lines)
+
+
+func _campaign_hint_text(campaign: CampaignSnapshot) -> String:
+	if campaign.completed:
+		return tr("CAMPAIGN_HINT_COMPLETE")
+	if campaign.status != CampaignState.Status.AWAITING_INFERENCE:
+		return tr("CAMPAIGN_HINT_OBSERVE")
+	var hint_keys: PackedStringArray = [
+		"CAMPAIGN_HINT_COMPARE",
+		"CAMPAIGN_HINT_DIRECTION",
+		"CAMPAIGN_HINT_OPERATION",
+		"CAMPAIGN_HINT_EXPLICIT",
+	]
+	return tr(hint_keys[mini(campaign.hint_tier, hint_keys.size() - 1)])
+
+
+func _campaign_facilities_text(campaign: CampaignSnapshot) -> String:
+	var names: PackedStringArray = []
+	for facility_id: StringName in [
+		CampaignState.FACILITY_TEST_TUBE_NEST,
+		CampaignState.FACILITY_LIGHT_COVER,
+		CampaignState.FACILITY_MICRO_FEEDING_PORT,
+		CampaignState.FACILITY_SMALL_FORAGING_BOX,
+	]:
+		if campaign.has_unlocked_facility(facility_id):
+			names.append(_campaign_facility_name(facility_id))
+	return tr("CAMPAIGN_UNLOCKED_KIT") % (
+		tr("CAMPAIGN_LIST_SEPARATOR").join(names)
+	)
+
+
+func _campaign_inference_text(inference_id: StringName) -> String:
+	match inference_id:
+		CampaignState.INFERENCE_FIRST_WORKER:
+			return tr("CAMPAIGN_INFERENCE_FIRST_WORKER")
+		CampaignState.INFERENCE_FIRST_WORKER_RANDOM:
+			return tr("CAMPAIGN_INFERENCE_FIRST_WORKER_RANDOM")
+		CampaignState.INFERENCE_FIRST_WORKER_DIRECTED:
+			return tr("CAMPAIGN_INFERENCE_FIRST_WORKER_DIRECTED")
+		CampaignState.INFERENCE_ENVIRONMENT:
+			return tr("CAMPAIGN_INFERENCE_ENVIRONMENT")
+		CampaignState.INFERENCE_ENVIRONMENT_IGNORED:
+			return tr("CAMPAIGN_INFERENCE_ENVIRONMENT_IGNORED")
+		CampaignState.INFERENCE_ENVIRONMENT_DIRECTED:
+			return tr("CAMPAIGN_INFERENCE_ENVIRONMENT_DIRECTED")
+		_:
+			return tr("CAMPAIGN_INFERENCE_UNKNOWN")
+
+
+func _campaign_evidence_name(evidence_id: StringName) -> String:
+	match evidence_id:
+		CampaignState.EVIDENCE_FIRST_WORKER:
+			return tr("CAMPAIGN_EVIDENCE_FIRST_WORKER")
+		CampaignState.EVIDENCE_HUMIDITY_RELOCATION:
+			return tr("CAMPAIGN_EVIDENCE_HUMIDITY")
+		CampaignState.EVIDENCE_SUGAR_SHARING:
+			return tr("CAMPAIGN_EVIDENCE_SUGAR")
+		_:
+			return tr("CAMPAIGN_EVIDENCE_UNKNOWN")
+
+
+func _campaign_facility_name(facility_id: StringName) -> String:
+	match facility_id:
+		CampaignState.FACILITY_TEST_TUBE_NEST:
+			return tr("FACILITY_TEST_TUBE_NEST")
+		CampaignState.FACILITY_LIGHT_COVER:
+			return tr("FACILITY_LIGHT_COVER")
+		CampaignState.FACILITY_MICRO_FEEDING_PORT:
+			return tr("FACILITY_MICRO_FEEDING_PORT")
+		CampaignState.FACILITY_SMALL_FORAGING_BOX:
+			return tr("FACILITY_SMALL_FORAGING_BOX")
+		_:
+			return tr("FACILITY_UNKNOWN")
+
+
+func _campaign_check(completed: bool) -> String:
+	return "✓" if completed else "○"
+
+
 func _update_player_guidance() -> void:
 	if _latest_snapshot == null:
 		return
@@ -506,6 +754,7 @@ func _update_player_guidance() -> void:
 	_phase_label.text = _get_phase_heading(phase)
 	_set_completion_state(
 		phase == ScenarioSequenceSnapshot.Phase.OBSERVATION_SUMMARY
+			and _latest_snapshot.campaign.completed
 	)
 
 	match phase:
@@ -595,17 +844,29 @@ func _update_player_guidance() -> void:
 				)
 		ScenarioSequenceSnapshot.Phase.OBSERVATION_SUMMARY:
 			_tool_heading.text = tr("TOOL_SUMMARY")
-			_set_copy(
-				_instruction_label,
-				tr("GUIDE_SUMMARY_INSTRUCTION"),
-				COPY_ROLE_POST_EVENT_CONCLUSION
-			)
-			_set_copy(
-				_feedback_label,
-				tr("GUIDE_SUMMARY_FEEDBACK"),
-				COPY_ROLE_POST_EVENT_CONCLUSION
-			)
-			_completion_label.text = _build_completion_summary()
+			if _latest_snapshot.campaign.completed:
+				_set_copy(
+					_instruction_label,
+					tr("GUIDE_SUMMARY_INSTRUCTION"),
+					COPY_ROLE_POST_EVENT_CONCLUSION
+				)
+				_set_copy(
+					_feedback_label,
+					tr("GUIDE_SUMMARY_FEEDBACK"),
+					COPY_ROLE_POST_EVENT_CONCLUSION
+				)
+				_completion_label.text = _build_completion_summary()
+			else:
+				_set_copy(
+					_instruction_label,
+					tr("CAMPAIGN_SUMMARY_REVIEW_INSTRUCTION"),
+					COPY_ROLE_OBSERVATION_CUE
+				)
+				_set_copy(
+					_feedback_label,
+					tr("CAMPAIGN_SUMMARY_REVIEW_FEEDBACK"),
+					COPY_ROLE_ACTION_AFFORDANCE
+				)
 
 
 func _update_control_state() -> void:
@@ -616,6 +877,7 @@ func _update_control_state() -> void:
 			_stage_action_button,
 			_restart_button,
 			_save_game_button,
+			_journal_button,
 			_speed_1x_button,
 			_speed_4x_button,
 			_speed_16x_button,
@@ -627,7 +889,7 @@ func _update_control_state() -> void:
 
 	var speed_multiplier: int = _simulation_clock.get_speed_multiplier()
 	var paused: bool = _simulation_clock.is_paused()
-	var completed: bool = _latest_snapshot.sequence.completed
+	var completed: bool = _latest_snapshot.campaign.completed
 	if _preparation_gate_active:
 		_set_copy(
 			_status_label,
@@ -639,12 +901,14 @@ func _update_control_state() -> void:
 			_stage_action_button,
 			_restart_button,
 			_save_game_button,
+			_journal_button,
 			_speed_1x_button,
 			_speed_4x_button,
 			_speed_16x_button,
 		]:
 			gated_button.disabled = true
 		_pause_button.disabled = _pause_menu_open
+		_journal_button.disabled = true
 		_pause_restart_button.disabled = true
 		_return_to_title_button.disabled = false
 		_start_observation_button.disabled = _pause_menu_open
@@ -663,20 +927,30 @@ func _update_control_state() -> void:
 		COPY_ROLE_SYSTEM_STATUS
 	)
 	_pause_button.text = tr("UI_MENU")
-	_pause_button.disabled = _pause_menu_open
+	_pause_button.disabled = _pause_menu_open or _journal_open
 	_pause_restart_button.disabled = false
 	_save_game_button.disabled = false
 	_return_to_title_button.disabled = false
+	_journal_button.disabled = _pause_menu_open
+	_journal_button.text = (
+		tr("CAMPAIGN_JOURNAL_REVIEW")
+		if _latest_snapshot.campaign.status
+			== CampaignState.Status.AWAITING_INFERENCE
+		else tr("CAMPAIGN_JOURNAL_OPEN")
+	)
 	_speed_1x_button.disabled = (
 		_pause_menu_open
+		or _journal_open
 		or speed_multiplier == SimulationClock.NORMAL_SPEED
 	)
 	_speed_4x_button.disabled = (
 		_pause_menu_open
+		or _journal_open
 		or speed_multiplier == SimulationClock.FAST_SPEED
 	)
 	_speed_16x_button.disabled = (
 		_pause_menu_open
+		or _journal_open
 		or speed_multiplier == SimulationClock.VERY_FAST_SPEED
 	)
 
@@ -687,7 +961,7 @@ func _update_control_state() -> void:
 		ScenarioSequenceSnapshot.Phase.IDENTITY_OBSERVATION:
 			_stage_action_button.text = tr("ACTION_CONTINUE_ENVIRONMENT")
 			_stage_action_button.disabled = (
-				paused or _pause_menu_open
+				paused or _pause_menu_open or _journal_open
 				or not _latest_snapshot.sequence.continue_action_available
 			)
 		ScenarioSequenceSnapshot.Phase.HUMIDITY_OBSERVATION:
@@ -703,6 +977,7 @@ func _update_control_state() -> void:
 			_stage_action_button.disabled = (
 				paused
 				or _pause_menu_open
+				or _journal_open
 				or not _latest_snapshot.colony.water_action_available
 			)
 		ScenarioSequenceSnapshot.Phase.SUGAR_FORAGING:
@@ -714,6 +989,7 @@ func _update_control_state() -> void:
 			_stage_action_button.disabled = (
 				paused
 				or _pause_menu_open
+				or _journal_open
 				or (
 					not _sugar_tool_armed
 					and not _can_arm_sugar_tool()
@@ -722,7 +998,7 @@ func _update_control_state() -> void:
 		ScenarioSequenceSnapshot.Phase.OBSERVATION_SUMMARY:
 			_stage_action_button.disabled = true
 
-	_restart_button.disabled = not completed
+	_restart_button.disabled = not completed or _journal_open
 
 
 func _initialize_demo_settings() -> void:
@@ -772,6 +1048,12 @@ func _initialize_demo_settings() -> void:
 func _refresh_localized_ui() -> void:
 	_title_label.text = tr("UI_TITLE")
 	_observation_heading.text = tr("UI_OBSERVATION_CARDS")
+	_journal_button.text = tr("CAMPAIGN_JOURNAL_OPEN")
+	_journal_heading.text = tr("CAMPAIGN_JOURNAL_HEADING")
+	_journal_inference_heading.text = tr(
+		"CAMPAIGN_INFERENCE_HEADING"
+	)
+	_journal_close_button.text = tr("CAMPAIGN_JOURNAL_CLOSE")
 	_completion_heading.text = tr("UI_COMPLETION_HEADING")
 	_completion_label.text = tr("UI_COMPLETION_DEFAULT")
 	_restart_button.text = tr("UI_RESTART_OBSERVATION")
@@ -804,6 +1086,7 @@ func _refresh_localized_ui() -> void:
 	if _latest_snapshot != null:
 		_update_worker_observation_panel()
 		_update_observation_cards()
+		_update_campaign_journal()
 		_update_player_guidance()
 		_update_control_state()
 
@@ -871,7 +1154,7 @@ func _emit_settings_changed() -> void:
 
 
 func _open_pause_menu() -> void:
-	if _pause_menu_open or _simulation_clock == null:
+	if _pause_menu_open or _journal_open or _simulation_clock == null:
 		return
 	if _sugar_tool_armed:
 		_cancel_sugar_tool(tr("FEEDBACK_PAUSED_CANCELLED"))
@@ -891,6 +1174,8 @@ func _close_pause_menu(force_resume: bool) -> void:
 		return
 	_pause_menu_open = false
 	_pause_menu.visible = false
+	_journal_open = false
+	_journal_panel.visible = false
 	var paused: bool = (
 		true
 		if _preparation_gate_active
@@ -973,6 +1258,7 @@ func _update_debug_panel() -> void:
 	_debug_label.text = (
 		"Tick %d | speed %d× | paused=%s\n"
 		+ "phase=%s entered=%d first_worker=#%s\n"
+		+ "campaign chapter=%d status=%d hint=%d inference_pending=%s\n"
 		+ "continue pending=%s | water pending=%s | sugar pending=%s\n"
 		+ "cards=%s\n\nzones:\n%s\n\nworkers:\n%s\n\n"
 		+ "events=%d | AntViews=%d"
@@ -985,6 +1271,10 @@ func _update_debug_panel() -> void:
 		_format_optional_id(
 			_latest_snapshot.sequence.first_worker_entity_id
 		),
+		_latest_snapshot.campaign.chapter,
+		_latest_snapshot.campaign.status,
+		_latest_snapshot.campaign.hint_tier,
+		str(_latest_snapshot.campaign.inference_action_pending),
 		str(_latest_snapshot.sequence.continue_action_pending),
 		str(_latest_snapshot.colony.water_action_pending),
 		str(_latest_snapshot.scenario.place_action_pending),
@@ -1001,6 +1291,7 @@ func _can_arm_sugar_tool() -> bool:
 		_fatal_simulation_error.is_empty()
 		and not _preparation_gate_active
 		and not _pause_menu_open
+		and not _journal_open
 		and _simulation_clock != null
 		and not _simulation_clock.is_paused()
 		and _latest_snapshot != null
@@ -1049,6 +1340,8 @@ func _restart_session() -> void:
 	_preparation_gate_active = true
 	_pause_menu_open = false
 	_pause_menu.visible = false
+	_journal_open = false
+	_journal_panel.visible = false
 	_simulation_clock.reset()
 	_simulation_clock.set_paused(true)
 	_set_sugar_tool_armed(false)
@@ -1108,6 +1401,8 @@ func _get_phase_name(phase: int) -> String:
 func _enter_preparation_gate() -> void:
 	_preparation_gate_active = true
 	_preparation_gate.visible = true
+	_journal_open = false
+	_journal_panel.visible = false
 	_pause_menu_open = false
 	_pause_menu.visible = false
 	_start_observation_button.disabled = not _fatal_simulation_error.is_empty()
@@ -1297,6 +1592,8 @@ func _reset_session_projection() -> void:
 	_player_annotation_state.reset_session()
 	_pause_menu_open = false
 	_pause_menu.visible = false
+	_journal_open = false
+	_journal_panel.visible = false
 	_set_sugar_tool_armed(false)
 	_debug_panel.visible = false
 	_debug_label.text = tr("UI_DEBUG_WAITING")
@@ -1338,6 +1635,8 @@ func _format_optional_id(entity_id: int) -> String:
 
 func _set_fatal_simulation_error(message: String) -> void:
 	_fatal_simulation_error = message
+	_journal_open = false
+	_journal_panel.visible = false
 	if _simulation_clock != null:
 		_simulation_clock.set_paused(true)
 	if _habitat_view != null:

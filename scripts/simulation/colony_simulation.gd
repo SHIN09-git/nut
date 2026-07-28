@@ -15,6 +15,7 @@ enum PendingCommandType {
 	WATER_ACTION,
 	PLACE_SUGAR_ACTION,
 	CONTINUE_OBSERVATION_ACTION,
+	SELECT_CAMPAIGN_INFERENCE_ACTION,
 }
 
 var _lifecycle_config: LifecycleConfig
@@ -23,6 +24,7 @@ var _habitat_config: HabitatScenarioConfig
 var _brood_relocation_system: BroodRelocationSystem
 var _foraging_system: ForagingSystem
 var _scenario_director: ScenarioDirector
+var _campaign_director: CampaignDirector
 var _state: ColonyState
 var _pending_commands: Array[PendingSimulationCommand] = []
 var _next_pending_command_sequence_id: int = 1
@@ -104,6 +106,16 @@ func _init(
 				"ColonySimulation could not initialize scenario director"
 			)
 			return
+		_campaign_director = CampaignDirector.new(
+			_habitat_config.sequence_config,
+			_habitat_config
+		)
+		if not _campaign_director.is_ready():
+			_configuration_error = (
+				"ColonySimulation could not initialize campaign director"
+			)
+			return
+		_campaign_director.update_after_systems(_state)
 	if not has_valid_habitat_ownership():
 		_configuration_error = "Initial habitat ownership is invalid"
 
@@ -142,6 +154,16 @@ func submit_continue_observation_action() -> bool:
 	if not _is_continue_observation_action_available():
 		return false
 	_queue_pending_command(PendingCommandType.CONTINUE_OBSERVATION_ACTION)
+	return true
+
+
+func submit_campaign_inference_action(inference_id: StringName) -> bool:
+	if not _is_campaign_inference_action_available(inference_id):
+		return false
+	_queue_pending_command(
+		PendingCommandType.SELECT_CAMPAIGN_INFERENCE_ACTION,
+		inference_id
+	)
 	return true
 
 
@@ -209,6 +231,8 @@ func advance_tick(tick_index: int) -> bool:
 		_update_observation_record()
 	if _scenario_director != null:
 		_scenario_director.update_after_systems(_state)
+	if _campaign_director != null:
+		_campaign_director.update_after_systems(_state)
 	if not has_valid_habitat_ownership():
 		_configuration_error = (
 			"Habitat ownership invariant failed at Tick %d"
@@ -395,12 +419,21 @@ func create_game_snapshot() -> GameSnapshot:
 				PendingCommandType.CONTINUE_OBSERVATION_ACTION
 			)
 		)
+	var campaign_snapshot: CampaignSnapshot
+	if _campaign_director != null:
+		campaign_snapshot = _campaign_director.create_snapshot(
+			_state,
+			_has_pending_command(
+				PendingCommandType.SELECT_CAMPAIGN_INFERENCE_ACTION
+			)
+		)
 	return GameSnapshot.new(
 		_state.simulation_tick,
 		create_snapshot(),
 		scenario_snapshot,
 		observation_snapshot,
-		sequence_snapshot
+		sequence_snapshot,
+		campaign_snapshot
 	)
 
 
@@ -464,6 +497,11 @@ func _has_valid_habitat_ownership(state: ColonyState) -> bool:
 		and not _scenario_director.has_valid_state(state)
 	):
 		return false
+	if (
+		_campaign_director != null
+		and not _campaign_director.has_valid_state(state)
+	):
+		return false
 	return true
 
 
@@ -483,6 +521,12 @@ func _apply_pending_commands() -> void:
 				if _scenario_director != null:
 					_scenario_director.apply_identity_continue_action(
 						_state
+					)
+			PendingCommandType.SELECT_CAMPAIGN_INFERENCE_ACTION:
+				if _campaign_director != null:
+					_campaign_director.apply_inference_action(
+						_state,
+						command.argument_id
 					)
 
 
@@ -664,6 +708,22 @@ func _is_continue_observation_action_available() -> bool:
 	)
 
 
+func _is_campaign_inference_action_available(
+	inference_id: StringName
+) -> bool:
+	return (
+		is_ready()
+		and _campaign_director != null
+		and not _has_pending_command(
+			PendingCommandType.SELECT_CAMPAIGN_INFERENCE_ACTION
+		)
+		and _campaign_director.is_inference_action_available(
+			_state,
+			inference_id
+		)
+	)
+
+
 func _has_pending_command(command_type: int) -> bool:
 	for command: PendingSimulationCommand in _pending_commands:
 		if command.command_type == command_type:
@@ -671,10 +731,14 @@ func _has_pending_command(command_type: int) -> bool:
 	return false
 
 
-func _queue_pending_command(command_type: PendingCommandType) -> void:
+func _queue_pending_command(
+	command_type: PendingCommandType,
+	argument_id: StringName = &""
+) -> void:
 	_pending_commands.append(PendingSimulationCommand.new(
 		_next_pending_command_sequence_id,
-		command_type
+		command_type,
+		argument_id
 	))
 	_next_pending_command_sequence_id += 1
 

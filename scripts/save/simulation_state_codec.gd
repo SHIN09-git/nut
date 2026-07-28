@@ -1,7 +1,8 @@
 class_name SimulationStateCodec
 extends RefCounted
 
-const CURRENT_SCHEMA_ID: String = "r2.authority.v1"
+const CURRENT_SCHEMA_ID: String = "r4.authority.v2"
+const PREVIOUS_SCHEMA_ID: String = "r2.authority.v1"
 const LEGACY_SCHEMA_ID: String = "r2.authority.v0"
 
 
@@ -215,6 +216,9 @@ static func _encode_state(state: ColonyState) -> Dictionary:
 			"sugar_observation_completed_tick":
 				state.scenario_progress.sugar_observation_completed_tick,
 		}
+	var campaign: Variant = null
+	if state.campaign_state != null:
+		campaign = _encode_campaign(state.campaign_state)
 	return {
 		"simulation_tick": state.simulation_tick,
 		"queen": {
@@ -237,7 +241,30 @@ static func _encode_state(state: ColonyState) -> Dictionary:
 				state.copy_unlocked_observation_card_ids()
 			),
 		"scenario_progress": progress,
+		"campaign": campaign,
 		"observation_events": events,
+	}
+
+
+static func _encode_campaign(campaign: CampaignState) -> Dictionary:
+	return {
+		"chapter": campaign.chapter,
+		"status": campaign.status,
+		"chapter_entered_tick": campaign.chapter_entered_tick,
+		"completed_chapter_count": campaign.completed_chapter_count,
+		"incorrect_inference_attempts":
+			campaign.incorrect_inference_attempts,
+		"hint_tier": campaign.hint_tier,
+		"campaign_completed_tick": campaign.campaign_completed_tick,
+		"collected_evidence_ids": _strings_from_names(
+			campaign.copy_evidence_ids()
+		),
+		"confirmed_inference_ids": _strings_from_names(
+			campaign.copy_confirmed_inference_ids()
+		),
+		"unlocked_facility_type_ids": _strings_from_names(
+			campaign.copy_unlocked_facility_type_ids()
+		),
 	}
 
 
@@ -300,6 +327,7 @@ static func _encode_pending_commands(
 		encoded.append({
 			"sequence_id": command.sequence_id,
 			"command_type": command.command_type,
+			"argument_id": String(command.argument_id),
 		})
 	return encoded
 
@@ -642,6 +670,7 @@ static func _decode_state(
 			"total_sugar_portions_placed",
 			"unlocked_observation_card_ids",
 			"scenario_progress",
+			"campaign",
 			"observation_events",
 		]
 	):
@@ -741,6 +770,10 @@ static func _decode_state(
 	if not progress_result.get("ok", false):
 		return progress_result
 	state.scenario_progress = progress_result["progress"]
+	var campaign_result: Dictionary = _decode_campaign(payload["campaign"])
+	if not campaign_result.get("ok", false):
+		return campaign_result
+	state.campaign_state = campaign_result["campaign"]
 	state._observation_events.clear()
 	for event_value: Variant in payload["observation_events"]:
 		var event_result: Dictionary = _decode_event(event_value)
@@ -752,6 +785,85 @@ static func _decode_state(
 		next_ids["observation_event_id"]
 	)
 	return {"ok": true, "error": "", "state": state}
+
+
+static func _decode_campaign(value: Variant) -> Dictionary:
+	if value == null:
+		return {"ok": true, "error": "", "campaign": null}
+	var keys: Array[String] = [
+		"chapter",
+		"status",
+		"chapter_entered_tick",
+		"completed_chapter_count",
+		"incorrect_inference_attempts",
+		"hint_tier",
+		"campaign_completed_tick",
+		"collected_evidence_ids",
+		"confirmed_inference_ids",
+		"unlocked_facility_type_ids",
+	]
+	if not _is_dictionary_with_keys(value, keys):
+		return _failure("Campaign state is invalid")
+	for key: String in [
+		"chapter",
+		"status",
+		"chapter_entered_tick",
+		"completed_chapter_count",
+		"incorrect_inference_attempts",
+		"hint_tier",
+		"campaign_completed_tick",
+	]:
+		if not _is_integral_number(value[key]):
+			return _failure("Campaign state contains a non-integer")
+	for key: String in [
+		"collected_evidence_ids",
+		"confirmed_inference_ids",
+		"unlocked_facility_type_ids",
+	]:
+		if typeof(value[key]) != TYPE_ARRAY:
+			return _failure("Campaign state contains an invalid collection")
+	var campaign: CampaignState = CampaignState.new()
+	campaign.chapter = int(value["chapter"])
+	campaign.status = int(value["status"])
+	campaign.chapter_entered_tick = int(value["chapter_entered_tick"])
+	campaign.completed_chapter_count = int(
+		value["completed_chapter_count"]
+	)
+	campaign.incorrect_inference_attempts = int(
+		value["incorrect_inference_attempts"]
+	)
+	campaign.hint_tier = int(value["hint_tier"])
+	campaign.campaign_completed_tick = int(
+		value["campaign_completed_tick"]
+	)
+	var evidence_result: Dictionary = _decode_string_names(
+		value["collected_evidence_ids"],
+		true
+	)
+	if not evidence_result.get("ok", false):
+		return evidence_result
+	campaign.collected_evidence_ids.clear()
+	for evidence_id: StringName in evidence_result["values"]:
+		campaign.collected_evidence_ids[evidence_id] = true
+	var inference_result: Dictionary = _decode_string_names(
+		value["confirmed_inference_ids"],
+		true
+	)
+	if not inference_result.get("ok", false):
+		return inference_result
+	campaign.confirmed_inference_ids.clear()
+	for inference_id: StringName in inference_result["values"]:
+		campaign.confirmed_inference_ids[inference_id] = true
+	var facility_result: Dictionary = _decode_string_names(
+		value["unlocked_facility_type_ids"],
+		true
+	)
+	if not facility_result.get("ok", false):
+		return facility_result
+	campaign.unlocked_facility_type_ids.clear()
+	for facility_id: StringName in facility_result["values"]:
+		campaign.unlocked_facility_type_ids[facility_id] = true
+	return {"ok": true, "error": "", "campaign": campaign}
 
 
 static func _decode_ant(value: Variant) -> Dictionary:
@@ -1058,28 +1170,31 @@ static func _decode_pending_commands(
 	for value: Variant in values:
 		if not _is_dictionary_with_keys(
 			value,
-			["sequence_id", "command_type"]
+			["sequence_id", "command_type", "argument_id"]
 		):
 			return _failure("Pending command record is invalid")
 		if (
 			not _is_positive_int(value["sequence_id"])
 			or not _is_integral_number(value["command_type"])
+			or typeof(value["argument_id"]) != TYPE_STRING
 		):
 			return _failure("Pending command record contains invalid data")
 		var sequence_id: int = int(value["sequence_id"])
 		var command_type: int = int(value["command_type"])
+		var argument_id: StringName = StringName(value["argument_id"])
 		if (
 			sequence_id <= previous_sequence_id
 			or sequence_id >= next_sequence_id
 			or command_type < ColonySimulation.PendingCommandType.WATER_ACTION
 			or command_type
 				> ColonySimulation.PendingCommandType
-					.CONTINUE_OBSERVATION_ACTION
+					.SELECT_CAMPAIGN_INFERENCE_ACTION
 		):
 			return _failure("Pending command ordering or type is invalid")
 		commands.append(PendingSimulationCommand.new(
 			sequence_id,
-			command_type
+			command_type,
+			argument_id
 		))
 		previous_sequence_id = sequence_id
 	return {"ok": true, "error": "", "commands": commands}
@@ -1187,6 +1302,7 @@ static func _has_valid_core_state(simulation: ColonySimulation) -> bool:
 			and state.zones.is_empty()
 			and state.food_sources.is_empty()
 			and state.scenario_progress == null
+			and state.campaign_state == null
 			and state.humidity_adjustment_count == 0
 			and state.observation_stable_ticks == 0
 			and state.shared_sugar_portions == 0
@@ -1305,6 +1421,10 @@ static func _state_graph_matches_frozen_config(
 			config.is_combined_observation()
 			!= (state.scenario_progress != null)
 		)
+		or (
+			config.is_combined_observation()
+			!= (state.campaign_state != null)
+		)
 	):
 		return false
 	for zone_index: int in state.zones.size():
@@ -1329,16 +1449,34 @@ static func _has_valid_pending_commands(
 		seen_types[command.command_type] = true
 		match command.command_type:
 			ColonySimulation.PendingCommandType.WATER_ACTION:
-				if not _can_restore_water_command(simulation):
+				if (
+					not command.argument_id.is_empty()
+					or not _can_restore_water_command(simulation)
+				):
 					return false
 			ColonySimulation.PendingCommandType.PLACE_SUGAR_ACTION:
-				if not _can_restore_sugar_command(simulation):
+				if (
+					not command.argument_id.is_empty()
+					or not _can_restore_sugar_command(simulation)
+				):
 					return false
 			ColonySimulation.PendingCommandType.CONTINUE_OBSERVATION_ACTION:
 				if (
-					simulation._scenario_director == null
+					not command.argument_id.is_empty()
+					or simulation._scenario_director == null
 					or not simulation._scenario_director
 						.is_identity_continue_available(simulation._state)
+				):
+					return false
+			ColonySimulation.PendingCommandType.SELECT_CAMPAIGN_INFERENCE_ACTION:
+				if (
+					command.argument_id.is_empty()
+					or simulation._campaign_director == null
+					or not simulation._campaign_director
+						.is_inference_action_available(
+							simulation._state,
+							command.argument_id
+						)
 				):
 					return false
 			_:

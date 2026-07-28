@@ -2,7 +2,7 @@ class_name SaveGameService
 extends RefCounted
 
 const CURRENT_FORMAT_VERSION: int = 1
-const CURRENT_GAME_VERSION: String = "0.2.0-demo"
+const CURRENT_GAME_VERSION: String = "0.4.0-dev"
 const CURRENT_CONTENT_MANIFEST_ID: String = (
 	"colony-under-glass.r2-base.1"
 )
@@ -269,8 +269,18 @@ func _verify_and_migrate_envelope(envelope: Dictionary) -> Dictionary:
 	match String(current["state_schema_id"]):
 		SimulationStateCodec.CURRENT_SCHEMA_ID:
 			pass
+		SimulationStateCodec.PREVIOUS_SCHEMA_ID:
+			var migration_result: Dictionary = _migrate_v1_to_v2(current)
+			if not migration_result.get("ok", false):
+				return migration_result
+			current = migration_result["envelope"]
+			migrated = true
 		SimulationStateCodec.LEGACY_SCHEMA_ID:
 			var migration_result: Dictionary = _migrate_v0_to_v1(current)
+			if not migration_result.get("ok", false):
+				return migration_result
+			current = migration_result["envelope"]
+			migration_result = _migrate_v1_to_v2(current)
 			if not migration_result.get("ok", false):
 				return migration_result
 			current = migration_result["envelope"]
@@ -310,7 +320,7 @@ func _migrate_v0_to_v1(legacy: Dictionary) -> Dictionary:
 		})
 		sequence_id += 1
 	var migrated: Dictionary = legacy.duplicate(true)
-	migrated["state_schema_id"] = SimulationStateCodec.CURRENT_SCHEMA_ID
+	migrated["state_schema_id"] = SimulationStateCodec.PREVIOUS_SCHEMA_ID
 	migrated["pending_commands"] = migrated_commands
 	migrated["next_ids"] = {
 		"entity_id": legacy_next_ids["entity_id"],
@@ -321,6 +331,93 @@ func _migrate_v0_to_v1(legacy: Dictionary) -> Dictionary:
 	if migrated.is_empty():
 		return _failure("Legacy save migration could not be sealed")
 	return {"ok": true, "error": "", "envelope": migrated}
+
+
+func _migrate_v1_to_v2(previous: Dictionary) -> Dictionary:
+	if (
+		typeof(previous["pending_commands"]) != TYPE_ARRAY
+		or typeof(previous["state_payload"]) != TYPE_DICTIONARY
+	):
+		return _failure("Previous save payload is invalid")
+	var migrated_commands: Array[Dictionary] = []
+	for command_value: Variant in previous["pending_commands"]:
+		if (
+			typeof(command_value) != TYPE_DICTIONARY
+			or command_value.size() != 2
+			or not command_value.has("sequence_id")
+			or not command_value.has("command_type")
+		):
+			return _failure("Previous pending command record is invalid")
+		migrated_commands.append({
+			"sequence_id": command_value["sequence_id"],
+			"command_type": command_value["command_type"],
+			"argument_id": "",
+		})
+	var state_payload: Dictionary = previous["state_payload"].duplicate(true)
+	if state_payload.has("campaign"):
+		return _failure("Previous save unexpectedly contains campaign state")
+	state_payload["campaign"] = _derive_campaign_for_v1(state_payload)
+	var migrated: Dictionary = previous.duplicate(true)
+	migrated["game_version"] = CURRENT_GAME_VERSION
+	migrated["state_schema_id"] = SimulationStateCodec.CURRENT_SCHEMA_ID
+	migrated["pending_commands"] = migrated_commands
+	migrated["state_payload"] = state_payload
+	migrated = seal_envelope(migrated)
+	if migrated.is_empty():
+		return _failure("Previous save migration could not be sealed")
+	return {"ok": true, "error": "", "envelope": migrated}
+
+
+func _derive_campaign_for_v1(state_payload: Dictionary) -> Variant:
+	var progress: Variant = state_payload.get("scenario_progress")
+	if progress == null:
+		return null
+	if typeof(progress) != TYPE_DICTIONARY:
+		return {}
+	var phase: int = int(progress.get("phase", -1))
+	var evidence: Array[String] = []
+	var inferences: Array[String] = []
+	var facilities: Array[String] = [
+		String(CampaignState.FACILITY_LIGHT_COVER),
+		String(CampaignState.FACILITY_TEST_TUBE_NEST),
+	]
+	var chapter: int = CampaignState.Chapter.FOUNDING_OBSERVATION
+	var status: int = CampaignState.Status.ACTIVE
+	var completed_chapter_count: int = 0
+	var chapter_entered_tick: int = 0
+	if phase >= ScenarioSequenceSnapshot.Phase.IDENTITY_OBSERVATION:
+		evidence.append(String(CampaignState.EVIDENCE_FIRST_WORKER))
+		status = CampaignState.Status.AWAITING_INFERENCE
+	if phase >= ScenarioSequenceSnapshot.Phase.HUMIDITY_OBSERVATION:
+		chapter = CampaignState.Chapter.ENVIRONMENTAL_CARE
+		status = CampaignState.Status.ACTIVE
+		completed_chapter_count = 1
+		chapter_entered_tick = int(
+			progress.get("phase_entered_tick", 0)
+		)
+		inferences.append(String(CampaignState.INFERENCE_FIRST_WORKER))
+		facilities.append(
+			String(CampaignState.FACILITY_MICRO_FEEDING_PORT)
+		)
+	if phase >= ScenarioSequenceSnapshot.Phase.SUGAR_FORAGING:
+		evidence.append(
+			String(CampaignState.EVIDENCE_HUMIDITY_RELOCATION)
+		)
+	if phase >= ScenarioSequenceSnapshot.Phase.OBSERVATION_SUMMARY:
+		evidence.append(String(CampaignState.EVIDENCE_SUGAR_SHARING))
+		status = CampaignState.Status.AWAITING_INFERENCE
+	return {
+		"chapter": chapter,
+		"status": status,
+		"chapter_entered_tick": chapter_entered_tick,
+		"completed_chapter_count": completed_chapter_count,
+		"incorrect_inference_attempts": 0,
+		"hint_tier": 0,
+		"campaign_completed_tick": -1,
+		"collected_evidence_ids": evidence,
+		"confirmed_inference_ids": inferences,
+		"unlocked_facility_type_ids": facilities,
+	}
 
 
 func _validate_outer_shape(envelope: Dictionary) -> String:

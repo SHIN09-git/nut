@@ -17,6 +17,7 @@ var shared_sugar_portions: int = 0
 var total_sugar_portions_placed: int = 0
 var unlocked_observation_card_ids: Dictionary[StringName, bool] = {}
 var scenario_progress: ScenarioProgressState
+var campaign_state: CampaignState
 var _next_entity_id: int = 1
 var _next_observation_event_id: int = 1
 var _observation_events: Array[ObservationEvent] = []
@@ -73,6 +74,7 @@ func initialize_habitat(
 		scenario_progress.first_worker_entity_id = (
 			first_worker_pupa.entity_id
 		)
+		campaign_state = CampaignState.new()
 
 	for worker_index: int in config.initial_worker_count:
 		var worker: AntModel = AntModel.new(

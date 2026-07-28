@@ -69,6 +69,15 @@ func get_summary() -> Dictionary:
 	var phase: int = -1
 	if typeof(progress) == TYPE_DICTIONARY:
 		phase = int(progress.get("phase", -1))
+	var campaign: Variant = state_payload.get("campaign")
+	var campaign_chapter: int = -1
+	var campaign_completed: bool = false
+	if typeof(campaign) == TYPE_DICTIONARY:
+		campaign_chapter = int(campaign.get("chapter", -1))
+		campaign_completed = (
+			int(campaign.get("status", CampaignState.Status.ACTIVE))
+			== CampaignState.Status.COMPLETED
+		)
 	var cards: Array = state_payload.get(
 		"unlocked_observation_card_ids",
 		[]
@@ -88,6 +97,8 @@ func get_summary() -> Dictionary:
 			* SimulationClock.FIXED_STEP_SECONDS
 		),
 		"phase": phase,
+		"campaign_chapter": campaign_chapter,
+		"campaign_completed": campaign_completed,
 		"saved_at_utc": String(envelope["saved_at_utc"]),
 		"recent_observation_id": recent_observation_id,
 		"error": "",

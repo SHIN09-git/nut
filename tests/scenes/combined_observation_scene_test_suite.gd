@@ -676,6 +676,22 @@ func _test_real_viewport_path_reaches_summary_and_restarts() -> void:
 			carried_sugar_seen = true
 		controller._process(SimulationClock.FIXED_STEP_SECONDS)
 
+	(controller.get_node("%JournalButton") as Button).pressed.emit()
+	(controller.get_node("%InferenceButton1") as Button).pressed.emit()
+	controller._process(SimulationClock.FIXED_STEP_SECONDS)
+	_expect_int(
+		controller._latest_snapshot.campaign.completed_chapter_count,
+		1,
+		"the real journal path completes the first campaign chapter"
+	)
+	(controller.get_node("%InferenceButton1") as Button).pressed.emit()
+	controller._process(SimulationClock.FIXED_STEP_SECONDS)
+	_expect_true(
+		controller._latest_snapshot.campaign.completed,
+		"the real journal path completes the campaign inference set"
+	)
+	(controller.get_node("%JournalCloseButton") as Button).pressed.emit()
+
 	var completed: GameSnapshot = controller._latest_snapshot
 	_expect_true(carried_sugar_seen, "normal view path crosses carried sugar")
 	_expect_int(

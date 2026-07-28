@@ -239,7 +239,10 @@ func _refresh_profile_summary() -> void:
 	if String(summary.get("recovered_from", "primary")) != "primary":
 		source_note = tr("SHELL_RECOVERY_NOTE")
 	_profile_summary.text = tr("SHELL_PROFILE_SUMMARY") % [
-		_phase_name(int(summary.get("phase", -1))),
+		_campaign_chapter_name(
+			int(summary.get("campaign_chapter", -1)),
+			bool(summary.get("campaign_completed", false))
+		),
 		_format_duration(float(summary.get("simulation_seconds", 0.0))),
 		_observation_name(String(summary.get("recent_observation_id", ""))),
 		String(summary.get("saved_at_utc", "—")),
@@ -507,6 +510,18 @@ func _phase_name(phase: int) -> String:
 	if phase < 0 or phase >= phase_keys.size():
 		return tr("SHELL_PHASE_NOT_STARTED")
 	return tr(phase_keys[phase])
+
+
+func _campaign_chapter_name(chapter: int, completed: bool) -> String:
+	if completed:
+		return tr("SHELL_CAMPAIGN_COMPLETE")
+	match chapter:
+		CampaignState.Chapter.FOUNDING_OBSERVATION:
+			return tr("CAMPAIGN_CHAPTER_FOUNDING")
+		CampaignState.Chapter.ENVIRONMENTAL_CARE:
+			return tr("CAMPAIGN_CHAPTER_ENVIRONMENT")
+		_:
+			return _phase_name(-1)
 
 
 func _observation_name(observation_id: String) -> String:

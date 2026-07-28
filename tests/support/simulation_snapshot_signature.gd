@@ -192,6 +192,42 @@ static func canonical_game_snapshot(snapshot: GameSnapshot) -> String:
 			]
 		)
 
+	if snapshot.campaign == null:
+		lines.append("campaign|null")
+	else:
+		lines.append(
+			(
+				"campaign|chapter=%d|status=%d|entered=%d|completed_count=%d"
+				+ "|incorrect=%d|hint=%d|completed_tick=%d"
+				+ "|action_available=%s|action_pending=%s|completed=%s"
+				+ "|choices=%s|evidence=%s|inferences=%s|facilities=%s"
+			)
+			% [
+				snapshot.campaign.chapter,
+				snapshot.campaign.status,
+				snapshot.campaign.chapter_entered_tick,
+				snapshot.campaign.completed_chapter_count,
+				snapshot.campaign.incorrect_inference_attempts,
+				snapshot.campaign.hint_tier,
+				snapshot.campaign.campaign_completed_tick,
+				str(snapshot.campaign.inference_action_available),
+				str(snapshot.campaign.inference_action_pending),
+				str(snapshot.campaign.completed),
+				_names_signature(
+					snapshot.campaign.available_inference_ids
+				),
+				_names_signature(
+					snapshot.campaign.collected_evidence_ids
+				),
+				_names_signature(
+					snapshot.campaign.confirmed_inference_ids
+				),
+				_names_signature(
+					snapshot.campaign.unlocked_facility_type_ids
+				),
+			]
+		)
+
 	if snapshot.colony != null:
 		var sources: Array[FoodSourceSnapshot] = []
 		sources.assign(snapshot.colony.food_sources)
@@ -279,6 +315,14 @@ static func game_snapshot_digest(snapshot: GameSnapshot) -> String:
 
 static func roll_digest(previous_digest: String, record: String) -> String:
 	return ("%s\n%s" % [previous_digest, record]).sha256_text()
+
+
+static func _names_signature(values: Array[StringName]) -> String:
+	var strings: PackedStringArray = []
+	for value: StringName in values:
+		strings.append(String(value))
+	strings.sort()
+	return ",".join(strings)
 
 
 static func _format_float(value: float) -> String:
