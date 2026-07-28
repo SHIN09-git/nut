@@ -18,6 +18,10 @@ var sugar_placement_zone_id: StringName
 var sugar_portions: int
 var foraging_observation_card_id: StringName
 var sequence_config: ScenarioSequenceConfig
+var lifecycle_active: bool
+var nutrition_config: NutritionConfig
+var protein_placement_zone_id: StringName
+var protein_portions: int
 
 
 static func from_data(
@@ -60,6 +64,17 @@ static func from_data(
 		)
 		if config.sequence_config == null:
 			return null
+	config.lifecycle_active = scenario_data.lifecycle_active
+	if scenario_data.nutrition_data != null:
+		config.nutrition_config = NutritionConfig.from_data(
+			scenario_data.nutrition_data
+		)
+		if config.nutrition_config == null:
+			return null
+	config.protein_placement_zone_id = (
+		scenario_data.protein_placement_zone_id
+	)
+	config.protein_portions = scenario_data.protein_portions
 	return config
 
 
@@ -84,9 +99,20 @@ func is_combined_observation() -> bool:
 	)
 
 
+func is_nutrition_growth() -> bool:
+	return (
+		scenario_kind
+		== HabitatScenarioData.ScenarioKind.NUTRITION_GROWTH
+	)
+
+
 func supports_humidity_relocation() -> bool:
 	return is_humidity_relocation() or is_combined_observation()
 
 
 func supports_sugar_foraging() -> bool:
-	return is_sugar_foraging() or is_combined_observation()
+	return (
+		is_sugar_foraging()
+		or is_combined_observation()
+		or is_nutrition_growth()
+	)

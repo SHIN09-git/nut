@@ -571,6 +571,20 @@ func _test_legacy_schema_migration() -> void:
 	]
 	legacy["next_ids"].erase("pending_command_sequence_id")
 	legacy["state_payload"].erase("campaign")
+	legacy["state_payload"].erase("nutrition")
+	for ant: Dictionary in legacy["state_payload"]["ants"]:
+		ant.erase("protein_supported_growth_ticks")
+		ant.erase("feeding_task")
+	var legacy_habitat: Dictionary = (
+		legacy["frozen_config_bundle"]["habitat"]
+	)
+	legacy_habitat.erase("lifecycle_active")
+	legacy_habitat.erase("nutrition_config")
+	legacy_habitat.erase("protein_placement_zone_id")
+	legacy_habitat.erase("protein_portions")
+	legacy["frozen_config_hash"] = CanonicalSaveJson.sha256(
+		legacy["frozen_config_bundle"]
+	)
 	legacy = service.seal_envelope(legacy)
 	var load_result: Dictionary = service.load_envelope(legacy)
 	_expect_true(

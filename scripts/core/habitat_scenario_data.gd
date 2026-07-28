@@ -5,6 +5,7 @@ enum ScenarioKind {
 	HUMIDITY_RELOCATION,
 	SUGAR_FORAGING,
 	COMBINED_OBSERVATION,
+	NUTRITION_GROWTH,
 }
 
 @export var scenario_id: StringName = &""
@@ -26,6 +27,10 @@ enum ScenarioKind {
 @export_range(0, 3, 1) var sugar_portions: int = 0
 @export var foraging_observation_card_id: StringName = &""
 @export var sequence_data: ScenarioSequenceData
+@export var lifecycle_active: bool = false
+@export var nutrition_data: NutritionData
+@export var protein_placement_zone_id: StringName = &""
+@export_range(0, 10, 1) var protein_portions: int = 0
 
 
 func is_valid() -> bool:
@@ -81,6 +86,10 @@ func is_valid() -> bool:
 				and sugar_portions == 0
 				and foraging_observation_card_id.is_empty()
 				and sequence_data == null
+				and not lifecycle_active
+				and nutrition_data == null
+				and protein_placement_zone_id.is_empty()
+				and protein_portions == 0
 			)
 		ScenarioKind.SUGAR_FORAGING:
 			return (
@@ -99,6 +108,10 @@ func is_valid() -> bool:
 				and is_zero_approx(humidity_adjustment_amount)
 				and observation_stable_ticks == 0
 				and sequence_data == null
+				and not lifecycle_active
+				and nutrition_data == null
+				and protein_placement_zone_id.is_empty()
+				and protein_portions == 0
 				and _has_available_path(
 					nest_zone_id,
 					sugar_placement_zone_id
@@ -129,6 +142,10 @@ func is_valid() -> bool:
 				and not foraging_observation_card_id.is_empty()
 				and sequence_data != null
 				and sequence_data.is_valid()
+				and not lifecycle_active
+				and nutrition_data == null
+				and protein_placement_zone_id.is_empty()
+				and protein_portions == 0
 				and foraging_observation_card_id
 					!= sequence_data.first_worker_observation_card_id
 				and foraging_observation_card_id
@@ -140,6 +157,48 @@ func is_valid() -> bool:
 				)
 				and _has_available_path(
 					sugar_placement_zone_id,
+					nest_zone_id
+				)
+			)
+		ScenarioKind.NUTRITION_GROWTH:
+			return (
+				zones.size() == 3
+				and initial_worker_count > 0
+				and initial_brood_count > 0
+				and initial_brood_stage == AntModel.LifeStage.LARVA
+				and known_zone_ids.has(nest_zone_id)
+				and initial_worker_zone_id == nest_zone_id
+				and initial_brood_zone_id == nest_zone_id
+				and foraging_data != null
+				and foraging_data.is_valid()
+				and known_zone_ids.has(sugar_placement_zone_id)
+				and known_zone_ids.has(protein_placement_zone_id)
+				and sugar_placement_zone_id != nest_zone_id
+				and protein_placement_zone_id != nest_zone_id
+				and sugar_portions > 0
+				and protein_portions > 0
+				and not foraging_observation_card_id.is_empty()
+				and lifecycle_active
+				and nutrition_data != null
+				and nutrition_data.is_valid()
+				and humidity_adjustment_zone_id.is_empty()
+				and is_zero_approx(humidity_adjustment_amount)
+				and observation_stable_ticks == 0
+				and sequence_data == null
+				and _has_available_path(
+					nest_zone_id,
+					sugar_placement_zone_id
+				)
+				and _has_available_path(
+					sugar_placement_zone_id,
+					nest_zone_id
+				)
+				and _has_available_path(
+					nest_zone_id,
+					protein_placement_zone_id
+				)
+				and _has_available_path(
+					protein_placement_zone_id,
 					nest_zone_id
 				)
 			)

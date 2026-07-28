@@ -1,7 +1,8 @@
 class_name SimulationStateCodec
 extends RefCounted
 
-const CURRENT_SCHEMA_ID: String = "r4.authority.v2"
+const CURRENT_SCHEMA_ID: String = "r5.authority.v3"
+const R4_SCHEMA_ID: String = "r4.authority.v2"
 const PREVIOUS_SCHEMA_ID: String = "r2.authority.v1"
 const LEGACY_SCHEMA_ID: String = "r2.authority.v0"
 
@@ -170,6 +171,15 @@ static func _encode_habitat(config: HabitatScenarioConfig) -> Dictionary:
 					),
 			}
 		),
+		"lifecycle_active": config.lifecycle_active,
+		"nutrition_config": (
+			null
+			if config.nutrition_config == null
+			else _encode_nutrition_config(config.nutrition_config)
+		),
+		"protein_placement_zone_id":
+			String(config.protein_placement_zone_id),
+		"protein_portions": config.protein_portions,
 	}
 
 
@@ -219,6 +229,9 @@ static func _encode_state(state: ColonyState) -> Dictionary:
 	var campaign: Variant = null
 	if state.campaign_state != null:
 		campaign = _encode_campaign(state.campaign_state)
+	var nutrition: Variant = null
+	if state.nutrition_state != null:
+		nutrition = _encode_nutrition_state(state.nutrition_state)
 	return {
 		"simulation_tick": state.simulation_tick,
 		"queen": {
@@ -242,6 +255,7 @@ static func _encode_state(state: ColonyState) -> Dictionary:
 			),
 		"scenario_progress": progress,
 		"campaign": campaign,
+		"nutrition": nutrition,
 		"observation_events": events,
 	}
 
@@ -265,6 +279,52 @@ static func _encode_campaign(campaign: CampaignState) -> Dictionary:
 		"unlocked_facility_type_ids": _strings_from_names(
 			campaign.copy_unlocked_facility_type_ids()
 		),
+	}
+
+
+static func _encode_nutrition_config(
+	config: NutritionConfig
+) -> Dictionary:
+	return {
+		"initial_sugar_reserve_portions":
+			config.initial_sugar_reserve_portions,
+		"initial_protein_reserve_portions":
+			config.initial_protein_reserve_portions,
+		"sugar_activity_ticks_per_portion":
+			config.sugar_activity_ticks_per_portion,
+		"sugar_shortage_step_interval_ticks":
+			config.sugar_shortage_step_interval_ticks,
+		"protein_growth_ticks_per_portion":
+			config.protein_growth_ticks_per_portion,
+		"feeding_decision_interval_ticks":
+			config.feeding_decision_interval_ticks,
+		"feeding_travel_duration_ticks":
+			config.feeding_travel_duration_ticks,
+		"feeding_duration_ticks": config.feeding_duration_ticks,
+	}
+
+
+static func _encode_nutrition_state(
+	nutrition: ColonyNutritionState
+) -> Dictionary:
+	return {
+		"sugar_reserve_portions": nutrition.sugar_reserve_portions,
+		"protein_reserve_portions": nutrition.protein_reserve_portions,
+		"sugar_activity_ticks_remaining":
+			nutrition.sugar_activity_ticks_remaining,
+		"total_sugar_portions_supplied":
+			nutrition.total_sugar_portions_supplied,
+		"total_protein_portions_supplied":
+			nutrition.total_protein_portions_supplied,
+		"total_sugar_portions_consumed":
+			nutrition.total_sugar_portions_consumed,
+		"total_protein_portions_consumed":
+			nutrition.total_protein_portions_consumed,
+		"total_protein_portions_placed":
+			nutrition.total_protein_portions_placed,
+		"delivered_protein_portions":
+			nutrition.delivered_protein_portions,
+		"completed_feeding_count": nutrition.completed_feeding_count,
 	}
 
 
@@ -297,6 +357,19 @@ static func _encode_ant(ant: AntModel) -> Dictionary:
 			"elapsed_ticks": ant.foraging_task.elapsed_ticks,
 			"duration_ticks": ant.foraging_task.duration_ticks,
 		}
+	var feeding_task: Variant = null
+	if ant.feeding_task != null:
+		feeding_task = {
+			"state": ant.feeding_task.state,
+			"target_brood_id": ant.feeding_task.target_brood_id,
+			"origin_zone_id": String(ant.feeding_task.origin_zone_id),
+			"target_zone_id": String(ant.feeding_task.target_zone_id),
+			"route_zone_ids":
+				_strings_from_names(ant.feeding_task.route_zone_ids),
+			"elapsed_ticks": ant.feeding_task.elapsed_ticks,
+			"duration_ticks": ant.feeding_task.duration_ticks,
+			"next_decision_tick": ant.feeding_task.next_decision_tick,
+		}
 	return {
 		"entity_id": ant.entity_id,
 		"life_stage": ant.life_stage,
@@ -304,8 +377,11 @@ static func _encode_ant(ant: AntModel) -> Dictionary:
 		"stage_age_ticks": ant.stage_age_ticks,
 		"zone_id": String(ant.zone_id),
 		"zone_entered_tick": ant.zone_entered_tick,
+		"protein_supported_growth_ticks":
+			ant.protein_supported_growth_ticks,
 		"worker_task": worker_task,
 		"foraging_task": foraging_task,
+		"feeding_task": feeding_task,
 	}
 
 
@@ -466,6 +542,10 @@ static func _decode_habitat_data(value: Variant) -> Dictionary:
 		"sugar_portions",
 		"foraging_observation_card_id",
 		"sequence_config",
+		"lifecycle_active",
+		"nutrition_config",
+		"protein_placement_zone_id",
+		"protein_portions",
 	]
 	if not _is_dictionary_with_keys(value, keys):
 		return _failure("Habitat configuration is invalid")
@@ -477,6 +557,7 @@ static func _decode_habitat_data(value: Variant) -> Dictionary:
 		"nest_zone_id",
 		"sugar_placement_zone_id",
 		"foraging_observation_card_id",
+		"protein_placement_zone_id",
 	]:
 		if typeof(value[key]) != TYPE_STRING:
 			return _failure("Habitat configuration contains a non-string ID")
@@ -487,12 +568,14 @@ static func _decode_habitat_data(value: Variant) -> Dictionary:
 		"initial_brood_stage",
 		"observation_stable_ticks",
 		"sugar_portions",
+		"protein_portions",
 	]:
 		if not _is_integral_number(value[key]):
 			return _failure("Habitat configuration contains a non-integer")
 	if (
 		not _is_finite_number(value["humidity_adjustment_amount"])
 		or typeof(value["zones"]) != TYPE_ARRAY
+		or typeof(value["lifecycle_active"]) != TYPE_BOOL
 	):
 		return _failure("Habitat configuration contains invalid numeric data")
 
@@ -527,6 +610,11 @@ static func _decode_habitat_data(value: Variant) -> Dictionary:
 	habitat.foraging_observation_card_id = StringName(
 		value["foraging_observation_card_id"]
 	)
+	habitat.lifecycle_active = bool(value["lifecycle_active"])
+	habitat.protein_placement_zone_id = StringName(
+		value["protein_placement_zone_id"]
+	)
+	habitat.protein_portions = int(value["protein_portions"])
 	for zone_value: Variant in value["zones"]:
 		var zone_result: Dictionary = _decode_zone_data(zone_value)
 		if not zone_result.get("ok", false):
@@ -544,6 +632,12 @@ static func _decode_habitat_data(value: Variant) -> Dictionary:
 	if not sequence_result.get("ok", false):
 		return sequence_result
 	habitat.sequence_data = sequence_result["sequence_data"]
+	var nutrition_result: Dictionary = _decode_nutrition_data(
+		value["nutrition_config"]
+	)
+	if not nutrition_result.get("ok", false):
+		return nutrition_result
+	habitat.nutrition_data = nutrition_result["nutrition_data"]
 	if not habitat.is_valid():
 		return _failure("Frozen habitat configuration is not valid")
 	return {"ok": true, "error": "", "habitat_data": habitat}
@@ -650,6 +744,54 @@ static func _decode_sequence_data(value: Variant) -> Dictionary:
 	return {"ok": true, "error": "", "sequence_data": data}
 
 
+static func _decode_nutrition_data(value: Variant) -> Dictionary:
+	if value == null:
+		return {"ok": true, "error": "", "nutrition_data": null}
+	var keys: Array[String] = [
+		"initial_sugar_reserve_portions",
+		"initial_protein_reserve_portions",
+		"sugar_activity_ticks_per_portion",
+		"sugar_shortage_step_interval_ticks",
+		"protein_growth_ticks_per_portion",
+		"feeding_decision_interval_ticks",
+		"feeding_travel_duration_ticks",
+		"feeding_duration_ticks",
+	]
+	if not _is_dictionary_with_keys(value, keys):
+		return _failure("Nutrition configuration is invalid")
+	for key: String in keys:
+		if not _is_integral_number(value[key]):
+			return _failure("Nutrition configuration contains a non-integer")
+	var data: NutritionData = NutritionData.new()
+	data.data_status = &"prototype_pacing_fixture"
+	data.scientifically_validated = false
+	data.initial_sugar_reserve_portions = int(
+		value["initial_sugar_reserve_portions"]
+	)
+	data.initial_protein_reserve_portions = int(
+		value["initial_protein_reserve_portions"]
+	)
+	data.sugar_activity_ticks_per_portion = int(
+		value["sugar_activity_ticks_per_portion"]
+	)
+	data.sugar_shortage_step_interval_ticks = int(
+		value["sugar_shortage_step_interval_ticks"]
+	)
+	data.protein_growth_ticks_per_portion = int(
+		value["protein_growth_ticks_per_portion"]
+	)
+	data.feeding_decision_interval_ticks = int(
+		value["feeding_decision_interval_ticks"]
+	)
+	data.feeding_travel_duration_ticks = int(
+		value["feeding_travel_duration_ticks"]
+	)
+	data.feeding_duration_ticks = int(value["feeding_duration_ticks"])
+	if not data.is_valid():
+		return _failure("Frozen nutrition configuration is not valid")
+	return {"ok": true, "error": "", "nutrition_data": data}
+
+
 static func _decode_state(
 	payload: Dictionary,
 	next_ids: Dictionary
@@ -671,6 +813,7 @@ static func _decode_state(
 			"unlocked_observation_card_ids",
 			"scenario_progress",
 			"campaign",
+			"nutrition",
 			"observation_events",
 		]
 	):
@@ -774,6 +917,12 @@ static func _decode_state(
 	if not campaign_result.get("ok", false):
 		return campaign_result
 	state.campaign_state = campaign_result["campaign"]
+	var nutrition_result: Dictionary = _decode_nutrition_state(
+		payload["nutrition"]
+	)
+	if not nutrition_result.get("ok", false):
+		return nutrition_result
+	state.nutrition_state = nutrition_result["nutrition"]
 	state._observation_events.clear()
 	for event_value: Variant in payload["observation_events"]:
 		var event_result: Dictionary = _decode_event(event_value)
@@ -785,6 +934,58 @@ static func _decode_state(
 		next_ids["observation_event_id"]
 	)
 	return {"ok": true, "error": "", "state": state}
+
+
+static func _decode_nutrition_state(value: Variant) -> Dictionary:
+	if value == null:
+		return {"ok": true, "error": "", "nutrition": null}
+	var keys: Array[String] = [
+		"sugar_reserve_portions",
+		"protein_reserve_portions",
+		"sugar_activity_ticks_remaining",
+		"total_sugar_portions_supplied",
+		"total_protein_portions_supplied",
+		"total_sugar_portions_consumed",
+		"total_protein_portions_consumed",
+		"total_protein_portions_placed",
+		"delivered_protein_portions",
+		"completed_feeding_count",
+	]
+	if not _is_dictionary_with_keys(value, keys):
+		return _failure("Nutrition state is invalid")
+	for key: String in keys:
+		if not _is_nonnegative_int(value[key]):
+			return _failure("Nutrition state contains an invalid counter")
+	var nutrition: ColonyNutritionState = ColonyNutritionState.new()
+	nutrition.sugar_reserve_portions = int(value["sugar_reserve_portions"])
+	nutrition.protein_reserve_portions = int(
+		value["protein_reserve_portions"]
+	)
+	nutrition.sugar_activity_ticks_remaining = int(
+		value["sugar_activity_ticks_remaining"]
+	)
+	nutrition.total_sugar_portions_supplied = int(
+		value["total_sugar_portions_supplied"]
+	)
+	nutrition.total_protein_portions_supplied = int(
+		value["total_protein_portions_supplied"]
+	)
+	nutrition.total_sugar_portions_consumed = int(
+		value["total_sugar_portions_consumed"]
+	)
+	nutrition.total_protein_portions_consumed = int(
+		value["total_protein_portions_consumed"]
+	)
+	nutrition.total_protein_portions_placed = int(
+		value["total_protein_portions_placed"]
+	)
+	nutrition.delivered_protein_portions = int(
+		value["delivered_protein_portions"]
+	)
+	nutrition.completed_feeding_count = int(
+		value["completed_feeding_count"]
+	)
+	return {"ok": true, "error": "", "nutrition": nutrition}
 
 
 static func _decode_campaign(value: Variant) -> Dictionary:
@@ -876,8 +1077,10 @@ static func _decode_ant(value: Variant) -> Dictionary:
 			"stage_age_ticks",
 			"zone_id",
 			"zone_entered_tick",
+			"protein_supported_growth_ticks",
 			"worker_task",
 			"foraging_task",
+			"feeding_task",
 		]
 	):
 		return _failure("Ant state is invalid")
@@ -886,6 +1089,7 @@ static func _decode_ant(value: Variant) -> Dictionary:
 		"life_stage",
 		"total_age_ticks",
 		"stage_age_ticks",
+		"protein_supported_growth_ticks",
 	]:
 		if not _is_nonnegative_int(value[key]):
 			return _failure("Ant state contains an invalid counter")
@@ -903,6 +1107,9 @@ static func _decode_ant(value: Variant) -> Dictionary:
 	ant.stage_age_ticks = int(value["stage_age_ticks"])
 	ant.zone_id = StringName(value["zone_id"])
 	ant.zone_entered_tick = int(value["zone_entered_tick"])
+	ant.protein_supported_growth_ticks = int(
+		value["protein_supported_growth_ticks"]
+	)
 	var worker_result: Dictionary = _decode_worker_task(value["worker_task"])
 	if not worker_result.get("ok", false):
 		return worker_result
@@ -913,6 +1120,12 @@ static func _decode_ant(value: Variant) -> Dictionary:
 	if not foraging_result.get("ok", false):
 		return foraging_result
 	ant.foraging_task = foraging_result["task"]
+	var feeding_result: Dictionary = _decode_feeding_task(
+		value["feeding_task"]
+	)
+	if not feeding_result.get("ok", false):
+		return feeding_result
+	ant.feeding_task = feeding_result["task"]
 	return {"ok": true, "error": "", "ant": ant}
 
 
@@ -1024,6 +1237,57 @@ static func _decode_foraging_task(value: Variant) -> Dictionary:
 	return {"ok": true, "error": "", "task": task}
 
 
+static func _decode_feeding_task(value: Variant) -> Dictionary:
+	if value == null:
+		return {"ok": true, "error": "", "task": null}
+	var keys: Array[String] = [
+		"state",
+		"target_brood_id",
+		"origin_zone_id",
+		"target_zone_id",
+		"route_zone_ids",
+		"elapsed_ticks",
+		"duration_ticks",
+		"next_decision_tick",
+	]
+	if not _is_dictionary_with_keys(value, keys):
+		return _failure("Brood-feeding task is invalid")
+	for key: String in [
+		"state",
+		"target_brood_id",
+		"elapsed_ticks",
+		"duration_ticks",
+		"next_decision_tick",
+	]:
+		if not _is_integral_number(value[key]):
+			return _failure("Brood-feeding task contains a non-integer")
+	if (
+		int(value["state"]) < BroodFeedingTaskModel.State.IDLE
+		or int(value["state"]) > BroodFeedingTaskModel.State.FEEDING
+		or int(value["elapsed_ticks"]) < 0
+		or int(value["duration_ticks"]) < 0
+		or int(value["next_decision_tick"]) < 0
+		or typeof(value["origin_zone_id"]) != TYPE_STRING
+		or typeof(value["target_zone_id"]) != TYPE_STRING
+	):
+		return _failure("Brood-feeding task contains an invalid value")
+	var route_result: Dictionary = _decode_string_names(
+		value["route_zone_ids"]
+	)
+	if not route_result.get("ok", false):
+		return route_result
+	var task: BroodFeedingTaskModel = BroodFeedingTaskModel.new()
+	task.state = int(value["state"])
+	task.target_brood_id = int(value["target_brood_id"])
+	task.origin_zone_id = StringName(value["origin_zone_id"])
+	task.target_zone_id = StringName(value["target_zone_id"])
+	task.route_zone_ids.assign(route_result["values"])
+	task.elapsed_ticks = int(value["elapsed_ticks"])
+	task.duration_ticks = int(value["duration_ticks"])
+	task.next_decision_tick = int(value["next_decision_tick"])
+	return {"ok": true, "error": "", "task": task}
+
+
 static func _decode_zone_state(value: Variant) -> Dictionary:
 	var data_result: Dictionary = _decode_zone_data(value)
 	if not data_result.get("ok", false):
@@ -1057,7 +1321,8 @@ static func _decode_food_source(value: Variant) -> Dictionary:
 		not _is_nonnegative_int(value["entity_id"])
 		or not _is_nonnegative_int(value["remaining_portions"])
 		or not _is_integral_number(value["food_type"])
-		or int(value["food_type"]) != FoodSourceState.FoodType.SUGAR_WATER
+		or int(value["food_type"]) < FoodSourceState.FoodType.SUGAR_WATER
+		or int(value["food_type"]) > FoodSourceState.FoodType.PROTEIN
 		or typeof(value["zone_id"]) != TYPE_STRING
 		or typeof(value["available"]) != TYPE_BOOL
 	):
@@ -1139,7 +1404,7 @@ static func _decode_event(value: Variant) -> Dictionary:
 		or int(value["tick"]) < 0
 		or int(value["event_type"]) < ObservationEvent.Type.RELOCATION_STARTED
 		or int(value["event_type"])
-			> ObservationEvent.Type.OBSERVATION_SESSION_COMPLETED
+			> ObservationEvent.Type.BROOD_FED
 		or typeof(value["source_zone_id"]) != TYPE_STRING
 		or typeof(value["target_zone_id"]) != TYPE_STRING
 	):
@@ -1188,7 +1453,7 @@ static func _decode_pending_commands(
 			or command_type < ColonySimulation.PendingCommandType.WATER_ACTION
 			or command_type
 				> ColonySimulation.PendingCommandType
-					.SELECT_CAMPAIGN_INFERENCE_ACTION
+					.PLACE_PROTEIN_ACTION
 		):
 			return _failure("Pending command ordering or type is invalid")
 		commands.append(PendingSimulationCommand.new(
@@ -1265,7 +1530,13 @@ static func _has_valid_core_state(simulation: ColonySimulation) -> bool:
 			if not zone_ids.has(connected_zone_id):
 				return false
 	for source: FoodSourceState in state.food_sources:
-		if not zone_ids.has(source.zone_id):
+		if (
+			not zone_ids.has(source.zone_id)
+			or (
+				source.food_type == FoodSourceState.FoodType.PROTEIN
+				and simulation._nutrition_system == null
+			)
+		):
 			return false
 
 	var previous_event_id: int = 0
@@ -1303,17 +1574,29 @@ static func _has_valid_core_state(simulation: ColonySimulation) -> bool:
 			and state.food_sources.is_empty()
 			and state.scenario_progress == null
 			and state.campaign_state == null
+			and state.nutrition_state == null
 			and state.humidity_adjustment_count == 0
 			and state.observation_stable_ticks == 0
 			and state.shared_sugar_portions == 0
 			and state.total_sugar_portions_placed == 0
 			and state.unlocked_observation_card_ids.is_empty()
 		)
-	return (
-		state.queen.laid_egg_count == 0
-		and _state_graph_matches_frozen_config(simulation)
-		and simulation.has_valid_habitat_ownership()
-	)
+	if not _state_graph_matches_frozen_config(simulation):
+		return false
+	if simulation._supports_nutrition_growth():
+		if (
+			state.queen.laid_egg_count < 0
+			or state.queen.laid_egg_count
+				> simulation._lifecycle_config.max_first_generation_brood
+			or state.ants.size()
+				!= simulation._habitat_config.initial_worker_count
+					+ simulation._habitat_config.initial_brood_count
+					+ state.queen.laid_egg_count
+		):
+			return false
+	elif state.queen.laid_egg_count != 0 or state.nutrition_state != null:
+		return false
+	return simulation.has_valid_habitat_ownership()
 
 
 static func _has_valid_ant_state(
@@ -1326,7 +1609,11 @@ static func _has_valid_ant_state(
 	):
 		return false
 	if ant.life_stage != AntModel.LifeStage.WORKER:
-		if ant.worker_task != null or ant.foraging_task != null:
+		if (
+			ant.worker_task != null
+			or ant.foraging_task != null
+			or ant.feeding_task != null
+		):
 			return false
 		var stage_duration: int = simulation.get_stage_duration_ticks(
 			ant.life_stage
@@ -1336,9 +1623,31 @@ static func _has_valid_ant_state(
 	elif simulation.has_habitat():
 		if ant.worker_task == null or ant.foraging_task == null:
 			return false
-	else:
-		if ant.worker_task != null or ant.foraging_task != null:
+		if (
+			simulation._supports_nutrition_growth()
+			!= (ant.feeding_task != null)
+		):
 			return false
+	else:
+		if (
+			ant.worker_task != null
+			or ant.foraging_task != null
+			or ant.feeding_task != null
+		):
+			return false
+
+	if (
+		ant.protein_supported_growth_ticks < 0
+		or (
+			not simulation._supports_nutrition_growth()
+			and ant.protein_supported_growth_ticks != 0
+		)
+		or (
+			ant.life_stage != AntModel.LifeStage.LARVA
+			and ant.protein_supported_growth_ticks != 0
+		)
+	):
+		return false
 
 	if not simulation.has_habitat():
 		return ant.zone_id.is_empty()
@@ -1425,6 +1734,10 @@ static func _state_graph_matches_frozen_config(
 			config.is_combined_observation()
 			!= (state.campaign_state != null)
 		)
+		or (
+			config.is_nutrition_growth()
+			!= (state.nutrition_state != null)
+		)
 	):
 		return false
 	for zone_index: int in state.zones.size():
@@ -1479,6 +1792,12 @@ static func _has_valid_pending_commands(
 						)
 				):
 					return false
+			ColonySimulation.PendingCommandType.PLACE_PROTEIN_ACTION:
+				if (
+					not command.argument_id.is_empty()
+					or not _can_restore_protein_command(simulation)
+				):
+					return false
 			_:
 				return false
 	return true
@@ -1510,10 +1829,6 @@ static func _can_restore_sugar_command(
 ) -> bool:
 	if (
 		not simulation._supports_sugar_foraging()
-		or simulation._state.total_sugar_portions_placed > 0
-		or simulation._state.unlocked_observation_card_ids.has(
-			simulation._habitat_config.foraging_observation_card_id
-		)
 		or (
 			simulation._scenario_director != null
 			and not simulation._scenario_director
@@ -1521,10 +1836,41 @@ static func _can_restore_sugar_command(
 		)
 	):
 		return false
+	if simulation._supports_nutrition_growth():
+		if simulation._foraging_system.has_available_source_type(
+			simulation._state,
+			FoodSourceState.FoodType.SUGAR_WATER
+		):
+			return false
+	elif (
+		simulation._state.total_sugar_portions_placed > 0
+		or simulation._state.unlocked_observation_card_ids.has(
+			simulation._habitat_config.foraging_observation_card_id
+		)
+	):
+		return false
 	var zone: HabitatZoneState = simulation._state.get_zone(
 		simulation._habitat_config.sugar_placement_zone_id
 	)
 	return zone != null and zone.available
+
+
+static func _can_restore_protein_command(
+	simulation: ColonySimulation
+) -> bool:
+	if not simulation._supports_nutrition_growth():
+		return false
+	var zone: HabitatZoneState = simulation._state.get_zone(
+		simulation._habitat_config.protein_placement_zone_id
+	)
+	return (
+		zone != null
+		and zone.available
+		and not simulation._foraging_system.has_available_source_type(
+			simulation._state,
+			FoodSourceState.FoodType.PROTEIN
+		)
+	)
 
 
 static func _decode_string_names(

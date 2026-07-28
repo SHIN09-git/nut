@@ -21,6 +21,9 @@ const CombinedObservationTestSuiteScript: Script = preload(
 const CampaignJournalTestSuiteScript: Script = preload(
 	"res://tests/simulation/campaign_journal_test_suite.gd"
 )
+const NutritionGrowthTestSuiteScript: Script = preload(
+	"res://tests/simulation/nutrition_growth_test_suite.gd"
+)
 const ObservationEventTestSuiteScript: Script = preload(
 	"res://tests/simulation/observation_event_test_suite.gd"
 )
@@ -89,6 +92,13 @@ func _initialize() -> void:
 
 func _run_all_tests() -> void:
 	TranslationServer.set_locale("zh_CN")
+	if not _validate_suite_scripts():
+		printerr(
+			"FAIL: %d of %d project assertions failed"
+			% [_failure_count, _assertion_count]
+		)
+		quit(1)
+		return
 	_run_simulation_clock_test_suite()
 	_run_lifecycle_test_suite()
 	_run_humidity_relocation_test_suite()
@@ -96,6 +106,7 @@ func _run_all_tests() -> void:
 	_run_foraging_test_suite()
 	_run_combined_observation_test_suite()
 	_run_campaign_journal_test_suite()
+	_run_nutrition_growth_test_suite()
 	_run_observation_event_test_suite()
 	_run_save_core_test_suite()
 	_run_profile_store_test_suite()
@@ -126,6 +137,46 @@ func _run_all_tests() -> void:
 		% [_failure_count, _assertion_count]
 	)
 	quit(1)
+
+
+func _validate_suite_scripts() -> bool:
+	var suite_scripts: Array[Script] = [
+		SimulationClockTestSuiteScript,
+		LifecycleTestSuiteScript,
+		HumidityRelocationTestSuiteScript,
+		BroodRelocationEquivalenceTestSuiteScript,
+		ForagingTestSuiteScript,
+		CombinedObservationTestSuiteScript,
+		CampaignJournalTestSuiteScript,
+		NutritionGrowthTestSuiteScript,
+		ObservationEventTestSuiteScript,
+		SaveCoreTestSuiteScript,
+		ProfileStoreTestSuiteScript,
+		PlayerAnnotationStateTestSuiteScript,
+		DemoSettingsStateTestSuiteScript,
+		SettingsStoreTestSuiteScript,
+		DemoLocalizationTestSuiteScript,
+		ViewAdapterTestSuiteScript,
+		HabitatViewInterpolationTestSuiteScript,
+		ReducedMotionTestSuiteScript,
+		WorkerObservationPanelTestSuiteScript,
+		LifecycleDebugSceneTestSuiteScript,
+		HumidityMainSceneTestSuiteScript,
+		WorkerIdentitySceneTestSuiteScript,
+		SugarForagingSceneTestSuiteScript,
+		CombinedObservationSceneTestSuiteScript,
+		CampaignJournalSceneTestSuiteScript,
+		DemoShellSceneTestSuiteScript,
+		GameShellSceneTestSuiteScript,
+	]
+	var all_valid: bool = true
+	for suite_script: Script in suite_scripts:
+		_assertion_count += 1
+		if suite_script == null or not suite_script.can_instantiate():
+			_failure_count += 1
+			all_valid = false
+			printerr("  test suite script cannot instantiate")
+	return all_valid
 
 
 func _run_simulation_clock_test_suite() -> void:
@@ -172,6 +223,12 @@ func _run_combined_observation_test_suite() -> void:
 
 func _run_campaign_journal_test_suite() -> void:
 	var suite: CampaignJournalTestSuite = CampaignJournalTestSuiteScript.new()
+	suite.run()
+	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
+
+
+func _run_nutrition_growth_test_suite() -> void:
+	var suite: NutritionGrowthTestSuite = NutritionGrowthTestSuiteScript.new()
 	suite.run()
 	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
 

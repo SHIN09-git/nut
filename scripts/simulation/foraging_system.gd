@@ -39,7 +39,17 @@ func apply_configured_sugar_placement(state: ColonyState) -> FoodSourceState:
 	if (
 		state == null
 		or not is_ready()
-		or state.total_sugar_portions_placed > 0
+		or (
+			state.nutrition_state == null
+			and state.total_sugar_portions_placed > 0
+		)
+		or (
+			state.nutrition_state != null
+			and has_available_source_type(
+				state,
+				FoodSourceState.FoodType.SUGAR_WATER
+			)
+		)
 	):
 		return null
 	var placement_zone: HabitatZoneState = state.get_zone(
@@ -56,7 +66,61 @@ func apply_configured_sugar_placement(state: ColonyState) -> FoodSourceState:
 	if source == null:
 		return null
 	state.total_sugar_portions_placed += _sugar_portions
+	if state.nutrition_state != null:
+		state.nutrition_state.total_sugar_portions_supplied += (
+			_sugar_portions
+		)
 	return source
+
+
+func apply_configured_protein_placement(
+	state: ColonyState
+) -> FoodSourceState:
+	if (
+		state == null
+		or not is_ready()
+		or state.nutrition_state == null
+		or not _scenario_config.is_nutrition_growth()
+		or has_available_source_type(
+			state,
+			FoodSourceState.FoodType.PROTEIN
+		)
+	):
+		return null
+	var placement_zone: HabitatZoneState = state.get_zone(
+		_scenario_config.protein_placement_zone_id
+	)
+	if placement_zone == null or not placement_zone.available:
+		return null
+	var source: FoodSourceState = state.create_food_source(
+		_scenario_config.protein_placement_zone_id,
+		_scenario_config.protein_portions,
+		FoodSourceState.FoodType.PROTEIN
+	)
+	if source == null:
+		return null
+	state.nutrition_state.total_protein_portions_placed += (
+		_scenario_config.protein_portions
+	)
+	state.nutrition_state.total_protein_portions_supplied += (
+		_scenario_config.protein_portions
+	)
+	return source
+
+
+func has_available_source_type(
+	state: ColonyState,
+	food_type: FoodSourceState.FoodType
+) -> bool:
+	if state == null:
+		return false
+	for source: FoodSourceState in state.food_sources:
+		if (
+			source.food_type == food_type
+			and source.has_available_portion()
+		):
+			return true
+	return false
 
 
 func validate_tasks(state: ColonyState) -> void:
@@ -298,6 +362,13 @@ func has_valid_ownership(state: ColonyState) -> bool:
 		)
 		if relocation_active and task.state != ForagingTaskModel.State.IDLE:
 			return false
+		var feeding_active: bool = (
+			worker.feeding_task != null
+			and worker.feeding_task.state
+				!= BroodFeedingTaskModel.State.IDLE
+		)
+		if feeding_active and task.state != ForagingTaskModel.State.IDLE:
+			return false
 
 		if task.state == ForagingTaskModel.State.IDLE:
 			if not _is_idle_task_clean(task):
@@ -346,6 +417,11 @@ func has_valid_ownership(state: ColonyState) -> bool:
 			continue
 		return false
 
+	if state.nutrition_state != null:
+		return _has_valid_nutrition_conservation(
+			state,
+			sources_by_id
+		)
 	var shared_portions: int = state.shared_sugar_portions
 	var total_placed: int = state.total_sugar_portions_placed
 	if shared_portions < 0 or total_placed < 0:
@@ -454,7 +530,11 @@ func _collect_and_begin_return(
 	task.carried_portions = 1
 	_record_event(
 		state,
-		ObservationEvent.Type.SUGAR_COLLECTED,
+		(
+			ObservationEvent.Type.PROTEIN_COLLECTED
+			if source.food_type == FoodSourceState.FoodType.PROTEIN
+			else ObservationEvent.Type.SUGAR_COLLECTED
+		),
 		worker.entity_id,
 		source_id,
 		source_zone_id,
@@ -481,7 +561,11 @@ func _collect_and_begin_return(
 	)
 	_record_event(
 		state,
-		ObservationEvent.Type.SUGAR_RETURN_STARTED,
+		(
+			ObservationEvent.Type.PROTEIN_RETURN_STARTED
+			if source.food_type == FoodSourceState.FoodType.PROTEIN
+			else ObservationEvent.Type.SUGAR_RETURN_STARTED
+		),
 		worker.entity_id,
 		source_id,
 		source_zone_id,
@@ -522,18 +606,38 @@ func _complete_sharing(
 		return
 	var source_id: int = task.target_food_source_id
 	var source_zone_id: StringName = task.origin_zone_id
+	var source: FoodSourceState = state.get_food_source(source_id)
+	if source == null:
+		return
 	task.carried_portions = 0
-	state.shared_sugar_portions += 1
-	_record_event(
-		state,
-		ObservationEvent.Type.SUGAR_SHARED,
-		worker.entity_id,
-		source_id,
-		source_zone_id,
-		_nest_zone_id
-	)
+	if source.food_type == FoodSourceState.FoodType.PROTEIN:
+		if state.nutrition_state == null:
+			return
+		state.nutrition_state.protein_reserve_portions += 1
+		state.nutrition_state.delivered_protein_portions += 1
+		_record_event(
+			state,
+			ObservationEvent.Type.PROTEIN_DELIVERED,
+			worker.entity_id,
+			source_id,
+			source_zone_id,
+			_nest_zone_id
+		)
+	else:
+		state.shared_sugar_portions += 1
+		if state.nutrition_state != null:
+			state.nutrition_state.sugar_reserve_portions += 1
+		_record_event(
+			state,
+			ObservationEvent.Type.SUGAR_SHARED,
+			worker.entity_id,
+			source_id,
+			source_zone_id,
+			_nest_zone_id
+		)
 	task.reset_to_idle()
-	_unlock_observation_if_complete(state)
+	if source.food_type == FoodSourceState.FoodType.SUGAR_WATER:
+		_unlock_observation_if_complete(state)
 
 
 func _unlock_observation_if_complete(state: ColonyState) -> void:
@@ -743,6 +847,60 @@ func _is_worker_available(
 		and worker.worker_task != null
 		and worker.worker_task.state == WorkerTaskModel.State.IDLE
 		and task.state == ForagingTaskModel.State.IDLE
+		and (
+			worker.feeding_task == null
+			or worker.feeding_task.state
+				== BroodFeedingTaskModel.State.IDLE
+		)
+	)
+
+
+func _has_valid_nutrition_conservation(
+	state: ColonyState,
+	sources_by_id: Dictionary[int, FoodSourceState]
+) -> bool:
+	var remaining_sugar: int = 0
+	var remaining_protein: int = 0
+	for source: FoodSourceState in sources_by_id.values():
+		if source.food_type == FoodSourceState.FoodType.PROTEIN:
+			remaining_protein += source.remaining_portions
+		elif source.food_type == FoodSourceState.FoodType.SUGAR_WATER:
+			remaining_sugar += source.remaining_portions
+		else:
+			return false
+	var carried_sugar: int = 0
+	var carried_protein: int = 0
+	for worker: AntModel in _get_workers_in_stable_order(state):
+		var task: ForagingTaskModel = worker.foraging_task
+		if task == null or not task.is_carrying():
+			continue
+		var source: FoodSourceState = sources_by_id.get(
+			task.target_food_source_id
+		)
+		if source == null:
+			return false
+		if source.food_type == FoodSourceState.FoodType.PROTEIN:
+			carried_protein += task.carried_portions
+		else:
+			carried_sugar += task.carried_portions
+	var nutrition: ColonyNutritionState = state.nutrition_state
+	return (
+		state.shared_sugar_portions >= 0
+		and state.total_sugar_portions_placed >= 0
+		and state.shared_sugar_portions
+			<= state.total_sugar_portions_placed
+		and state.total_sugar_portions_placed
+			<= nutrition.total_sugar_portions_supplied
+		and remaining_sugar
+			+ carried_sugar
+			+ nutrition.sugar_reserve_portions
+			+ nutrition.total_sugar_portions_consumed
+			== nutrition.total_sugar_portions_supplied
+		and remaining_protein
+			+ carried_protein
+			+ nutrition.protein_reserve_portions
+			+ nutrition.total_protein_portions_consumed
+			== nutrition.total_protein_portions_supplied
 	)
 
 

@@ -2,7 +2,7 @@ class_name SaveGameService
 extends RefCounted
 
 const CURRENT_FORMAT_VERSION: int = 1
-const CURRENT_GAME_VERSION: String = "0.4.0-dev"
+const CURRENT_GAME_VERSION: String = "0.5.0-dev"
 const CURRENT_CONTENT_MANIFEST_ID: String = (
 	"colony-under-glass.r2-base.1"
 )
@@ -269,8 +269,18 @@ func _verify_and_migrate_envelope(envelope: Dictionary) -> Dictionary:
 	match String(current["state_schema_id"]):
 		SimulationStateCodec.CURRENT_SCHEMA_ID:
 			pass
+		SimulationStateCodec.R4_SCHEMA_ID:
+			var migration_result: Dictionary = _migrate_v2_to_v3(current)
+			if not migration_result.get("ok", false):
+				return migration_result
+			current = migration_result["envelope"]
+			migrated = true
 		SimulationStateCodec.PREVIOUS_SCHEMA_ID:
 			var migration_result: Dictionary = _migrate_v1_to_v2(current)
+			if not migration_result.get("ok", false):
+				return migration_result
+			current = migration_result["envelope"]
+			migration_result = _migrate_v2_to_v3(current)
 			if not migration_result.get("ok", false):
 				return migration_result
 			current = migration_result["envelope"]
@@ -281,6 +291,10 @@ func _verify_and_migrate_envelope(envelope: Dictionary) -> Dictionary:
 				return migration_result
 			current = migration_result["envelope"]
 			migration_result = _migrate_v1_to_v2(current)
+			if not migration_result.get("ok", false):
+				return migration_result
+			current = migration_result["envelope"]
+			migration_result = _migrate_v2_to_v3(current)
 			if not migration_result.get("ok", false):
 				return migration_result
 			current = migration_result["envelope"]
@@ -359,12 +373,82 @@ func _migrate_v1_to_v2(previous: Dictionary) -> Dictionary:
 	state_payload["campaign"] = _derive_campaign_for_v1(state_payload)
 	var migrated: Dictionary = previous.duplicate(true)
 	migrated["game_version"] = CURRENT_GAME_VERSION
-	migrated["state_schema_id"] = SimulationStateCodec.CURRENT_SCHEMA_ID
+	migrated["state_schema_id"] = SimulationStateCodec.R4_SCHEMA_ID
 	migrated["pending_commands"] = migrated_commands
 	migrated["state_payload"] = state_payload
 	migrated = seal_envelope(migrated)
 	if migrated.is_empty():
 		return _failure("Previous save migration could not be sealed")
+	return {"ok": true, "error": "", "envelope": migrated}
+
+
+func _migrate_v2_to_v3(previous: Dictionary) -> Dictionary:
+	if (
+		typeof(previous.get("frozen_config_bundle")) != TYPE_DICTIONARY
+		or typeof(previous.get("state_payload")) != TYPE_DICTIONARY
+	):
+		return _failure("R4 save payload is invalid")
+	var frozen_bundle: Dictionary = (
+		previous["frozen_config_bundle"] as Dictionary
+	).duplicate(true)
+	if (
+		not frozen_bundle.has("habitat")
+		or frozen_bundle.size() != 3
+	):
+		return _failure("R4 frozen configuration is invalid")
+	var habitat: Variant = frozen_bundle["habitat"]
+	if habitat != null:
+		if typeof(habitat) != TYPE_DICTIONARY:
+			return _failure("R4 habitat configuration is invalid")
+		var habitat_data: Dictionary = (habitat as Dictionary).duplicate(true)
+		for new_key: String in [
+			"lifecycle_active",
+			"nutrition_config",
+			"protein_placement_zone_id",
+			"protein_portions",
+		]:
+			if habitat_data.has(new_key):
+				return _failure("R4 habitat unexpectedly contains R5 data")
+		habitat_data["lifecycle_active"] = false
+		habitat_data["nutrition_config"] = null
+		habitat_data["protein_placement_zone_id"] = ""
+		habitat_data["protein_portions"] = 0
+		frozen_bundle["habitat"] = habitat_data
+
+	var state_payload: Dictionary = (
+		previous["state_payload"] as Dictionary
+	).duplicate(true)
+	if state_payload.has("nutrition"):
+		return _failure("R4 state unexpectedly contains nutrition data")
+	state_payload["nutrition"] = null
+	if typeof(state_payload.get("ants")) != TYPE_ARRAY:
+		return _failure("R4 ant state is invalid")
+	var migrated_ants: Array[Dictionary] = []
+	for ant_value: Variant in state_payload["ants"]:
+		if typeof(ant_value) != TYPE_DICTIONARY:
+			return _failure("R4 ant state is invalid")
+		var ant: Dictionary = (ant_value as Dictionary).duplicate(true)
+		if (
+			ant.has("protein_supported_growth_ticks")
+			or ant.has("feeding_task")
+		):
+			return _failure("R4 ant unexpectedly contains R5 data")
+		ant["protein_supported_growth_ticks"] = 0
+		ant["feeding_task"] = null
+		migrated_ants.append(ant)
+	state_payload["ants"] = migrated_ants
+
+	var migrated: Dictionary = previous.duplicate(true)
+	migrated["game_version"] = CURRENT_GAME_VERSION
+	migrated["state_schema_id"] = SimulationStateCodec.CURRENT_SCHEMA_ID
+	migrated["frozen_config_bundle"] = frozen_bundle
+	migrated["frozen_config_hash"] = CanonicalSaveJson.sha256(frozen_bundle)
+	if String(migrated["frozen_config_hash"]).is_empty():
+		return _failure("R5 frozen configuration hash could not be created")
+	migrated["state_payload"] = state_payload
+	migrated = seal_envelope(migrated)
+	if migrated.is_empty():
+		return _failure("R4 save migration could not be sealed")
 	return {"ok": true, "error": "", "envelope": migrated}
 
 

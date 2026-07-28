@@ -16,6 +16,7 @@ enum PendingCommandType {
 	PLACE_SUGAR_ACTION,
 	CONTINUE_OBSERVATION_ACTION,
 	SELECT_CAMPAIGN_INFERENCE_ACTION,
+	PLACE_PROTEIN_ACTION,
 }
 
 var _lifecycle_config: LifecycleConfig
@@ -23,6 +24,7 @@ var _brood_care_config: BroodCareConfig
 var _habitat_config: HabitatScenarioConfig
 var _brood_relocation_system: BroodRelocationSystem
 var _foraging_system: ForagingSystem
+var _nutrition_system: NutritionSystem
 var _scenario_director: ScenarioDirector
 var _campaign_director: CampaignDirector
 var _state: ColonyState
@@ -82,6 +84,16 @@ func _init(
 		if not _foraging_system.is_ready():
 			_configuration_error = (
 				"ColonySimulation could not initialize foraging"
+			)
+			return
+	if _habitat_config.is_nutrition_growth():
+		_nutrition_system = NutritionSystem.new(
+			_habitat_config.nutrition_config,
+			_habitat_config
+		)
+		if not _nutrition_system.is_ready():
+			_configuration_error = (
+				"ColonySimulation could not initialize nutrition"
 			)
 			return
 
@@ -150,6 +162,13 @@ func submit_place_sugar_action() -> bool:
 	return true
 
 
+func submit_place_protein_action() -> bool:
+	if not _is_place_protein_action_available():
+		return false
+	_queue_pending_command(PendingCommandType.PLACE_PROTEIN_ACTION)
+	return true
+
+
 func submit_continue_observation_action() -> bool:
 	if not _is_continue_observation_action_available():
 		return false
@@ -205,7 +224,10 @@ func advance_tick(tick_index: int) -> bool:
 		return true
 
 	_apply_pending_commands()
-	if _scenario_director != null:
+	if _is_lifecycle_active():
+		_update_existing_ants()
+		_try_lay_egg()
+	elif _scenario_director != null:
 		var lifecycle_change: Dictionary = (
 			_scenario_director.advance_controlled_lifecycle(_state)
 		)
@@ -220,11 +242,22 @@ func advance_tick(tick_index: int) -> bool:
 	_brood_relocation_system.validate_tasks(_state)
 	if _foraging_system != null:
 		_foraging_system.validate_tasks(_state)
-	_brood_relocation_system.advance_tasks(_state)
-	if _foraging_system != null:
-		_foraging_system.advance_tasks(_state)
+	if _nutrition_system != null:
+		_nutrition_system.validate_tasks(_state)
+	var worker_tasks_advance: bool = (
+		_nutrition_system == null
+		or _nutrition_system.should_advance_worker_tasks(_state)
+	)
+	if worker_tasks_advance:
+		_brood_relocation_system.advance_tasks(_state)
+		if _foraging_system != null:
+			_foraging_system.advance_tasks(_state)
+		if _nutrition_system != null:
+			_nutrition_system.advance_tasks(_state)
 	if _should_assign_brood_relocation():
 		_brood_relocation_system.assign_idle_workers(_state)
+	if _should_assign_brood_feeding():
+		_nutrition_system.assign_idle_workers(_state)
 	if _should_assign_foraging():
 		_foraging_system.assign_idle_workers(_state)
 	if _should_update_humidity_observation():
@@ -247,7 +280,7 @@ func advance_tick(tick_index: int) -> bool:
 func create_snapshot() -> ColonySnapshot:
 	var snapshot: ColonySnapshot = ColonySnapshot.new()
 	snapshot.simulation_tick = _state.simulation_tick
-	snapshot.lifecycle_active = not has_habitat()
+	snapshot.lifecycle_active = _is_lifecycle_active()
 	snapshot.queen_entity_id = _state.queen.entity_id
 	snapshot.queen_laid_egg_count = (
 		_state.queen.laid_egg_count if snapshot.lifecycle_active else 0
@@ -354,6 +387,9 @@ func create_snapshot() -> ColonySnapshot:
 		var foraging_task_snapshot: ForagingTaskSnapshot
 		if ant.foraging_task != null:
 			foraging_task_snapshot = ant.foraging_task.create_snapshot()
+		var feeding_task_snapshot: BroodFeedingTaskSnapshot
+		if ant.feeding_task != null:
+			feeding_task_snapshot = ant.feeding_task.create_snapshot()
 		snapshot.ants.append(AntSnapshot.new(
 			ant.entity_id,
 			ant.life_stage,
@@ -371,7 +407,9 @@ func create_snapshot() -> ColonySnapshot:
 			carried_brood_id,
 			task_elapsed_ticks,
 			task_duration_ticks,
-			foraging_task_snapshot
+			foraging_task_snapshot,
+			ant.protein_supported_growth_ticks,
+			feeding_task_snapshot
 		))
 
 	return snapshot
@@ -426,6 +464,64 @@ func create_game_snapshot() -> GameSnapshot:
 			_has_pending_command(
 				PendingCommandType.SELECT_CAMPAIGN_INFERENCE_ACTION
 			)
+			)
+	var nutrition_snapshot: NutritionSnapshot
+	if _nutrition_system != null and _state.nutrition_state != null:
+		var nutrition: ColonyNutritionState = _state.nutrition_state
+		nutrition_snapshot = NutritionSnapshot.new()
+		nutrition_snapshot.active = true
+		nutrition_snapshot.sugar_reserve_portions = (
+			nutrition.sugar_reserve_portions
+		)
+		nutrition_snapshot.protein_reserve_portions = (
+			nutrition.protein_reserve_portions
+		)
+		nutrition_snapshot.sugar_activity_ticks_remaining = (
+			nutrition.sugar_activity_ticks_remaining
+		)
+		nutrition_snapshot.total_sugar_portions_supplied = (
+			nutrition.total_sugar_portions_supplied
+		)
+		nutrition_snapshot.total_protein_portions_supplied = (
+			nutrition.total_protein_portions_supplied
+		)
+		nutrition_snapshot.total_sugar_portions_consumed = (
+			nutrition.total_sugar_portions_consumed
+		)
+		nutrition_snapshot.total_protein_portions_consumed = (
+			nutrition.total_protein_portions_consumed
+		)
+		nutrition_snapshot.total_protein_portions_placed = (
+			nutrition.total_protein_portions_placed
+		)
+		nutrition_snapshot.delivered_protein_portions = (
+			nutrition.delivered_protein_portions
+		)
+		nutrition_snapshot.completed_feeding_count = (
+			nutrition.completed_feeding_count
+		)
+		nutrition_snapshot.active_feeding_count = (
+			_nutrition_system.get_active_feeding_count(_state)
+		)
+		nutrition_snapshot.sugar_shortage = (
+			nutrition.sugar_reserve_portions == 0
+			and nutrition.sugar_activity_ticks_remaining == 0
+		)
+		nutrition_snapshot.protein_shortage = (
+			nutrition.protein_reserve_portions
+			<= nutrition_snapshot.active_feeding_count
+		)
+		nutrition_snapshot.sugar_action_pending = (
+			_has_pending_command(PendingCommandType.PLACE_SUGAR_ACTION)
+		)
+		nutrition_snapshot.protein_action_pending = (
+			_has_pending_command(PendingCommandType.PLACE_PROTEIN_ACTION)
+		)
+		nutrition_snapshot.sugar_action_available = (
+			_is_place_sugar_action_available()
+		)
+		nutrition_snapshot.protein_action_available = (
+			_is_place_protein_action_available()
 		)
 	return GameSnapshot.new(
 		_state.simulation_tick,
@@ -433,14 +529,15 @@ func create_game_snapshot() -> GameSnapshot:
 		scenario_snapshot,
 		observation_snapshot,
 		sequence_snapshot,
-		campaign_snapshot
+		campaign_snapshot,
+		nutrition_snapshot
 	)
 
 
 func get_next_egg_tick() -> int:
 	if not is_ready():
 		return -1
-	if has_habitat():
+	if has_habitat() and not _is_lifecycle_active():
 		return -1
 	if (
 		_state.queen.laid_egg_count
@@ -493,6 +590,11 @@ func _has_valid_habitat_ownership(state: ColonyState) -> bool:
 	):
 		return false
 	if (
+		_nutrition_system != null
+		and not _nutrition_system.has_valid_state(state)
+	):
+		return false
+	if (
 		_scenario_director != null
 		and not _scenario_director.has_valid_state(state)
 	):
@@ -515,6 +617,11 @@ func _apply_pending_commands() -> void:
 			PendingCommandType.PLACE_SUGAR_ACTION:
 				if _foraging_system != null:
 					_foraging_system.apply_configured_sugar_placement(
+						_state
+					)
+			PendingCommandType.PLACE_PROTEIN_ACTION:
+				if _foraging_system != null:
+					_foraging_system.apply_configured_protein_placement(
 						_state
 					)
 			PendingCommandType.CONTINUE_OBSERVATION_ACTION:
@@ -620,6 +727,25 @@ func _supports_sugar_foraging() -> bool:
 	)
 
 
+func _supports_nutrition_growth() -> bool:
+	return (
+		is_ready()
+		and has_habitat()
+		and _habitat_config.is_nutrition_growth()
+		and _nutrition_system != null
+	)
+
+
+func _is_lifecycle_active() -> bool:
+	return (
+		is_ready()
+		and (
+			not has_habitat()
+			or _habitat_config.lifecycle_active
+		)
+	)
+
+
 func _should_assign_brood_relocation() -> bool:
 	if _is_humidity_relocation_scenario():
 		return true
@@ -632,11 +758,17 @@ func _should_assign_brood_relocation() -> bool:
 func _should_assign_foraging() -> bool:
 	if _is_sugar_foraging_scenario():
 		return _foraging_system != null
+	if _supports_nutrition_growth():
+		return _foraging_system != null
 	return (
 		_foraging_system != null
 		and _scenario_director != null
 		and _scenario_director.is_foraging_phase_active(_state)
 	)
+
+
+func _should_assign_brood_feeding() -> bool:
+	return _supports_nutrition_growth()
 
 
 func _should_update_humidity_observation() -> bool:
@@ -685,14 +817,43 @@ func _is_place_sugar_action_available() -> bool:
 			and not _scenario_director.is_foraging_phase_active(_state)
 		)
 		or _has_pending_command(PendingCommandType.PLACE_SUGAR_ACTION)
-		or _state.total_sugar_portions_placed > 0
-		or _state.unlocked_observation_card_ids.has(
-			_habitat_config.foraging_observation_card_id
+		or (
+			not _supports_nutrition_growth()
+			and (
+				_state.total_sugar_portions_placed > 0
+				or _state.unlocked_observation_card_ids.has(
+					_habitat_config.foraging_observation_card_id
+				)
+			)
+		)
+		or (
+			_supports_nutrition_growth()
+			and _foraging_system.has_available_source_type(
+				_state,
+				FoodSourceState.FoodType.SUGAR_WATER
+			)
 		)
 	):
 		return false
 	var placement_zone: HabitatZoneState = _state.get_zone(
 		_habitat_config.sugar_placement_zone_id
+	)
+	return placement_zone != null and placement_zone.available
+
+
+func _is_place_protein_action_available() -> bool:
+	if (
+		not _supports_nutrition_growth()
+		or _foraging_system == null
+		or _has_pending_command(PendingCommandType.PLACE_PROTEIN_ACTION)
+		or _foraging_system.has_available_source_type(
+			_state,
+			FoodSourceState.FoodType.PROTEIN
+		)
+	):
+		return false
+	var placement_zone: HabitatZoneState = _state.get_zone(
+		_habitat_config.protein_placement_zone_id
 	)
 	return placement_zone != null and placement_zone.available
 
@@ -831,6 +992,13 @@ func _is_brood_humidity_comfortable(humidity: float) -> bool:
 func _update_existing_ants() -> void:
 	for ant: AntModel in _state.ants:
 		ant.total_age_ticks += 1
+		if (
+			_supports_nutrition_growth()
+			and ant.life_stage == AntModel.LifeStage.LARVA
+		):
+			if ant.protein_supported_growth_ticks <= 0:
+				continue
+			ant.protein_supported_growth_ticks -= 1
 		ant.stage_age_ticks += 1
 		if ant.life_stage == AntModel.LifeStage.WORKER:
 			continue
@@ -843,6 +1011,19 @@ func _update_existing_ants() -> void:
 
 		var previous_stage: AntModel.LifeStage = ant.life_stage
 		ant.transition_to(_get_next_life_stage(previous_stage))
+		ant.protein_supported_growth_ticks = 0
+		if (
+			_supports_nutrition_growth()
+			and ant.life_stage == AntModel.LifeStage.WORKER
+		):
+			ant.configure_nutrition_worker(
+				(
+					ant.zone_id
+					if not ant.zone_id.is_empty()
+					else _habitat_config.nest_zone_id
+				),
+				_state.simulation_tick
+			)
 		life_stage_changed.emit(
 			ant.entity_id,
 			previous_stage,
@@ -856,7 +1037,14 @@ func _try_lay_egg() -> void:
 	if next_egg_tick < 0 or _state.simulation_tick < next_egg_tick:
 		return
 
-	var egg: AntModel = _state.create_egg()
+	var egg: AntModel
+	if _supports_nutrition_growth():
+		egg = _state.create_egg(
+			_habitat_config.nest_zone_id,
+			_state.simulation_tick
+		)
+	else:
+		egg = _state.create_egg()
 	egg_laid.emit(egg.entity_id, _state.simulation_tick)
 
 

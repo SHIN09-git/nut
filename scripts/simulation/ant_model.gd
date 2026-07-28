@@ -14,8 +14,10 @@ var total_age_ticks: int = 0
 var stage_age_ticks: int = 0
 var zone_id: StringName = &""
 var zone_entered_tick: int = 0
+var protein_supported_growth_ticks: int = 0
 var worker_task: WorkerTaskModel
 var foraging_task: ForagingTaskModel
+var feeding_task: BroodFeedingTaskModel
 
 
 func _init(
@@ -39,6 +41,7 @@ func configure_brood(
 	zone_entered_tick = new_zone_entered_tick
 	worker_task = null
 	foraging_task = null
+	feeding_task = null
 
 
 func configure_worker(
@@ -51,3 +54,13 @@ func configure_worker(
 	worker_task = WorkerTaskModel.new()
 	worker_task.next_decision_tick = next_decision_tick
 	foraging_task = ForagingTaskModel.new()
+	protein_supported_growth_ticks = 0
+
+
+func configure_nutrition_worker(
+	new_zone_id: StringName,
+	next_decision_tick: int
+) -> void:
+	configure_worker(new_zone_id, next_decision_tick)
+	feeding_task = BroodFeedingTaskModel.new()
+	feeding_task.next_decision_tick = next_decision_tick

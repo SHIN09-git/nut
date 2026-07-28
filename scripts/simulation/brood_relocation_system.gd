@@ -176,6 +176,11 @@ func assign_idle_workers(state: ColonyState) -> void:
 				and worker.foraging_task.state
 					!= ForagingTaskModel.State.IDLE
 			)
+			or (
+				worker.feeding_task != null
+				and worker.feeding_task.state
+					!= BroodFeedingTaskModel.State.IDLE
+			)
 			or state.simulation_tick < worker.worker_task.next_decision_tick
 		):
 			continue
@@ -224,6 +229,13 @@ func has_valid_ownership(state: ColonyState) -> bool:
 			return false
 
 		var task: WorkerTaskModel = ant.worker_task
+		if (
+			task.state != WorkerTaskModel.State.IDLE
+			and ant.feeding_task != null
+			and ant.feeding_task.state
+				!= BroodFeedingTaskModel.State.IDLE
+		):
+			return false
 		if task.state == WorkerTaskModel.State.IDLE:
 			if (
 				task.target_brood_id != -1

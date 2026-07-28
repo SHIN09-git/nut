@@ -18,6 +18,7 @@ var total_sugar_portions_placed: int = 0
 var unlocked_observation_card_ids: Dictionary[StringName, bool] = {}
 var scenario_progress: ScenarioProgressState
 var campaign_state: CampaignState
+var nutrition_state: ColonyNutritionState
 var _next_entity_id: int = 1
 var _next_observation_event_id: int = 1
 var _observation_events: Array[ObservationEvent] = []
@@ -27,9 +28,14 @@ func _init() -> void:
 	queen = QueenModel.new(QUEEN_ENTITY_ID)
 
 
-func create_egg() -> AntModel:
+func create_egg(
+	zone_id: StringName = &"",
+	zone_entered_tick: int = 0
+) -> AntModel:
 	var egg: AntModel = AntModel.new(_next_entity_id, AntModel.LifeStage.EGG)
 	_next_entity_id += 1
+	if not zone_id.is_empty():
+		egg.configure_brood(zone_id, zone_entered_tick)
 	ants.append(egg)
 	queen.laid_egg_count += 1
 	return egg
@@ -45,6 +51,14 @@ func initialize_habitat(
 
 	for zone: HabitatZoneState in config.zones:
 		zones.append(zone.duplicate_state())
+
+	if config.is_nutrition_growth():
+		if config.nutrition_config == null or not config.lifecycle_active:
+			return false
+		nutrition_state = ColonyNutritionState.new(
+			config.nutrition_config.initial_sugar_reserve_portions,
+			config.nutrition_config.initial_protein_reserve_portions
+		)
 
 	if config.is_combined_observation():
 		if (
@@ -82,10 +96,19 @@ func initialize_habitat(
 			AntModel.LifeStage.WORKER
 		)
 		_next_entity_id += 1
-		worker.configure_worker(
-			config.initial_worker_zone_id,
-			brood_care_config.decision_interval_ticks
-		)
+		if config.is_nutrition_growth():
+			worker.configure_nutrition_worker(
+				config.initial_worker_zone_id,
+				config.nutrition_config.feeding_decision_interval_ticks
+			)
+			worker.worker_task.next_decision_tick = (
+				brood_care_config.decision_interval_ticks
+			)
+		else:
+			worker.configure_worker(
+				config.initial_worker_zone_id,
+				brood_care_config.decision_interval_ticks
+			)
 		ants.append(worker)
 
 	for brood_index: int in config.initial_brood_count:

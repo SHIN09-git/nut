@@ -23,7 +23,10 @@
 - 第二次保存会保留上一个完整备份；主档损坏时“继续”可回退到备份，档案页也提供显式恢复。新游戏覆盖和删除档案均需二次确认。
 - 设置独立保存到 `user://settings.json`，包括主音量、1280×720／1920×1080、窗口／全屏、100%／125%／150% UI 缩放、简体中文／临时英文和减少动效；设置不进入权威游戏档案。
 - 完成后可立即重新开始；重开会清除旧命令、阶段、资源、观察卡、名称、选择、事件游标和视觉映射，并返回 Tick 0 准备门。
-- R4 把章节、证据、推论、提示和设施解锁写入权威档案；当前 schema 为 `r4.authority.v2`，并保留从 R2 两个旧 schema 的单向迁移、checksum、严格加载、临时文件提交与备份恢复语义。
+- R4 把章节、证据、推论、提示和设施解锁写入权威档案，并建立 `r4.authority.v2` 历史 schema。
+- R5 增加独立的营养成长模拟基线：糖类储备支持工蚁活动，短缺时确定性减速而非停摆；蛋白由工蚁搬回群落储备，再通过专用育幼任务支持幼虫阶段成长。该抽象不是现实饲养剂量建议。
+- 营养成长场景启用栖息地内完整生命周期、稳定实体 ID、糖／蛋白分别守恒和三类工蚁任务互斥；它目前由快照与自动测试验证，尚未接入默认玩家章节或设施 UI。
+- 当前存档 schema 为 `r5.authority.v3`；R4 状态、R2 两个旧 schema 和固定旧档夹具沿显式单向链迁移，营养配置与任务状态随会话冻结和恢复。
 - 旧的双室湿度切片、独立糖水切片和完整生命周期试管场景仍可单独启动，用于回归与调试。
 
 当前所有物种、湿度和行为参数都是 `prototype_pacing_fixture`，未经科学验证。影响当前连续体验的配置事实来源包括：
@@ -32,6 +35,8 @@
 - `data/habitats/combined_observation_slice.tres`
 - `data/habitats/combined_observation_sequence.tres`
 - `data/behaviors/sugar_foraging_prototype.tres`
+- `data/habitats/colony_growth_nutrition.tres`
+- `data/behaviors/nutrition_growth_prototype.tres`
 
 旧独立场景继续使用各自的 `.tres` 配置。测试从 Resource 计算节奏边界，不在生产代码或文档中复制生命周期 Tick。
 
@@ -88,7 +93,7 @@
 
 ## 测试
 
-`tests/test_runner.gd` 是唯一顶层入口，聚合固定时钟、生命周期、湿度搬运、糖水觅食、连续场景编排、章节手册、推论命令、设施解锁、结构化事件、版本化存档、档案与备份、独立设置、会话注释、快照隔离、View 映射、真实 UI 存取档路径、暂停菜单、减少动效和翻译资源测试：
+`tests/test_runner.gd` 是唯一顶层入口，先验证每个测试套件可实例化，再聚合固定时钟、生命周期、湿度搬运、糖水觅食、糖／蛋白守恒、育幼喂食、资源约束成长、连续场景编排、章节手册、推论命令、设施解锁、结构化事件、版本化存档、档案与备份、独立设置、会话注释、快照隔离、View 映射、真实 UI 存取档路径、暂停菜单、减少动效和翻译资源测试：
 
 ```powershell
 & '.\Godot_v4.7.1-stable_win64_console.exe' `
@@ -125,11 +130,11 @@ New-Item -ItemType Directory -Force -Path '.\builds\windows'
 - v0.2 计划要求的 7 名有效首次接触测试者数据尚未取得，因此外部理解度 Gate 没有通过。用户于 2026-07-28 明确决定豁免该前置条件并继续 M5；这不是测试结果，也不能作为外部可理解性证据。
 - 连续场景只受控推进一只晚期蛹；完整卵、幼虫、蛹、工蚁生命周期仍只在独立调试场景运行。
 - 工蚁名称、选择和个人行动记录仍是会话注释，不进入权威游戏档案；显示设置会独立跨程序保存。
-- 当前主档保存已实现的连续观察和两章演示手册。设施仅以稳定类型 ID 解锁并显示在手册中，尚不能摆放或产生权威环境效果；正式六章内容与营养成长仍未实现。
+- 当前默认主档保存连续观察和两章演示手册；R5 营养权威状态也已经可以独立存读，但尚未接入默认档案的玩家章节。设施仅以稳定类型 ID 解锁并显示在手册中，尚不能摆放或产生权威环境效果；正式六章内容仍未实现。
 - 尚无蛋白质、饥饿、能量、资源经济、多食物点、自由地图、设施建造、镜头跟随、Steam、正式素材、音频或第三方插件。
 
-v0.1 发布基线见 `docs/validation/v0.1_baseline_001.md`；M2 身份验证见 `docs/validation/worker_identity_001.md`；M3 糖水验证见 `docs/validation/sugar_foraging_001.md`；M4 连续体验验证见 `docs/validation/v0_2_combined_001.md`；R0-A 证据有效性修正见 `docs/validation/v0_2_m4_evidence_validity_001.md`；R0-B 冻结外测候选见 `docs/validation/v0_2_m4_evidence_candidate_001.md`；M5 演示候选见 `docs/validation/v0_2_m5_demo_candidate_001.md`；R1 规格锁定见 `docs/validation/v1_r1_production_spec_001.md`；R2 存档核心见 `docs/validation/v1_r2_save_core_001.md`；R3 档案与设置见 `docs/validation/v1_r3_profile_shell_001.md`；R4 章节与手册见 `docs/validation/v1_r4_campaign_journal_001.md`。
+v0.1 发布基线见 `docs/validation/v0.1_baseline_001.md`；M2 身份验证见 `docs/validation/worker_identity_001.md`；M3 糖水验证见 `docs/validation/sugar_foraging_001.md`；M4 连续体验验证见 `docs/validation/v0_2_combined_001.md`；R0-A 证据有效性修正见 `docs/validation/v0_2_m4_evidence_validity_001.md`；R0-B 冻结外测候选见 `docs/validation/v0_2_m4_evidence_candidate_001.md`；M5 演示候选见 `docs/validation/v0_2_m5_demo_candidate_001.md`；R1 规格锁定见 `docs/validation/v1_r1_production_spec_001.md`；R2 存档核心见 `docs/validation/v1_r2_save_core_001.md`；R3 档案与设置见 `docs/validation/v1_r3_profile_shell_001.md`；R4 章节与手册见 `docs/validation/v1_r4_campaign_journal_001.md`；R5 营养成长见 `docs/validation/v1_r5_nutrition_growth_001.md`。
 
-未来 3～4 小时完整独立游戏的章节、档案、设施、UI、音画、验证与发行路线见 `CODEX_V1_MASTER_PLAN.md`；R1 生产规格索引见 `docs/V1_PRODUCTION_SPEC_INDEX.md`，当前存档 schema 见 `docs/architecture/SAVE_SCHEMA_R4.md`，R2 历史基线见 `docs/architecture/SAVE_SCHEMA_R2.md`。这些计划不表示未来能力已经实现；当前可运行事实仍以本 README、`GDD.md` 和 `ARCHITECTURE.md` 为准。
+未来 3～4 小时完整独立游戏的章节、档案、设施、UI、音画、验证与发行路线见 `CODEX_V1_MASTER_PLAN.md`；R1 生产规格索引见 `docs/V1_PRODUCTION_SPEC_INDEX.md`，当前存档 schema 见 `docs/architecture/SAVE_SCHEMA_R5.md`，R4／R2 历史基线分别见 `docs/architecture/SAVE_SCHEMA_R4.md` 与 `docs/architecture/SAVE_SCHEMA_R2.md`。这些计划不表示未来能力已经实现；当前可运行事实仍以本 README、`GDD.md` 和 `ARCHITECTURE.md` 为准。
 
 开始修改前请阅读 `AGENTS.md`、`GDD.md` 和 `ARCHITECTURE.md`。`sucai/` 仅作内部观察参考，授权确认前不得作为发行素材。

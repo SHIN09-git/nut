@@ -3,6 +3,7 @@ extends RefCounted
 
 enum FoodType {
 	SUGAR_WATER,
+	PROTEIN,
 }
 
 var entity_id: int
