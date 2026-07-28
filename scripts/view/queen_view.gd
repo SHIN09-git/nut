@@ -11,6 +11,7 @@ var entity_id: int = -1
 var _base_position: Vector2 = Vector2.ZERO
 var _simulation_tick: int = 0
 var _visuals_paused: bool = false
+var _reduced_motion: bool = false
 
 
 func _ready() -> void:
@@ -38,6 +39,12 @@ func set_visuals_paused(value: bool) -> void:
 
 func are_visuals_paused() -> bool:
 	return _visuals_paused
+
+
+func set_reduced_motion(value: bool) -> void:
+	_reduced_motion = value
+	_update_idle_pose()
+	queue_redraw()
 
 
 func _draw() -> void:
@@ -75,6 +82,8 @@ func _update_idle_pose() -> void:
 
 
 func _get_idle_phase() -> float:
+	if _reduced_motion:
+		return 0.0
 	return (
 		float(_simulation_tick % IDLE_PERIOD_TICKS)
 		/ float(IDLE_PERIOD_TICKS)

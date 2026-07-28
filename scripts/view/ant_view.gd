@@ -16,6 +16,7 @@ var _transition_elapsed_seconds: float = TRANSITION_DURATION_SECONDS
 var _visuals_paused: bool = false
 var _slot_position: Vector2 = Vector2.ZERO
 var _selected: bool = false
+var _reduced_motion: bool = false
 
 
 func configure(snapshot: AntSnapshot, slot_position: Vector2) -> bool:
@@ -72,6 +73,12 @@ func are_visuals_paused() -> bool:
 	return _visuals_paused
 
 
+func set_reduced_motion(value: bool) -> void:
+	_reduced_motion = value
+	if _reduced_motion:
+		_finish_transition_animation()
+
+
 func get_entity_id() -> int:
 	return entity_id
 
@@ -89,7 +96,7 @@ func is_transition_active() -> bool:
 
 
 func _process(delta: float) -> void:
-	if _visuals_paused or not is_transition_active():
+	if _visuals_paused or _reduced_motion or not is_transition_active():
 		return
 
 	_transition_elapsed_seconds = minf(
@@ -123,9 +130,18 @@ func _draw() -> void:
 
 
 func _start_transition_animation() -> void:
+	if _reduced_motion:
+		_finish_transition_animation()
+		return
 	_transition_elapsed_seconds = 0.0
 	scale = Vector2.ONE * 0.72
 	modulate.a = 0.42
+
+
+func _finish_transition_animation() -> void:
+	_transition_elapsed_seconds = TRANSITION_DURATION_SECONDS
+	scale = Vector2.ONE
+	modulate.a = 1.0
 
 
 func _draw_egg() -> void:

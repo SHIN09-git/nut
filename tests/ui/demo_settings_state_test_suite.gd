@@ -9,6 +9,8 @@ func run() -> void:
 	_test_defaults_and_supported_values()
 	_test_selection_rejects_invalid_indices()
 	_test_locale_normalization_and_fullscreen_state()
+	_test_accessibility_and_volume_settings()
+	_test_dictionary_round_trip_and_validation()
 
 
 func get_assertion_count() -> int:
@@ -121,6 +123,88 @@ func _test_locale_normalization_and_fullscreen_state() -> void:
 	)
 
 
+func _test_accessibility_and_volume_settings() -> void:
+	var state: DemoSettingsState = DemoSettingsState.new()
+	_expect_float(
+		state.get_ui_scale_factor(),
+		1.0,
+		"default UI scale is 100 percent"
+	)
+	_expect_true(state.select_ui_scale(1), "125 percent UI scale is supported")
+	_expect_float(
+		state.get_ui_scale_factor(),
+		1.25,
+		"selected 125 percent UI scale is returned"
+	)
+	_expect_true(state.select_ui_scale(2), "150 percent UI scale is supported")
+	_expect_true(
+		not state.select_ui_scale(3),
+		"out-of-range UI scale is rejected"
+	)
+	state.set_reduced_motion(true)
+	_expect_true(state.is_reduced_motion(), "reduced motion can be enabled")
+	_expect_true(state.set_master_volume(0.35), "finite volume is accepted")
+	_expect_float(
+		state.get_master_volume(),
+		0.35,
+		"master volume stores a normalized value"
+	)
+	_expect_true(state.set_master_volume(2.0), "finite volume is clamped")
+	_expect_float(
+		state.get_master_volume(),
+		1.0,
+		"master volume clamps to one"
+	)
+	_expect_true(
+		not state.set_master_volume(NAN),
+		"NaN master volume is rejected"
+	)
+
+
+func _test_dictionary_round_trip_and_validation() -> void:
+	var state: DemoSettingsState = DemoSettingsState.new(
+		"en",
+		Vector2i(1920, 1080),
+		true,
+		1.5,
+		true,
+		0.45
+	)
+	var restored: DemoSettingsState = DemoSettingsState.from_dictionary(
+		state.to_dictionary()
+	)
+	_expect_true(restored != null, "valid settings dictionary restores")
+	if restored != null:
+		_expect_string(restored.get_locale_code(), "en", "locale restores")
+		_expect_vector2i(
+			restored.get_windowed_resolution(),
+			Vector2i(1920, 1080),
+			"resolution restores"
+		)
+		_expect_float(
+			restored.get_ui_scale_factor(),
+			1.5,
+			"UI scale restores"
+		)
+		_expect_true(
+			restored.is_reduced_motion(),
+			"reduced motion restores"
+		)
+		_expect_float(restored.get_master_volume(), 0.45, "volume restores")
+	var invalid: Dictionary = state.to_dictionary()
+	invalid["ui_scale_index"] = 99
+	_expect_true(
+		DemoSettingsState.from_dictionary(invalid) == null,
+		"unsupported UI scale in persisted settings is rejected"
+	)
+	invalid = state.to_dictionary()
+	invalid["master_volume"] = NAN
+	_expect_true(
+		DemoSettingsState.from_dictionary(invalid) == null,
+		"NaN persisted volume is rejected"
+	)
+
+
 func _expect_true(actual: bool, message: String) -> void:
 	_assertion_count += 1
 	if actual:
@@ -142,6 +226,13 @@ func _expect_vector2i(
 ) -> void:
 	_assertion_count += 1
 	if actual == expected:
+		return
+	_record_failure(message, str(expected), str(actual))
+
+
+func _expect_float(actual: float, expected: float, message: String) -> void:
+	_assertion_count += 1
+	if is_equal_approx(actual, expected):
 		return
 	_record_failure(message, str(expected), str(actual))
 

@@ -10,7 +10,7 @@ config_version=5
 [application]
 
 config/name="Colony Under Glass"
-run/main_scene="res://scenes/main/combined_observation.tscn"
+run/main_scene="res://scenes/app/game_shell.tscn"
 
 [display]
 

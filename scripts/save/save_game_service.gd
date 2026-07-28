@@ -224,6 +224,18 @@ func load_from_path(path: String) -> Dictionary:
 	return _failure("No valid save candidate: " + "; ".join(errors))
 
 
+func load_backup_from_path(path: String) -> Dictionary:
+	if not _is_safe_user_path(path):
+		return _failure("Save path must be a user:// file")
+	var absolute_path: String = ProjectSettings.globalize_path(path) + ".bak"
+	if not FileAccess.file_exists(absolute_path):
+		return _failure("No backup save was found")
+	var result: Dictionary = _load_absolute_path(absolute_path)
+	if result.get("ok", false):
+		result["recovered_from"] = "backup"
+	return result
+
+
 func seal_envelope(envelope: Dictionary) -> Dictionary:
 	var sealed: Dictionary = envelope.duplicate(true)
 	sealed["save_checksum"] = ""

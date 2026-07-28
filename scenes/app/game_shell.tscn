@@ -1,0 +1,412 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/app/game_shell_controller.gd" id="1_shell"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_panel"]
+bg_color = Color(0.055, 0.072, 0.066, 0.98)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.38, 0.34, 0.23, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+shadow_color = Color(0, 0, 0, 0.45)
+shadow_size = 12
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_button"]
+bg_color = Color(0.11, 0.14, 0.125, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.38, 0.34, 0.23, 0.8)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[node name="GameShell" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_shell")
+
+[node name="GameHost" type="Control" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="ShellOverlay" type="Control" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Background" type="ColorRect" parent="ShellOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.014, 0.023, 0.02, 1)
+
+[node name="Glow" type="ColorRect" parent="ShellOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.08, 0.075, 0.045, 0.22)
+
+[node name="Center" type="CenterContainer" parent="ShellOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="TitlePage" type="PanelContainer" parent="ShellOverlay/Center"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(640, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBox_panel")
+
+[node name="Margin" type="MarginContainer" parent="ShellOverlay/Center/TitlePage"]
+layout_mode = 2
+theme_override_constants/margin_left = 48
+theme_override_constants/margin_top = 26
+theme_override_constants/margin_right = 48
+theme_override_constants/margin_bottom = 26
+
+[node name="Content" type="VBoxContainer" parent="ShellOverlay/Center/TitlePage/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="TitleHeading" type="Label" parent="ShellOverlay/Center/TitlePage/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.84, 0.58, 1)
+theme_override_font_sizes/font_size = 36
+text = "Colony Under Glass"
+horizontal_alignment = 1
+
+[node name="TitleSubtitle" type="Label" parent="ShellOverlay/Center/TitlePage/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.74, 0.67, 1)
+theme_override_font_sizes/font_size = 17
+text = "Observe, infer, and shape the colony's environment."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="Spacer" type="Control" parent="ShellOverlay/Center/TitlePage/Margin/Content"]
+custom_minimum_size = Vector2(0, 4)
+layout_mode = 2
+
+[node name="NewGameButton" type="Button" parent="ShellOverlay/Center/TitlePage/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+theme_override_styles/normal = SubResource("StyleBox_button")
+text = "New Game"
+
+[node name="ContinueButton" type="Button" parent="ShellOverlay/Center/TitlePage/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+text = "Continue"
+
+[node name="ProfilesButton" type="Button" parent="ShellOverlay/Center/TitlePage/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+text = "Profiles"
+
+[node name="SettingsButton" type="Button" parent="ShellOverlay/Center/TitlePage/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+text = "Settings"
+
+[node name="ShellExitButton" type="Button" parent="ShellOverlay/Center/TitlePage/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 38)
+layout_mode = 2
+text = "Exit"
+
+[node name="ProfilesPage" type="PanelContainer" parent="ShellOverlay/Center"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(610, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBox_panel")
+
+[node name="Margin" type="MarginContainer" parent="ShellOverlay/Center/ProfilesPage"]
+layout_mode = 2
+theme_override_constants/margin_left = 40
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 24
+
+[node name="Content" type="VBoxContainer" parent="ShellOverlay/Center/ProfilesPage/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ProfileHeading" type="Label" parent="ShellOverlay/Center/ProfilesPage/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.84, 0.58, 1)
+theme_override_font_sizes/font_size = 30
+text = "Main Profile"
+
+[node name="ProfileSummaryPanel" type="PanelContainer" parent="ShellOverlay/Center/ProfilesPage/Margin/Content"]
+layout_mode = 2
+
+[node name="ProfileSummary" type="Label" parent="ShellOverlay/Center/ProfilesPage/Margin/Content/ProfileSummaryPanel"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 120)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.76, 0.79, 0.72, 1)
+theme_override_constants/outline_size = 4
+text = "No profile"
+vertical_alignment = 1
+text_overrun_behavior = 3
+
+[node name="ProfileContinueButton" type="Button" parent="ShellOverlay/Center/ProfilesPage/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+text = "Continue Profile"
+
+[node name="RestoreBackupButton" type="Button" parent="ShellOverlay/Center/ProfilesPage/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+text = "Restore Previous Backup"
+
+[node name="DeleteProfileButton" type="Button" parent="ShellOverlay/Center/ProfilesPage/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+text = "Delete Profile"
+
+[node name="ProfileBackButton" type="Button" parent="ShellOverlay/Center/ProfilesPage/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 38)
+layout_mode = 2
+text = "Back"
+
+[node name="SettingsPage" type="PanelContainer" parent="ShellOverlay/Center"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(630, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBox_panel")
+
+[node name="Margin" type="MarginContainer" parent="ShellOverlay/Center/SettingsPage"]
+layout_mode = 2
+theme_override_constants/margin_left = 40
+theme_override_constants/margin_top = 28
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 28
+
+[node name="Content" type="VBoxContainer" parent="ShellOverlay/Center/SettingsPage/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="SettingsHeading" type="Label" parent="ShellOverlay/Center/SettingsPage/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.84, 0.58, 1)
+theme_override_font_sizes/font_size = 30
+text = "Settings"
+
+[node name="VolumeRow" type="HBoxContainer" parent="ShellOverlay/Center/SettingsPage/Margin/Content"]
+layout_mode = 2
+
+[node name="ShellMasterVolumeLabel" type="Label" parent="ShellOverlay/Center/SettingsPage/Margin/Content/VolumeRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(220, 40)
+layout_mode = 2
+text = "Master Volume"
+vertical_alignment = 1
+
+[node name="ShellMasterVolumeSlider" type="HSlider" parent="ShellOverlay/Center/SettingsPage/Margin/Content/VolumeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 1.0
+step = 0.05
+value = 0.8
+
+[node name="ResolutionRow" type="HBoxContainer" parent="ShellOverlay/Center/SettingsPage/Margin/Content"]
+layout_mode = 2
+
+[node name="ShellResolutionLabel" type="Label" parent="ShellOverlay/Center/SettingsPage/Margin/Content/ResolutionRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(220, 40)
+layout_mode = 2
+text = "Window Resolution"
+vertical_alignment = 1
+
+[node name="ShellResolutionOption" type="OptionButton" parent="ShellOverlay/Center/SettingsPage/Margin/Content/ResolutionRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ShellFullscreenCheck" type="CheckButton" parent="ShellOverlay/Center/SettingsPage/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Fullscreen"
+
+[node name="ScaleRow" type="HBoxContainer" parent="ShellOverlay/Center/SettingsPage/Margin/Content"]
+layout_mode = 2
+
+[node name="ShellUIScaleLabel" type="Label" parent="ShellOverlay/Center/SettingsPage/Margin/Content/ScaleRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(220, 40)
+layout_mode = 2
+text = "UI Scale"
+vertical_alignment = 1
+
+[node name="ShellUIScaleOption" type="OptionButton" parent="ShellOverlay/Center/SettingsPage/Margin/Content/ScaleRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="LanguageRow" type="HBoxContainer" parent="ShellOverlay/Center/SettingsPage/Margin/Content"]
+layout_mode = 2
+
+[node name="ShellLanguageLabel" type="Label" parent="ShellOverlay/Center/SettingsPage/Margin/Content/LanguageRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(220, 40)
+layout_mode = 2
+text = "Language"
+vertical_alignment = 1
+
+[node name="ShellLanguageOption" type="OptionButton" parent="ShellOverlay/Center/SettingsPage/Margin/Content/LanguageRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ShellReducedMotionCheck" type="CheckButton" parent="ShellOverlay/Center/SettingsPage/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Reduce Motion"
+
+[node name="SettingsBackButton" type="Button" parent="ShellOverlay/Center/SettingsPage/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+text = "Save & Back"
+
+[node name="ShellStatusLabel" type="Label" parent="ShellOverlay"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 12
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 40.0
+offset_top = -58.0
+offset_right = -40.0
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_font_sizes/font_size = 16
+text = "Status"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ConfirmPanel" type="Control" parent="ShellOverlay"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Dim" type="ColorRect" parent="ShellOverlay/ConfirmPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.7)
+
+[node name="Center" type="CenterContainer" parent="ShellOverlay/ConfirmPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="ShellOverlay/ConfirmPanel/Center"]
+custom_minimum_size = Vector2(520, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBox_panel")
+
+[node name="Margin" type="MarginContainer" parent="ShellOverlay/ConfirmPanel/Center/Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 34
+theme_override_constants/margin_top = 28
+theme_override_constants/margin_right = 34
+theme_override_constants/margin_bottom = 28
+
+[node name="Content" type="VBoxContainer" parent="ShellOverlay/ConfirmPanel/Center/Panel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="ConfirmHeading" type="Label" parent="ShellOverlay/ConfirmPanel/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.97, 0.79, 0.56, 1)
+theme_override_font_sizes/font_size = 25
+text = "Confirm"
+
+[node name="ConfirmDescription" type="Label" parent="ShellOverlay/ConfirmPanel/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 72)
+layout_mode = 2
+text = "Description"
+autowrap_mode = 2
+
+[node name="Buttons" type="HBoxContainer" parent="ShellOverlay/ConfirmPanel/Center/Panel/Margin/Content"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="ConfirmCancelButton" type="Button" parent="ShellOverlay/ConfirmPanel/Center/Panel/Margin/Content/Buttons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Cancel"
+
+[node name="ConfirmAcceptButton" type="Button" parent="ShellOverlay/ConfirmPanel/Center/Panel/Margin/Content/Buttons"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Confirm"

@@ -4,9 +4,11 @@ extends RefCounted
 const TRANSLATION_CSV_PATH: String = "res://localization/v0_2.csv"
 const PLAYER_COPY_SOURCE_PATHS: PackedStringArray = [
 	"res://scripts/core/combined_observation_controller.gd",
+	"res://scripts/app/game_shell_controller.gd",
 	"res://scripts/view/worker_observation_panel.gd",
 	"res://scripts/view/combined_habitat_view.gd",
 	"res://scenes/main/combined_observation.tscn",
+	"res://scenes/app/game_shell.tscn",
 	"res://scenes/habitat/combined_habitat.tscn",
 ]
 

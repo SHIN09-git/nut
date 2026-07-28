@@ -86,6 +86,7 @@ var _sequence_phase: int = (
 var _visuals_paused: bool = false
 var _selected_worker_id: int = -1
 var _sugar_tool_armed: bool = false
+var _reduced_motion: bool = false
 
 @onready var _entity_layer: Node2D = %EntityLayer
 @onready var _queen_view: QueenView = %QueenView
@@ -98,6 +99,7 @@ var _sugar_tool_armed: bool = false
 func _ready() -> void:
 	_queen_view.z_index = 3
 	_queen_view.set_visuals_paused(_visuals_paused)
+	_queen_view.set_reduced_motion(_reduced_motion)
 	_refresh_localized_labels()
 	_layout_projection()
 	queue_redraw()
@@ -180,6 +182,7 @@ func apply_snapshot(snapshot: GameSnapshot) -> bool:
 				ant_view.queue_free()
 				return false
 			ant_view.set_visuals_paused(_visuals_paused)
+			ant_view.set_reduced_motion(_reduced_motion)
 			_ant_views[ant_snapshot.entity_id] = ant_view
 		elif not ant_view.apply_snapshot(ant_snapshot):
 			return false
@@ -252,6 +255,22 @@ func are_visuals_paused() -> bool:
 	return _visuals_paused
 
 
+func set_reduced_motion(value: bool) -> void:
+	_reduced_motion = value
+	if _queen_view != null:
+		_queen_view.set_reduced_motion(value)
+	for ant_view: AntView in _ant_views.values():
+		ant_view.set_reduced_motion(value)
+	if _reduced_motion and not _visuals_paused:
+		_interpolation_alpha = 1.0
+		_layout_projection()
+		queue_redraw()
+
+
+func is_reduced_motion() -> bool:
+	return _reduced_motion
+
+
 func get_interpolation_alpha() -> float:
 	return _interpolation_alpha
 
@@ -260,7 +279,9 @@ func set_interpolation_alpha(value: float) -> void:
 	if _visuals_paused:
 		return
 	_interpolation_alpha = (
-		clampf(value, 0.0, 1.0) if is_finite(value) else 0.0
+		1.0
+		if _reduced_motion
+		else (clampf(value, 0.0, 1.0) if is_finite(value) else 0.0)
 	)
 	_layout_projection()
 	queue_redraw()

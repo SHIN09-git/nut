@@ -2,6 +2,9 @@ class_name CombinedObservationController
 extends Control
 
 signal application_exit_requested
+signal save_profile_requested
+signal return_to_title_requested
+signal settings_changed(settings: DemoSettingsState)
 
 const SPECIES_A_DATA: SpeciesData = preload(
 	"res://data/species/species_a.tres"
@@ -27,6 +30,7 @@ var _preparation_gate_active: bool = true
 var _pause_menu_open: bool = false
 var _paused_before_menu: bool = true
 var _demo_settings_state: DemoSettingsState
+var _ui_scale_theme: Theme
 
 # Tests may replace these before _ready(). Both Resources are consumed only
 # while ColonySimulation freezes the configuration at session construction.
@@ -35,6 +39,8 @@ var habitat_scenario_data_source: HabitatScenarioData = (
 	COMBINED_SCENARIO_DATA
 )
 var exit_application_on_request: bool = true
+var provided_settings_state: DemoSettingsState
+var shell_managed: bool = false
 
 @onready var _title_label: Label = %Title
 @onready var _status_label: Label = %StatusLabel
@@ -72,12 +78,20 @@ var exit_application_on_request: bool = true
 @onready var _pause_heading: Label = %PauseHeading
 @onready var _resume_button: Button = %ResumeButton
 @onready var _pause_restart_button: Button = %PauseRestartButton
+@onready var _save_game_button: Button = %SaveGameButton
+@onready var _return_to_title_button: Button = %ReturnToTitleButton
+@onready var _pause_save_status: Label = %PauseSaveStatus
 @onready var _display_heading: Label = %DisplayHeading
 @onready var _resolution_label: Label = %ResolutionLabel
 @onready var _resolution_option: OptionButton = %ResolutionOption
 @onready var _fullscreen_check: CheckButton = %FullscreenCheck
 @onready var _language_label: Label = %LanguageLabel
 @onready var _language_option: OptionButton = %LanguageOption
+@onready var _ui_scale_label: Label = %UIScaleLabel
+@onready var _ui_scale_option: OptionButton = %UIScaleOption
+@onready var _reduced_motion_check: CheckButton = %ReducedMotionCheck
+@onready var _master_volume_label: Label = %MasterVolumeLabel
+@onready var _master_volume_slider: HSlider = %MasterVolumeSlider
 @onready var _exit_button: Button = %ExitButton
 
 
@@ -95,7 +109,7 @@ func _ready() -> void:
 		)
 		return
 
-	_simulation_clock.tick_requested.connect(_on_simulation_tick_requested)
+	_connect_clock()
 	_habitat_view.worker_selection_requested.connect(
 		_on_worker_selection_requested
 	)
@@ -113,11 +127,18 @@ func _ready() -> void:
 	_pause_restart_button.pressed.connect(
 		_on_pause_restart_button_pressed
 	)
+	_save_game_button.pressed.connect(_on_save_game_button_pressed)
+	_return_to_title_button.pressed.connect(
+		_on_return_to_title_button_pressed
+	)
 	_resolution_option.item_selected.connect(
 		_on_resolution_selected
 	)
 	_fullscreen_check.toggled.connect(_on_fullscreen_toggled)
 	_language_option.item_selected.connect(_on_language_selected)
+	_ui_scale_option.item_selected.connect(_on_ui_scale_selected)
+	_reduced_motion_check.toggled.connect(_on_reduced_motion_toggled)
+	_master_volume_slider.value_changed.connect(_on_master_volume_changed)
 	_exit_button.pressed.connect(_on_exit_button_pressed)
 	_stage_action_button.pressed.connect(_on_stage_action_button_pressed)
 	_restart_button.pressed.connect(_on_restart_button_pressed)
@@ -135,6 +156,7 @@ func _ready() -> void:
 	)
 
 	_refresh_localized_ui()
+	_exit_button.visible = not shell_managed
 	_simulation_clock.set_paused(true)
 	_apply_game_snapshot()
 	_enter_preparation_gate()
@@ -200,16 +222,36 @@ func _on_pause_restart_button_pressed() -> void:
 	_restart_session()
 
 
+func _on_save_game_button_pressed() -> void:
+	if (
+		_preparation_gate_active
+		or not _fatal_simulation_error.is_empty()
+		or _simulation_clock == null
+	):
+		return
+	save_profile_requested.emit()
+
+
+func _on_return_to_title_button_pressed() -> void:
+	if _simulation_clock == null:
+		return
+	_simulation_clock.set_paused(true)
+	_habitat_view.set_visuals_paused(true)
+	return_to_title_requested.emit()
+
+
 func _on_resolution_selected(index: int) -> void:
 	if not _demo_settings_state.select_resolution(index):
 		return
 	if not _demo_settings_state.is_fullscreen_requested():
 		_apply_windowed_resolution()
+	_emit_settings_changed()
 
 
 func _on_fullscreen_toggled(enabled: bool) -> void:
 	_demo_settings_state.set_fullscreen_requested(enabled)
 	_apply_fullscreen_mode()
+	_emit_settings_changed()
 
 
 func _on_language_selected(index: int) -> void:
@@ -217,6 +259,27 @@ func _on_language_selected(index: int) -> void:
 		return
 	TranslationServer.set_locale(_demo_settings_state.get_locale_code())
 	_refresh_localized_ui()
+	_emit_settings_changed()
+
+
+func _on_ui_scale_selected(index: int) -> void:
+	if not _demo_settings_state.select_ui_scale(index):
+		return
+	_apply_ui_scale()
+	_emit_settings_changed()
+
+
+func _on_reduced_motion_toggled(enabled: bool) -> void:
+	_demo_settings_state.set_reduced_motion(enabled)
+	_apply_reduced_motion()
+	_emit_settings_changed()
+
+
+func _on_master_volume_changed(value: float) -> void:
+	if not _demo_settings_state.set_master_volume(value):
+		return
+	_apply_master_volume()
+	_emit_settings_changed()
 
 
 func _on_exit_button_pressed() -> void:
@@ -552,6 +615,7 @@ func _update_control_state() -> void:
 			_pause_button,
 			_stage_action_button,
 			_restart_button,
+			_save_game_button,
 			_speed_1x_button,
 			_speed_4x_button,
 			_speed_16x_button,
@@ -574,6 +638,7 @@ func _update_control_state() -> void:
 		for gated_button: Button in [
 			_stage_action_button,
 			_restart_button,
+			_save_game_button,
 			_speed_1x_button,
 			_speed_4x_button,
 			_speed_16x_button,
@@ -581,6 +646,7 @@ func _update_control_state() -> void:
 			gated_button.disabled = true
 		_pause_button.disabled = _pause_menu_open
 		_pause_restart_button.disabled = true
+		_return_to_title_button.disabled = false
 		_start_observation_button.disabled = _pause_menu_open
 		return
 	_set_copy(
@@ -599,6 +665,8 @@ func _update_control_state() -> void:
 	_pause_button.text = tr("UI_MENU")
 	_pause_button.disabled = _pause_menu_open
 	_pause_restart_button.disabled = false
+	_save_game_button.disabled = false
+	_return_to_title_button.disabled = false
 	_speed_1x_button.disabled = (
 		_pause_menu_open
 		or speed_multiplier == SimulationClock.NORMAL_SPEED
@@ -669,11 +737,13 @@ func _initialize_demo_settings() -> void:
 			DisplayServer.WINDOW_MODE_FULLSCREEN,
 			DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN,
 		]
-	_demo_settings_state = DemoSettingsState.new(
-		TranslationServer.get_locale(),
-		initial_window_size,
-		initial_fullscreen
-	)
+	_demo_settings_state = provided_settings_state
+	if _demo_settings_state == null:
+		_demo_settings_state = DemoSettingsState.new(
+			TranslationServer.get_locale(),
+			initial_window_size,
+			initial_fullscreen
+		)
 	TranslationServer.set_locale(_demo_settings_state.get_locale_code())
 	_resolution_option.clear()
 	_resolution_option.add_item("1280 × 720")
@@ -683,7 +753,20 @@ func _initialize_demo_settings() -> void:
 	_language_option.add_item("")
 	_language_option.add_item("")
 	_language_option.select(_demo_settings_state.get_locale_index())
-	_fullscreen_check.set_pressed_no_signal(initial_fullscreen)
+	_ui_scale_option.clear()
+	for scale_factor: float in DemoSettingsState.UI_SCALE_FACTORS:
+		_ui_scale_option.add_item("%d%%" % int(scale_factor * 100.0))
+	_ui_scale_option.select(_demo_settings_state.get_ui_scale_index())
+	_fullscreen_check.set_pressed_no_signal(
+		_demo_settings_state.is_fullscreen_requested()
+	)
+	_reduced_motion_check.set_pressed_no_signal(
+		_demo_settings_state.is_reduced_motion()
+	)
+	_master_volume_slider.set_value_no_signal(
+		_demo_settings_state.get_master_volume()
+	)
+	_apply_all_settings()
 
 
 func _refresh_localized_ui() -> void:
@@ -699,11 +782,16 @@ func _refresh_localized_ui() -> void:
 	_start_observation_button.text = tr("UI_START_OBSERVATION")
 	_pause_heading.text = tr("UI_PAUSE_HEADING")
 	_resume_button.text = tr("UI_RESUME")
-	_pause_restart_button.text = tr("UI_RESTART")
+	_pause_restart_button.text = tr("UI_RESTART_CHAPTER")
+	_save_game_button.text = tr("UI_SAVE_GAME")
+	_return_to_title_button.text = tr("UI_SAVE_RETURN_TITLE")
 	_display_heading.text = tr("UI_DISPLAY_HEADING")
 	_resolution_label.text = tr("UI_RESOLUTION")
 	_fullscreen_check.text = tr("UI_FULLSCREEN")
 	_language_label.text = tr("UI_LANGUAGE")
+	_ui_scale_label.text = tr("UI_SCALE")
+	_reduced_motion_check.text = tr("UI_REDUCED_MOTION")
+	_master_volume_label.text = tr("UI_MASTER_VOLUME")
 	_exit_button.text = tr("UI_EXIT")
 	if _resolution_option.item_count >= 2:
 		_resolution_option.set_item_text(0, tr("UI_RESOLUTION_1280"))
@@ -720,6 +808,68 @@ func _refresh_localized_ui() -> void:
 		_update_control_state()
 
 
+func _apply_all_settings() -> void:
+	TranslationServer.set_locale(_demo_settings_state.get_locale_code())
+	_apply_fullscreen_mode()
+	_apply_ui_scale()
+	_apply_reduced_motion()
+	_apply_master_volume()
+
+
+func _apply_ui_scale() -> void:
+	var window: Window = get_window()
+	if window != null:
+		window.content_scale_factor = 1.0
+	var scale_factor: float = _demo_settings_state.get_ui_scale_factor()
+	if _ui_scale_theme == null:
+		_ui_scale_theme = Theme.new()
+		theme = _ui_scale_theme
+	_ui_scale_theme.default_base_scale = scale_factor
+	_ui_scale_theme.default_font_size = int(round(16.0 * scale_factor))
+	_apply_explicit_font_scale(self, scale_factor)
+
+
+func _apply_explicit_font_scale(node: Node, scale_factor: float) -> void:
+	if node is Control:
+		var control: Control = node as Control
+		if control.has_theme_font_size_override(&"font_size"):
+			if not control.has_meta(&"ui_scale_base_font_size"):
+				control.set_meta(
+					&"ui_scale_base_font_size",
+					control.get_theme_font_size(&"font_size")
+				)
+			control.add_theme_font_size_override(
+				&"font_size",
+				int(round(
+					float(control.get_meta(&"ui_scale_base_font_size"))
+					* scale_factor
+				))
+			)
+	for child: Node in node.get_children():
+		_apply_explicit_font_scale(child, scale_factor)
+
+
+func _apply_reduced_motion() -> void:
+	if _habitat_view != null:
+		_habitat_view.set_reduced_motion(
+			_demo_settings_state.is_reduced_motion()
+		)
+
+
+func _apply_master_volume() -> void:
+	var bus_index: int = AudioServer.get_bus_index(&"Master")
+	if bus_index < 0:
+		return
+	var volume: float = _demo_settings_state.get_master_volume()
+	AudioServer.set_bus_mute(bus_index, volume <= 0.0001)
+	if volume > 0.0001:
+		AudioServer.set_bus_volume_db(bus_index, linear_to_db(volume))
+
+
+func _emit_settings_changed() -> void:
+	settings_changed.emit(_demo_settings_state)
+
+
 func _open_pause_menu() -> void:
 	if _pause_menu_open or _simulation_clock == null:
 		return
@@ -728,6 +878,7 @@ func _open_pause_menu() -> void:
 	_paused_before_menu = _simulation_clock.is_paused()
 	_pause_menu_open = true
 	_pause_menu.visible = true
+	_pause_save_status.visible = false
 	_simulation_clock.set_paused(true)
 	_habitat_view.set_visuals_paused(true)
 	_update_control_state()
@@ -1002,6 +1153,155 @@ func is_fullscreen_requested() -> bool:
 
 func get_selected_locale() -> String:
 	return _demo_settings_state.get_locale_code()
+
+
+func get_ui_scale_factor() -> float:
+	return _demo_settings_state.get_ui_scale_factor()
+
+
+func is_reduced_motion_requested() -> bool:
+	return _demo_settings_state.is_reduced_motion()
+
+
+func get_master_volume() -> float:
+	return _demo_settings_state.get_master_volume()
+
+
+func create_profile_envelope(saved_at_utc: String = "") -> Dictionary:
+	if (
+		_preparation_gate_active
+		or not _fatal_simulation_error.is_empty()
+		or _colony_simulation == null
+		or _simulation_clock == null
+	):
+		return {}
+	return SaveGameService.new().create_envelope(
+		_colony_simulation,
+		_simulation_clock,
+		ProfileStore.MAIN_SLOT_ID,
+		saved_at_utc
+	)
+
+
+func start_new_profile() -> bool:
+	var simulation: ColonySimulation = ColonySimulation.new(
+		species_data_source,
+		habitat_scenario_data_source
+	)
+	if not simulation.is_ready():
+		return false
+	_disconnect_clock()
+	_colony_simulation = simulation
+	_simulation_clock = SimulationClock.new()
+	_connect_clock()
+	_reset_session_projection()
+	_apply_game_snapshot()
+	_enter_preparation_gate()
+	return _fatal_simulation_error.is_empty()
+
+
+func restore_loaded_session(
+	simulation: ColonySimulation,
+	clock: SimulationClock
+) -> bool:
+	if (
+		simulation == null
+		or clock == null
+		or not simulation.is_ready()
+		or simulation.create_snapshot().simulation_tick != clock.get_tick_index()
+	):
+		return false
+	_disconnect_clock()
+	_colony_simulation = simulation
+	_simulation_clock = clock
+	_connect_clock()
+	_reset_session_projection()
+	_preparation_gate_active = false
+	_preparation_gate.visible = false
+	_start_observation_button.disabled = true
+	_apply_game_snapshot()
+	if not _fatal_simulation_error.is_empty():
+		return false
+	var restored_paused: bool = _simulation_clock.is_paused()
+	_habitat_view.set_visuals_paused(restored_paused)
+	if restored_paused:
+		_paused_before_menu = true
+		_pause_menu_open = true
+		_pause_menu.visible = true
+		_resume_button.grab_focus()
+	else:
+		_pause_menu_open = false
+		_pause_menu.visible = false
+	_update_control_state()
+	_update_debug_panel()
+	return true
+
+
+func apply_external_settings(settings: DemoSettingsState) -> void:
+	if settings == null:
+		return
+	_demo_settings_state = settings
+	provided_settings_state = settings
+	_initialize_demo_settings()
+	_refresh_localized_ui()
+
+
+func report_profile_save_result(success: bool) -> void:
+	_pause_save_status.text = (
+		tr("PROFILE_SAVE_SUCCESS")
+		if success
+		else tr("PROFILE_SAVE_FAILURE")
+	)
+	_pause_save_status.modulate = (
+		Color(0.68, 0.9, 0.72)
+		if success
+		else Color(1.0, 0.62, 0.52)
+	)
+	_pause_save_status.visible = true
+	_set_copy(
+		_feedback_label,
+		tr("PROFILE_SAVE_SUCCESS")
+		if success
+		else tr("PROFILE_SAVE_FAILURE"),
+		COPY_ROLE_SYSTEM_STATUS if success else COPY_ROLE_ERROR
+	)
+
+
+func _connect_clock() -> void:
+	if (
+		_simulation_clock != null
+		and not _simulation_clock.tick_requested.is_connected(
+			_on_simulation_tick_requested
+		)
+	):
+		_simulation_clock.tick_requested.connect(
+			_on_simulation_tick_requested
+		)
+
+
+func _disconnect_clock() -> void:
+	if (
+		_simulation_clock != null
+		and _simulation_clock.tick_requested.is_connected(
+			_on_simulation_tick_requested
+		)
+	):
+		_simulation_clock.tick_requested.disconnect(
+			_on_simulation_tick_requested
+		)
+
+
+func _reset_session_projection() -> void:
+	_fatal_simulation_error = ""
+	_latest_snapshot = null
+	_player_annotation_state.reset_session()
+	_pause_menu_open = false
+	_pause_menu.visible = false
+	_set_sugar_tool_armed(false)
+	_debug_panel.visible = false
+	_debug_label.text = tr("UI_DEBUG_WAITING")
+	_worker_observation_panel.reset_panel()
+	_habitat_view.reset_projection()
 
 
 func _debug_controls_available() -> bool:

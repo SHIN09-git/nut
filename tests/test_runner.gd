@@ -24,11 +24,17 @@ const ObservationEventTestSuiteScript: Script = preload(
 const SaveCoreTestSuiteScript: Script = preload(
 	"res://tests/save/save_core_test_suite.gd"
 )
+const ProfileStoreTestSuiteScript: Script = preload(
+	"res://tests/save/profile_store_test_suite.gd"
+)
 const PlayerAnnotationStateTestSuiteScript: Script = preload(
 	"res://tests/session/player_annotation_state_test_suite.gd"
 )
 const DemoSettingsStateTestSuiteScript: Script = preload(
 	"res://tests/ui/demo_settings_state_test_suite.gd"
+)
+const SettingsStoreTestSuiteScript: Script = preload(
+	"res://tests/ui/settings_store_test_suite.gd"
 )
 const DemoLocalizationTestSuiteScript: Script = preload(
 	"res://tests/ui/demo_localization_test_suite.gd"
@@ -38,6 +44,9 @@ const ViewAdapterTestSuiteScript: Script = preload(
 )
 const HabitatViewInterpolationTestSuiteScript: Script = preload(
 	"res://tests/view/habitat_view_interpolation_test_suite.gd"
+)
+const ReducedMotionTestSuiteScript: Script = preload(
+	"res://tests/view/reduced_motion_test_suite.gd"
 )
 const WorkerObservationPanelTestSuiteScript: Script = preload(
 	"res://tests/view/worker_observation_panel_test_suite.gd"
@@ -60,6 +69,9 @@ const CombinedObservationSceneTestSuiteScript: Script = preload(
 const DemoShellSceneTestSuiteScript: Script = preload(
 	"res://tests/scenes/demo_shell_scene_test_suite.gd"
 )
+const GameShellSceneTestSuiteScript: Script = preload(
+	"res://tests/scenes/game_shell_scene_test_suite.gd"
+)
 
 var _assertion_count: int = 0
 var _failure_count: int = 0
@@ -79,11 +91,14 @@ func _run_all_tests() -> void:
 	_run_combined_observation_test_suite()
 	_run_observation_event_test_suite()
 	_run_save_core_test_suite()
+	_run_profile_store_test_suite()
 	_run_player_annotation_state_test_suite()
 	_run_demo_settings_state_test_suite()
+	_run_settings_store_test_suite()
 	_run_demo_localization_test_suite()
 	_run_view_adapter_test_suite()
 	_run_habitat_view_interpolation_test_suite()
+	_run_reduced_motion_test_suite()
 	_run_worker_observation_panel_test_suite()
 	_run_lifecycle_debug_scene_test_suite()
 	_run_humidity_main_scene_test_suite()
@@ -91,6 +106,7 @@ func _run_all_tests() -> void:
 	_run_sugar_foraging_scene_test_suite()
 	_run_combined_observation_scene_test_suite()
 	_run_demo_shell_scene_test_suite()
+	_run_game_shell_scene_test_suite()
 
 	if _failure_count == 0:
 		print("PASS: %d project assertions" % _assertion_count)
@@ -158,6 +174,12 @@ func _run_save_core_test_suite() -> void:
 	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
 
 
+func _run_profile_store_test_suite() -> void:
+	var suite: ProfileStoreTestSuite = ProfileStoreTestSuiteScript.new()
+	suite.run()
+	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
+
+
 func _run_player_annotation_state_test_suite() -> void:
 	var suite: PlayerAnnotationStateTestSuite = (
 		PlayerAnnotationStateTestSuiteScript.new()
@@ -170,6 +192,12 @@ func _run_demo_settings_state_test_suite() -> void:
 	var suite: DemoSettingsStateTestSuite = (
 		DemoSettingsStateTestSuiteScript.new()
 	)
+	suite.run()
+	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
+
+
+func _run_settings_store_test_suite() -> void:
+	var suite: SettingsStoreTestSuite = SettingsStoreTestSuiteScript.new()
 	suite.run()
 	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
 
@@ -190,6 +218,12 @@ func _run_habitat_view_interpolation_test_suite() -> void:
 	var suite: HabitatViewInterpolationTestSuite = (
 		HabitatViewInterpolationTestSuiteScript.new()
 	)
+	suite.run(root)
+	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
+
+
+func _run_reduced_motion_test_suite() -> void:
+	var suite: ReducedMotionTestSuite = ReducedMotionTestSuiteScript.new()
 	suite.run(root)
 	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
 
@@ -242,6 +276,12 @@ func _run_combined_observation_scene_test_suite() -> void:
 
 func _run_demo_shell_scene_test_suite() -> void:
 	var suite: DemoShellSceneTestSuite = DemoShellSceneTestSuiteScript.new()
+	suite.run(root)
+	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
+
+
+func _run_game_shell_scene_test_suite() -> void:
+	var suite: GameShellSceneTestSuite = GameShellSceneTestSuiteScript.new()
 	suite.run(root)
 	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
 

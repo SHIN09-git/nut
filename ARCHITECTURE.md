@@ -1,8 +1,8 @@
 # 《玻璃蚁国》技术架构
 
-> 文档版本：1.2｜更新日期：2026-07-28
+> 文档版本：1.3｜更新日期：2026-07-28
 >
-> 本文描述当前 v0.2 Demo 候选的连续组合观察、应用外壳、R2 版本化存档核心，以及仍保留的生命周期、湿度搬运和糖水觅食独立调试／验证路径。
+> 本文描述当前 v0.2 连续组合观察、R2 版本化存档核心、R3 档案与设置外壳，以及仍保留的独立调试／验证路径。
 
 ## 1. 固定技术决定
 
@@ -16,8 +16,8 @@
 | 配置 | 强类型 Resource，启动时验证并复制 |
 | 随机性 | 当前切片不使用随机性 |
 | 显示 | Godot 内置节点和程序化占位图形 |
-| 应用外壳 | 暂停菜单、两档窗口分辨率、窗口／全屏、简体中文／临时英文 |
-| 存档核心 | 规范化 JSON、版本／清单／checksum 校验、冻结配置、备份恢复和单向迁移；尚未接入玩家 UI |
+| 应用外壳 | 标题／档案／设置／确认页、暂停菜单、键盘焦点、三档 UI 缩放和减少动效 |
+| 存档核心 | 规范化 JSON、版本／清单／checksum 校验、冻结配置、主档／备份恢复和单向迁移；已接入玩家 UI |
 | 测试 | 项目自建 headless runner，无第三方插件 |
 
 ## 2. 数据流与命令边界
@@ -361,7 +361,11 @@ IDLE
 
 `SimulationStateCodec` 负责纯状态编码、从冻结值重建临时强类型 Resource、重建新的 `ColonyState`，以及运行稳定 ID、有限数值、区域图、任务进度、守恒、单一所有权和组合阶段不变量。加载不读取当前 `.tres`，不保存快照、View、Tween、会话名称或显示设置。只有 Envelope、配置哈希、迁移和全部不变量成功后才返回新会话。
 
-磁盘写入只允许 `user://`：先在同目录写临时文件并完整回读验证，再把有效旧主档轮换为备份，最后提升新主档。读取按主档、备份、临时文件顺序寻找第一个完整候选。R2 有故障注入和恢复测试，但没有档案或保存按钮；玩家外壳属于 R3。
+磁盘写入只允许 `user://`：先在同目录写临时文件并完整回读验证，再把有效旧主档轮换为备份，最后提升新主档。读取按主档、备份、临时文件顺序寻找第一个完整候选。`ProfileStore` 固定管理一个主档案，把保存 Envelope、摘要、显式备份恢复和确认后的完整删除暴露给 `GameShellController`；它不取得模拟内部引用。
+
+`GameShellController` 只在开始／继续时创建 `CombinedObservationController`。继续流程先在隔离对象中完成校验与重建，再用恢复的 `ColonySimulation + SimulationClock` 替换新场景的空会话；失败不会改变当前档案或暴露半恢复状态。暂停菜单只向外壳请求保存，Envelope 仍由控制器在合法 Tick 边界创建。
+
+`SettingsStore` 使用独立的 `user://settings.json`，只保存显示、音量、语言、UI 缩放和减少动效；它不进入 SaveEnvelope，不参与模拟 checksum，也不随档案删除。
 
 精确 schema、迁移和恢复顺序见 `docs/architecture/SAVE_SCHEMA_R2.md`。
 
@@ -376,13 +380,14 @@ IDLE
 - 首工从蛹转换为工蚁时沿用相同实体 ID，因此对已有 `AntView` 应用新阶段快照，不替换节点。
 - 根据 `WorkerTaskSnapshot`、`ForagingTaskSnapshot`、逻辑路线和阶段进度计算蚂蚁位置；不使用与模拟脱节的 Tween。
 - 相邻 Tick 间使用同一个 `SimulationClock` 的插值系数，暂停时冻结；同 Tick 快照只更新状态，不轮换插值端点。
+- 减少动效启用时，蚁后待机摆动和 AntView 阶段脉冲停止，位置直接投影当前快照端点；模拟 Tick 和任务结果不变。
 - 重复快照不创建重复节点；重开时 `reset_projection()` 清除旧端点、实体映射和临时糖水投影。
 
 `CombinedObservationController` 从 `ScenarioSequenceSnapshot` 投影五阶段标题、阶段按钮、三张观察卡和总结面板；从 `ColonySnapshot`、`ForagingScenarioSnapshot` 与 `ObservationJournalSnapshot` 投影对应的环境、工具和事件状态。UI 只组合快照，不能直接推进阶段或修改群落状态。
 
 玩家可见文本通过 `localization/v0_2.csv` 导入简体中文与临时英文翻译资源。阶段说明、反馈和观察卡仍携带小型 `evidence_copy_role` 元数据：`observation_cue`、`action_affordance`、`neutral_placeholder`、`post_event_conclusion`、`system_status` 或 `error`。翻译只改变表现文字，不改变角色或权威状态；锁定卡只能使用中性占位，事件完成后才能切换为结论角色。场景测试检查键、角色和节点状态，不绑定完整中文句子。这是当前场景的应用文案边界，不是通用内容框架。
 
-暂停菜单属于同一场景的应用层遮罩，提供继续、重新开始、退出、两档窗口分辨率、窗口／全屏和语言切换。显示模式只经 `DisplayServer` 应用，翻译只经 `TranslationServer` 刷新 UI；两者都没有模拟引用。当前没有设置持久化。
+`scenes/app/game_shell.tscn` 是默认应用入口，提供标题、主档摘要、备份恢复、删除确认和设置页。暂停菜单属于游戏场景的应用层遮罩，提供继续、保存、重开当前短章、返回标题和同一组设置。显示模式只经 `DisplayServer`，音量只经 `AudioServer`，翻译只经 `TranslationServer`，UI 缩放只经 `Window.content_scale_factor` 应用；这些路径都没有模拟引用。
 
 ### 独立湿度显示层
 
@@ -441,7 +446,7 @@ ColonyViewAdapter
 - `scenes/main/main.tscn` 使用 `MainController + HabitatView`，独立验证双室湿度搬运和身份观察。
 - `scenes/foraging/sugar_foraging.tscn` 使用 `SugarForagingController + SugarForagingHabitatView`，独立验证三区域糖水觅食。
 
-这些场景各自创建独立会话，不使用五阶段 `ScenarioDirector`，用于保留原有回归与人工验证能力。默认 `project.godot` 主场景是 `scenes/main/combined_observation.tscn`。
+这些场景各自创建独立会话，不使用五阶段 `ScenarioDirector`，用于保留原有回归与人工验证能力。默认 `project.godot` 主场景是 `scenes/app/game_shell.tscn`；连续组合场景由外壳按需实例化。
 
 ## 13. 测试结构
 
@@ -455,9 +460,11 @@ ColonyViewAdapter
 - `tests/simulation/combined_observation_test_suite.gd`
 - `tests/simulation/observation_event_test_suite.gd`
 - `tests/save/save_core_test_suite.gd`
+- `tests/save/profile_store_test_suite.gd`
 - `tests/session/player_annotation_state_test_suite.gd`
 - `tests/view/view_adapter_test_suite.gd`
 - `tests/view/habitat_view_interpolation_test_suite.gd`
+- `tests/view/reduced_motion_test_suite.gd`
 - `tests/view/worker_observation_panel_test_suite.gd`
 - `tests/scenes/lifecycle_debug_scene_test_suite.gd`
 - `tests/scenes/humidity_main_scene_test_suite.gd`
@@ -465,10 +472,12 @@ ColonyViewAdapter
 - `tests/scenes/sugar_foraging_scene_test_suite.gd`
 - `tests/scenes/combined_observation_scene_test_suite.gd`
 - `tests/scenes/demo_shell_scene_test_suite.gd`
+- `tests/scenes/game_shell_scene_test_suite.gd`
 - `tests/ui/demo_settings_state_test_suite.gd`
+- `tests/ui/settings_store_test_suite.gd`
 - `tests/ui/demo_localization_test_suite.gd`
 
-生命周期边界从 Resource 计算。湿度套件覆盖原有命令、搬运、所有权、节奏和 soak；黄金套件锁定 `BroodRelocationSystem` 拆分前后等价。糖水套件覆盖下一 Tick 命令、冻结配置、稳定选择、全部状态边界、软失效与返程恢复、份数守恒、快照隔离、三档速度、事件和 10,000 Tick soak。组合模拟套件覆盖五阶段顺序、稳定首工 ID、阶段门控、三类命令、冻结配置、精确线性拓扑、湿度闭环可完成性、快照隔离、重开和组合不变量；存档套件覆盖任务中途／生命周期／暂停／三档速度／待处理命令往返、冻结配置、checksum、内容清单、未知版本、非法值、旧 schema 迁移、原子提交、备份恢复、故障注入、隔离和载入后 10,000 Tick soak。组合场景套件覆盖真实阶段按钮、快照卡片 ID、糖水落点、总结与 View 节点复用。应用外壳套件覆盖暂停冻结／恢复、重开、明确退出信号、分辨率、全屏、即时语言和两档布局；翻译套件检查键唯一性、双语非空、资源加载和主要玩家场景不残留嵌入式中文。场景测试使用实际按钮和 Viewport 鼠标输入路径，不绑定完整中文文案。
+生命周期边界从 Resource 计算。湿度套件覆盖原有命令、搬运、所有权、节奏和 soak；黄金套件锁定 `BroodRelocationSystem` 拆分前后等价。糖水套件覆盖下一 Tick 命令、冻结配置、稳定选择、全部状态边界、软失效与返程恢复、份数守恒、快照隔离、三档速度、事件和 10,000 Tick soak。组合模拟套件覆盖五阶段顺序、稳定首工 ID、阶段门控、三类命令、冻结配置、精确线性拓扑、湿度闭环可完成性、快照隔离、重开和组合不变量；存档套件覆盖任务中途／生命周期／暂停／三档速度／待处理命令往返、冻结配置、checksum、内容清单、未知版本、非法值、旧 schema 迁移、原子提交、备份恢复、故障注入、隔离和载入后 10,000 Tick soak。R3 套件再覆盖真实标题→新游戏→保存→返回→继续路径、档案摘要、确认删除、坏主档回退、显式备份恢复、独立设置持久化、键盘返回和减少动效。翻译套件检查键唯一性、双语非空、资源加载和主要玩家场景不残留嵌入式中文。
 
 标准命令：
 
@@ -486,8 +495,8 @@ ColonyViewAdapter
 - 默认组合场景固定为三个区域、一个接近羽化的晚期蛹、五个幼虫和一份糖水；五阶段按唯一顺序推进，不支持分支。
 - 当前冻结配置在无额外玩家停留时于 Tick 586 完成，技术上已形成连续流程，但尚未达到 12～15 分钟的外部试玩节奏目标；架构不会通过无信息等待补足时长。
 - 原有生命周期、双室湿度和三区域糖水场景仍作为独立调试／验证入口；它们不会与默认组合会话共享状态。
-- 名称、选择、个人记录和显示设置只存在于当前会话，重开或退出后不保留。
+- 名称、选择和个人记录只存在于当前会话；显示与无障碍设置使用独立文件跨程序保留。
 - 临时英文尚未完成用户最终校对；7 名有效首次接触测试者数据未取得，外部理解度 Gate 未通过。用户已明确豁免该前置条件继续 M5，但该决定不构成外部验证证据。
 - 糖水分享只解锁观察记录，不实现饥饿、能量、蛋白质或资源经济。
-- R2 已有存档核心，但尚无新游戏／继续／档案／保存／恢复 UI；当前 Demo 不会自动写盘，名称、选择和显示设置也不在权威游戏档案中。
+- 当前档案只覆盖已经实现的连续观察权威状态；不会自动保存，也不含名称、选择、显示设置或未来章节／设施字段。
 - 没有镜头、直接个体命令、随机行为、正式素材或外部插件。
