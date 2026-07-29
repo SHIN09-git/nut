@@ -10,3 +10,5 @@ chapter_three_min_worker_count = 3
 pollution_avoidance_min_contrast = 0.08
 environment_stable_ticks = 30
 core_migration_stable_ticks = 40
+finale_stable_ticks = 40
+final_report_observation_card_id = &"glass_observation_report"

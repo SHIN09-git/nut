@@ -228,6 +228,28 @@ static func canonical_game_snapshot(snapshot: GameSnapshot) -> String:
 			]
 		)
 
+	if snapshot.act1 == null:
+		lines.append("act1|null")
+	else:
+		lines.append(
+			(
+				"act1|first_worker=%d|emerged=%d|care=%s"
+				+ "|environment_stable=%d/%d|finale_stable=%d/%d"
+				+ "|report_tick=%d|report_available=%s"
+			)
+			% [
+				snapshot.act1.first_worker_entity_id,
+				snapshot.act1.first_worker_emerged_tick,
+				str(snapshot.act1.first_worker_care_recorded),
+				snapshot.act1.environment_stable_ticks,
+				snapshot.act1.environment_stable_required_ticks,
+				snapshot.act1.finale_stable_ticks,
+				snapshot.act1.finale_stable_required_ticks,
+				snapshot.act1.final_report_generated_tick,
+				str(snapshot.act1.final_report_available),
+			]
+		)
+
 	if snapshot.colony != null:
 		var sources: Array[FoodSourceSnapshot] = []
 		sources.assign(snapshot.colony.food_sources)

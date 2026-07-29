@@ -819,8 +819,72 @@ func _test_chapter_five_real_layout_and_migration_path() -> void:
 		).pressed.emit()
 		controller._process(SimulationClock.FIXED_STEP_SECONDS)
 	_expect_true(
-		controller.get_latest_snapshot().campaign.completed,
-		"real Chapter 5 inference completes the implemented Act 1 arc"
+		not controller.get_latest_snapshot().campaign.completed,
+		"real Chapter 5 inference leaves the profile active"
+	)
+	_expect_int(
+		controller.get_latest_snapshot().campaign.chapter,
+		CampaignState.Chapter.ACT1_STABLE_COLONY_SUMMARY,
+		"real Chapter 5 inference enters the stable-colony summary"
+	)
+	_expect_true(
+		_advance_authority_until(
+			controller,
+			func(simulation: ColonySimulation) -> bool:
+				return (
+					simulation._state.campaign_state.status
+					== CampaignState.Status.AWAITING_INFERENCE
+				),
+			250
+		),
+		"real final layout reaches the evidence-backed report conclusion"
+	)
+	(controller.get_node("%JournalButton") as Button).pressed.emit()
+	var final_inference_button: Button = _find_inference_button(
+		controller,
+		CampaignState.INFERENCE_LAYOUT_SHAPES_BEHAVIOR
+	)
+	_expect_true(
+		final_inference_button != null
+			and not final_inference_button.disabled,
+		"journal exposes the long-term layout conclusion"
+	)
+	if final_inference_button != null:
+		final_inference_button.pressed.emit()
+		(
+			controller.get_node("%JournalCloseButton") as Button
+		).pressed.emit()
+		controller._process(SimulationClock.FIXED_STEP_SECONDS)
+	var final_snapshot: GameSnapshot = controller.get_latest_snapshot()
+	_expect_true(
+		final_snapshot.campaign.completed
+			and final_snapshot.act1.final_report_available,
+		"real journal path generates the final observation report"
+	)
+	_expect_true(
+		(controller.get_node("%CompletionPanel") as Control).visible,
+		"generated report opens the ending panel"
+	)
+	_expect_true(
+		not (controller.get_node("%CompletionBody") as Label).text.is_empty(),
+		"ending panel renders a profile-specific report"
+	)
+	var return_requested: Array[bool] = [false]
+	controller.return_to_title_requested.connect(
+		func() -> void:
+			return_requested[0] = true
+	)
+	(
+		controller.get_node("%CompletionReturnTitleButton") as Button
+	).pressed.emit()
+	_expect_true(
+		return_requested[0],
+		"ending panel offers the save-and-return profile path"
+	)
+	(controller.get_node("%ContinueFreeplayButton") as Button).pressed.emit()
+	_expect_true(
+		not (controller.get_node("%CompletionPanel") as Control).visible,
+		"continue button returns to free observation"
 	)
 	_destroy_controller(controller)
 
@@ -842,6 +906,15 @@ func _prepare_chapter_five_controller(
 		CampaignState.EVIDENCE_FIRST_WORKER,
 		CampaignState.EVIDENCE_FIRST_WORKER_CARE,
 		CampaignState.EVIDENCE_FIRST_NUTRIENT_EXCHANGE,
+		CampaignState.EVIDENCE_FORAGING_ZONE_SCOUTED,
+		CampaignState.EVIDENCE_FORAGING_SUGAR_CYCLE,
+		CampaignState.EVIDENCE_PROTEIN_CARE,
+		CampaignState.EVIDENCE_WASTE_TRAY_CLEANED,
+		CampaignState.EVIDENCE_SMALL_COLONY_STABLE,
+		CampaignState.EVIDENCE_HYDRATION_RESPONSE,
+		CampaignState.EVIDENCE_POLLUTION_AVOIDANCE,
+		CampaignState.EVIDENCE_PARTIAL_MIGRATION,
+		CampaignState.EVIDENCE_ENVIRONMENT_STABLE,
 	]:
 		campaign.collect_evidence(evidence_id)
 	for inference_id: StringName in [
@@ -895,6 +968,11 @@ func _prepare_chapter_five_controller(
 	)
 	state.nutrition_state.sugar_reserve_portions = 20
 	state.nutrition_state.total_sugar_portions_supplied = 20
+	state.act1_state.first_worker_emerged_tick = state.simulation_tick
+	state.act1_state.first_worker_care_recorded = true
+	state.nutrition_state.protein_reserve_portions = 1
+	state.nutrition_state.total_protein_portions_consumed = 1
+	state.nutrition_state.completed_feeding_count = 1
 	controller._apply_snapshot()
 
 

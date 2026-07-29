@@ -9,6 +9,7 @@ enum Chapter {
 	ACT1_FORAGING_EXPANSION,
 	ACT1_ENVIRONMENT_MANAGEMENT,
 	ACT1_MODULAR_MIGRATION,
+	ACT1_STABLE_COLONY_SUMMARY,
 }
 
 enum Status {
@@ -48,6 +49,18 @@ const EVIDENCE_DUAL_NEST_SCOUTED: StringName = &"dual_nest_scouted"
 const EVIDENCE_CORE_BROOD_MIGRATED: StringName = &"core_brood_migrated"
 const EVIDENCE_QUEEN_MIGRATED: StringName = &"queen_migrated"
 const EVIDENCE_FUNCTIONAL_ZONING: StringName = &"functional_zoning"
+const EVIDENCE_FIRST_WORKER_HISTORY: StringName = (
+	&"first_worker_history_reviewed"
+)
+const EVIDENCE_KEY_INTERVENTIONS: StringName = (
+	&"key_interventions_reviewed"
+)
+const EVIDENCE_FINAL_LAYOUT_STABLE: StringName = (
+	&"final_layout_stable"
+)
+const EVIDENCE_LONG_TERM_PATTERN: StringName = (
+	&"long_term_colony_pattern"
+)
 
 const INFERENCE_FIRST_WORKER: StringName = &"brood_develops_into_workers"
 const INFERENCE_FIRST_WORKER_RANDOM: StringName = &"worker_change_is_random"
@@ -105,6 +118,15 @@ const INFERENCE_MIGRATION_DIRECTED: StringName = (
 )
 const INFERENCE_MIGRATION_SIZE: StringName = (
 	&"the_largest_nest_always_wins"
+)
+const INFERENCE_LAYOUT_SHAPES_BEHAVIOR: StringName = (
+	&"layout_shapes_long_term_behavior"
+)
+const INFERENCE_FINALE_RANDOM: StringName = (
+	&"stable_colony_is_random"
+)
+const INFERENCE_FINALE_DIRECTED: StringName = (
+	&"player_directs_every_long_term_task"
 )
 
 const FACILITY_TEST_TUBE_NEST: StringName = &"test_tube_nest"

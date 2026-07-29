@@ -549,6 +549,14 @@ func _campaign_chapter_name(chapter: int, completed: bool) -> String:
 			return tr("ACT1_CHAPTER_FOUNDING")
 		CampaignState.Chapter.ACT1_FIRST_WORKERS:
 			return tr("ACT1_CHAPTER_FIRST_WORKERS")
+		CampaignState.Chapter.ACT1_FORAGING_EXPANSION:
+			return tr("R10_CHAPTER_FORAGING")
+		CampaignState.Chapter.ACT1_ENVIRONMENT_MANAGEMENT:
+			return tr("R10_CHAPTER_ENVIRONMENT")
+		CampaignState.Chapter.ACT1_MODULAR_MIGRATION:
+			return tr("R11_CHAPTER_MIGRATION")
+		CampaignState.Chapter.ACT1_STABLE_COLONY_SUMMARY:
+			return tr("R12_CHAPTER_FINALE")
 		_:
 			return _phase_name(-1)
 
@@ -569,6 +577,8 @@ func _observation_name(observation_id: String) -> String:
 			return tr("ACT1_EVIDENCE_WORKER_CARE")
 		"first_nutrient_exchange":
 			return tr("ACT1_EVIDENCE_NUTRIENT")
+		"glass_observation_report":
+			return tr("R12_OBSERVATION_REPORT")
 		"":
 			return tr("SHELL_OBSERVATION_NONE")
 		_:

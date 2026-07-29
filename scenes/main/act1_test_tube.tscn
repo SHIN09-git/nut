@@ -662,6 +662,12 @@ custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 text = "继续自由观察"
 
+[node name="CompletionReturnTitleButton" type="Button" parent="CompletionPanel/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+text = "保存档案并返回标题"
+
 [node name="PauseMenu" type="Control" parent="."]
 unique_name_in_owner = true
 visible = false

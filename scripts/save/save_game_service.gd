@@ -2,7 +2,7 @@ class_name SaveGameService
 extends RefCounted
 
 const CURRENT_FORMAT_VERSION: int = 1
-const CURRENT_GAME_VERSION: String = "0.11.0-dev"
+const CURRENT_GAME_VERSION: String = "0.12.0-dev"
 const CURRENT_CONTENT_MANIFEST_ID: String = (
 	"colony-under-glass.r2-base.1"
 )
@@ -269,6 +269,8 @@ func _verify_and_migrate_envelope(envelope: Dictionary) -> Dictionary:
 	match String(current["state_schema_id"]):
 		SimulationStateCodec.CURRENT_SCHEMA_ID:
 			pass
+		SimulationStateCodec.R11_SCHEMA_ID:
+			migrated = true
 		SimulationStateCodec.R10_SCHEMA_ID:
 			migrated = true
 		SimulationStateCodec.R9_SCHEMA_ID:
@@ -409,6 +411,12 @@ func _verify_and_migrate_envelope(envelope: Dictionary) -> Dictionary:
 		migrated = true
 	if String(current["state_schema_id"]) == SimulationStateCodec.R10_SCHEMA_ID:
 		var migration_result: Dictionary = _migrate_v8_to_v9(current)
+		if not migration_result.get("ok", false):
+			return migration_result
+		current = migration_result["envelope"]
+		migrated = true
+	if String(current["state_schema_id"]) == SimulationStateCodec.R11_SCHEMA_ID:
+		var migration_result: Dictionary = _migrate_v9_to_v10(current)
 		if not migration_result.get("ok", false):
 			return migration_result
 		current = migration_result["envelope"]
@@ -1412,7 +1420,7 @@ func _migrate_v8_to_v9(previous: Dictionary) -> Dictionary:
 
 	var migrated: Dictionary = previous.duplicate(true)
 	migrated["game_version"] = CURRENT_GAME_VERSION
-	migrated["state_schema_id"] = SimulationStateCodec.CURRENT_SCHEMA_ID
+	migrated["state_schema_id"] = SimulationStateCodec.R11_SCHEMA_ID
 	migrated["frozen_config_bundle"] = frozen_bundle
 	migrated["frozen_config_hash"] = CanonicalSaveJson.sha256(
 		frozen_bundle
@@ -1423,6 +1431,112 @@ func _migrate_v8_to_v9(previous: Dictionary) -> Dictionary:
 	migrated = seal_envelope(migrated)
 	if migrated.is_empty():
 		return _failure("R10 save migration could not be sealed")
+	return {"ok": true, "error": "", "envelope": migrated}
+
+
+func _migrate_v9_to_v10(previous: Dictionary) -> Dictionary:
+	if (
+		typeof(previous.get("frozen_config_bundle")) != TYPE_DICTIONARY
+		or typeof(previous.get("state_payload")) != TYPE_DICTIONARY
+	):
+		return _failure("R11 save payload is invalid")
+	var frozen_bundle: Dictionary = (
+		previous["frozen_config_bundle"] as Dictionary
+	).duplicate(true)
+	var habitat_value: Variant = frozen_bundle.get("habitat")
+	var is_act1: bool = false
+	if habitat_value != null:
+		if typeof(habitat_value) != TYPE_DICTIONARY:
+			return _failure("R11 habitat configuration is invalid")
+		var habitat: Dictionary = (
+			habitat_value as Dictionary
+		).duplicate(true)
+		is_act1 = (
+			String(habitat.get("scenario_id", ""))
+			== "act1_test_tube"
+		)
+		if is_act1:
+			var progression_value: Variant = habitat.get(
+				"act1_progression_config"
+			)
+			if typeof(progression_value) != TYPE_DICTIONARY:
+				return _failure("R11 Act 1 progression data is invalid")
+			var progression: Dictionary = (
+				progression_value as Dictionary
+			).duplicate(true)
+			if (
+				progression.has("finale_stable_ticks")
+				or progression.has(
+					"final_report_observation_card_id"
+				)
+			):
+				return _failure(
+					"R11 progression unexpectedly contains R12 data"
+				)
+			progression["finale_stable_ticks"] = 40
+			progression["final_report_observation_card_id"] = (
+				"glass_observation_report"
+			)
+			habitat["act1_progression_config"] = progression
+		frozen_bundle["habitat"] = habitat
+
+	var state_payload: Dictionary = (
+		previous["state_payload"] as Dictionary
+	).duplicate(true)
+	if is_act1:
+		var act1_value: Variant = state_payload.get("act1")
+		if typeof(act1_value) != TYPE_DICTIONARY:
+			return _failure("R11 Act 1 state is invalid")
+		var act1: Dictionary = (
+			act1_value as Dictionary
+		).duplicate(true)
+		if (
+			act1.has("finale_stable_ticks")
+			or act1.has("final_report_generated_tick")
+		):
+			return _failure(
+				"R11 Act 1 state unexpectedly contains R12 data"
+			)
+		act1["finale_stable_ticks"] = 0
+		act1["final_report_generated_tick"] = -1
+		state_payload["act1"] = act1
+
+		var campaign_value: Variant = state_payload.get("campaign")
+		if typeof(campaign_value) != TYPE_DICTIONARY:
+			return _failure("R11 Act 1 campaign state is invalid")
+		var campaign: Dictionary = (
+			campaign_value as Dictionary
+		).duplicate(true)
+		if (
+			int(campaign.get("completed_chapter_count", -1)) == 5
+			and int(campaign.get("status", -1))
+				== CampaignState.Status.COMPLETED
+			and int(campaign.get("chapter", -1))
+				== CampaignState.Chapter.ACT1_MODULAR_MIGRATION
+		):
+			campaign["chapter"] = (
+				CampaignState.Chapter.ACT1_STABLE_COLONY_SUMMARY
+			)
+			campaign["status"] = CampaignState.Status.ACTIVE
+			campaign["chapter_entered_tick"] = int(
+				state_payload.get("simulation_tick", 0)
+			)
+			campaign["campaign_completed_tick"] = -1
+		state_payload["campaign"] = campaign
+
+	var migrated: Dictionary = previous.duplicate(true)
+	migrated["game_version"] = CURRENT_GAME_VERSION
+	migrated["state_schema_id"] = SimulationStateCodec.CURRENT_SCHEMA_ID
+	migrated["frozen_config_bundle"] = frozen_bundle
+	migrated["frozen_config_hash"] = CanonicalSaveJson.sha256(
+		frozen_bundle
+	)
+	if String(migrated["frozen_config_hash"]).is_empty():
+		return _failure("R12 frozen configuration hash could not be created")
+	migrated["state_payload"] = state_payload
+	migrated = seal_envelope(migrated)
+	if migrated.is_empty():
+		return _failure("R11 save migration could not be sealed")
 	return {"ok": true, "error": "", "envelope": migrated}
 
 

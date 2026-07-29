@@ -85,6 +85,9 @@ var _selected_facility_type_id: StringName = (
 @onready var _completion_heading: Label = %CompletionHeading
 @onready var _completion_body: Label = %CompletionBody
 @onready var _continue_button: Button = %ContinueFreeplayButton
+@onready var _completion_return_button: Button = (
+	%CompletionReturnTitleButton
+)
 @onready var _pause_menu: Control = %PauseMenu
 @onready var _pause_heading: Label = %PauseHeading
 @onready var _resume_button: Button = %ResumeButton
@@ -218,6 +221,7 @@ func _connect_controls() -> void:
 	_journal_button.pressed.connect(_open_journal)
 	_journal_close_button.pressed.connect(_close_journal)
 	_continue_button.pressed.connect(_on_continue_freeplay_pressed)
+	_completion_return_button.pressed.connect(_on_return_pressed)
 	for index: int in _inference_buttons.size():
 		_inference_buttons[index].pressed.connect(
 			_on_inference_pressed.bind(index)
@@ -540,6 +544,8 @@ func _update_main_panel() -> void:
 	_objective_label.text = _objective_text(campaign)
 	_evidence_label.text = _evidence_text(campaign)
 	_guidance_label.text = _guidance_text(campaign)
+	if campaign.completed and _latest_snapshot.act1.final_report_available:
+		_completion_body.text = _completion_report_text()
 	_completion_panel.visible = (
 		campaign.completed
 		and not _preparation_gate_active
@@ -954,8 +960,10 @@ func _chapter_name(chapter: int) -> String:
 			return tr("R10_CHAPTER_FORAGING")
 		CampaignState.Chapter.ACT1_ENVIRONMENT_MANAGEMENT:
 			return tr("R10_CHAPTER_ENVIRONMENT")
-		_:
+		CampaignState.Chapter.ACT1_MODULAR_MIGRATION:
 			return tr("R11_CHAPTER_MIGRATION")
+		_:
+			return tr("R12_CHAPTER_FINALE")
 
 
 func _objective_text(campaign: CampaignSnapshot) -> String:
@@ -1024,32 +1032,93 @@ func _objective_text(campaign: CampaignSnapshot) -> String:
 				CampaignState.EVIDENCE_ENVIRONMENT_STABLE
 			)),
 		]
-	return tr("R11_OBJECTIVES_MIGRATION") % [
+	if campaign.chapter == CampaignState.Chapter.ACT1_MODULAR_MIGRATION:
+		return tr("R11_OBJECTIVES_MIGRATION") % [
+			_check(campaign.has_evidence(
+				CampaignState.EVIDENCE_DUAL_NEST_CONNECTED
+			)),
+			_check(campaign.has_evidence(
+				CampaignState.EVIDENCE_DUAL_NEST_SCOUTED
+			)),
+			_check(campaign.has_evidence(
+				CampaignState.EVIDENCE_CORE_BROOD_MIGRATED
+			)),
+			_check(campaign.has_evidence(
+				CampaignState.EVIDENCE_QUEEN_MIGRATED
+			)),
+			_check(campaign.has_evidence(
+				CampaignState.EVIDENCE_FUNCTIONAL_ZONING
+			)),
+		]
+	return tr("R12_OBJECTIVES_FINALE") % [
 		_check(campaign.has_evidence(
-			CampaignState.EVIDENCE_DUAL_NEST_CONNECTED
+			CampaignState.EVIDENCE_FIRST_WORKER_HISTORY
 		)),
 		_check(campaign.has_evidence(
-			CampaignState.EVIDENCE_DUAL_NEST_SCOUTED
+			CampaignState.EVIDENCE_KEY_INTERVENTIONS
 		)),
 		_check(campaign.has_evidence(
-			CampaignState.EVIDENCE_CORE_BROOD_MIGRATED
+			CampaignState.EVIDENCE_FINAL_LAYOUT_STABLE
 		)),
 		_check(campaign.has_evidence(
-			CampaignState.EVIDENCE_QUEEN_MIGRATED
-		)),
-		_check(campaign.has_evidence(
-			CampaignState.EVIDENCE_FUNCTIONAL_ZONING
+			CampaignState.EVIDENCE_LONG_TERM_PATTERN
 		)),
 	]
 
 
 func _evidence_text(campaign: CampaignSnapshot) -> String:
 	var lines: PackedStringArray = []
-	for evidence_id: StringName in campaign.collected_evidence_ids:
-		lines.append("• " + _evidence_name(evidence_id))
+	for evidence_id: StringName in _chapter_evidence_ids(campaign.chapter):
+		if campaign.has_evidence(evidence_id):
+			lines.append("• " + _evidence_name(evidence_id))
 	if lines.is_empty():
 		lines.append("• " + tr("CAMPAIGN_EVIDENCE_NONE"))
 	return "\n".join(lines)
+
+
+func _chapter_evidence_ids(chapter: int) -> Array[StringName]:
+	match chapter:
+		CampaignState.Chapter.ACT1_FOUNDING:
+			return [
+				CampaignState.EVIDENCE_QUEEN_CARE,
+				CampaignState.EVIDENCE_FIRST_PUPA,
+			]
+		CampaignState.Chapter.ACT1_FIRST_WORKERS:
+			return [
+				CampaignState.EVIDENCE_FIRST_WORKER,
+				CampaignState.EVIDENCE_FIRST_WORKER_CARE,
+				CampaignState.EVIDENCE_FIRST_NUTRIENT_EXCHANGE,
+			]
+		CampaignState.Chapter.ACT1_FORAGING_EXPANSION:
+			return [
+				CampaignState.EVIDENCE_FORAGING_ZONE_SCOUTED,
+				CampaignState.EVIDENCE_FORAGING_SUGAR_CYCLE,
+				CampaignState.EVIDENCE_PROTEIN_CARE,
+				CampaignState.EVIDENCE_WASTE_TRAY_CLEANED,
+				CampaignState.EVIDENCE_SMALL_COLONY_STABLE,
+			]
+		CampaignState.Chapter.ACT1_ENVIRONMENT_MANAGEMENT:
+			return [
+				CampaignState.EVIDENCE_HYDRATION_RESPONSE,
+				CampaignState.EVIDENCE_POLLUTION_AVOIDANCE,
+				CampaignState.EVIDENCE_PARTIAL_MIGRATION,
+				CampaignState.EVIDENCE_ENVIRONMENT_STABLE,
+			]
+		CampaignState.Chapter.ACT1_MODULAR_MIGRATION:
+			return [
+				CampaignState.EVIDENCE_DUAL_NEST_CONNECTED,
+				CampaignState.EVIDENCE_DUAL_NEST_SCOUTED,
+				CampaignState.EVIDENCE_CORE_BROOD_MIGRATED,
+				CampaignState.EVIDENCE_QUEEN_MIGRATED,
+				CampaignState.EVIDENCE_FUNCTIONAL_ZONING,
+			]
+		_:
+			return [
+				CampaignState.EVIDENCE_FIRST_WORKER_HISTORY,
+				CampaignState.EVIDENCE_KEY_INTERVENTIONS,
+				CampaignState.EVIDENCE_FINAL_LAYOUT_STABLE,
+				CampaignState.EVIDENCE_LONG_TERM_PATTERN,
+			]
 
 
 func _evidence_name(evidence_id: StringName) -> String:
@@ -1092,6 +1161,14 @@ func _evidence_name(evidence_id: StringName) -> String:
 			return tr("R11_EVIDENCE_QUEEN")
 		CampaignState.EVIDENCE_FUNCTIONAL_ZONING:
 			return tr("R11_EVIDENCE_ZONING")
+		CampaignState.EVIDENCE_FIRST_WORKER_HISTORY:
+			return tr("R12_EVIDENCE_FIRST_WORKER_HISTORY")
+		CampaignState.EVIDENCE_KEY_INTERVENTIONS:
+			return tr("R12_EVIDENCE_INTERVENTIONS")
+		CampaignState.EVIDENCE_FINAL_LAYOUT_STABLE:
+			return tr("R12_EVIDENCE_LAYOUT")
+		CampaignState.EVIDENCE_LONG_TERM_PATTERN:
+			return tr("R12_EVIDENCE_PATTERN")
 	return tr("CAMPAIGN_EVIDENCE_UNKNOWN")
 
 
@@ -1118,6 +1195,11 @@ func _guidance_text(campaign: CampaignSnapshot) -> String:
 		== CampaignState.Chapter.ACT1_MODULAR_MIGRATION
 	):
 		return tr("R11_GUIDANCE_MIGRATION")
+	if (
+		campaign.chapter
+		== CampaignState.Chapter.ACT1_STABLE_COLONY_SUMMARY
+	):
+		return tr("R12_GUIDANCE_FINALE")
 	if _latest_snapshot.nutrition.sugar_action_available:
 		return tr("ACT1_GUIDANCE_PLACE_SUGAR")
 	return tr("ACT1_GUIDANCE_WATCH_WORKER")
@@ -1138,6 +1220,19 @@ func _hint_text(campaign: CampaignSnapshot) -> String:
 		return tr("CAMPAIGN_HINT_COMPLETE")
 	if campaign.status != CampaignState.Status.AWAITING_INFERENCE:
 		return tr("CAMPAIGN_HINT_OBSERVE")
+	if (
+		campaign.chapter
+		== CampaignState.Chapter.ACT1_STABLE_COLONY_SUMMARY
+	):
+		var finale_keys: PackedStringArray = [
+			"R12_HINT_COMPARE",
+			"R12_HINT_HISTORY",
+			"R12_HINT_LAYOUT",
+			"R12_HINT_EXPLICIT",
+		]
+		return tr(
+			finale_keys[mini(campaign.hint_tier, finale_keys.size() - 1)]
+		)
 	var keys: PackedStringArray = [
 		"CAMPAIGN_HINT_COMPARE",
 		"ACT1_HINT_DIRECTION",
@@ -1179,6 +1274,12 @@ func _inference_text(inference_id: StringName) -> String:
 			return tr("R11_INFERENCE_DIRECTED")
 		CampaignState.INFERENCE_MIGRATION_SIZE:
 			return tr("R11_INFERENCE_SIZE")
+		CampaignState.INFERENCE_LAYOUT_SHAPES_BEHAVIOR:
+			return tr("R12_INFERENCE_LAYOUT")
+		CampaignState.INFERENCE_FINALE_RANDOM:
+			return tr("R12_INFERENCE_RANDOM")
+		CampaignState.INFERENCE_FINALE_DIRECTED:
+			return tr("R12_INFERENCE_DIRECTED")
 	return tr("CAMPAIGN_INFERENCE_UNKNOWN")
 
 
@@ -1223,6 +1324,33 @@ func _worker_activity(worker: AntSnapshot) -> String:
 	return tr("ACT1_WORKER_RESTING")
 
 
+func _completion_report_text() -> String:
+	if _latest_snapshot == null:
+		return tr("ACT1_COMPLETION_BODY")
+	var worker_count: int = 0
+	for ant: AntSnapshot in _latest_snapshot.colony.ants:
+		if ant.life_stage == AntModel.LifeStage.WORKER:
+			worker_count += 1
+	return tr("R12_REPORT_BODY") % [
+		_format_observation_time(
+			_latest_snapshot.act1.first_worker_emerged_tick
+		),
+		worker_count,
+		_latest_snapshot.layout.facilities.size(),
+		_latest_snapshot.work.completed_migration_count,
+		_latest_snapshot.nutrition.completed_feeding_count,
+		_latest_snapshot.work.cleaned_waste_tray_count,
+	]
+
+
+func _format_observation_time(tick: int) -> String:
+	var total_seconds: int = maxi(
+		0,
+		int(floor(float(tick) * SimulationClock.FIXED_STEP_SECONDS))
+	)
+	return "%02d:%02d" % [total_seconds / 60, total_seconds % 60]
+
+
 func _check(done: bool) -> String:
 	return "✓" if done else "○"
 
@@ -1248,8 +1376,16 @@ func _refresh_copy() -> void:
 	_journal_heading.text = tr("CAMPAIGN_JOURNAL_HEADING")
 	_journal_close_button.text = tr("CAMPAIGN_JOURNAL_CLOSE")
 	_completion_heading.text = tr("ACT1_COMPLETION_HEADING")
-	_completion_body.text = tr("ACT1_COMPLETION_BODY")
+	_completion_body.text = (
+		_completion_report_text()
+		if (
+			_latest_snapshot != null
+			and _latest_snapshot.act1.final_report_available
+		)
+		else tr("ACT1_COMPLETION_BODY")
+	)
 	_continue_button.text = tr("ACT1_CONTINUE_FREEPLAY")
+	_completion_return_button.text = tr("R12_SAVE_RETURN_TITLE")
 	_pause_heading.text = tr("UI_PAUSE_HEADING")
 	_resume_button.text = tr("UI_RESUME")
 	_save_button.text = tr("UI_SAVE_GAME")

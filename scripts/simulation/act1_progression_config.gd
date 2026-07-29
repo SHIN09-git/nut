@@ -5,6 +5,8 @@ var chapter_three_min_worker_count: int
 var pollution_avoidance_min_contrast: float
 var environment_stable_ticks: int
 var core_migration_stable_ticks: int
+var finale_stable_ticks: int
+var final_report_observation_card_id: StringName
 
 
 static func from_data(data: Act1ProgressionData) -> Act1ProgressionConfig:
@@ -19,4 +21,8 @@ static func from_data(data: Act1ProgressionData) -> Act1ProgressionConfig:
 	)
 	config.environment_stable_ticks = data.environment_stable_ticks
 	config.core_migration_stable_ticks = data.core_migration_stable_ticks
+	config.finale_stable_ticks = data.finale_stable_ticks
+	config.final_report_observation_card_id = (
+		data.final_report_observation_card_id
+	)
 	return config

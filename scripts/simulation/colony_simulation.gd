@@ -761,6 +761,23 @@ func create_game_snapshot() -> GameSnapshot:
 				else _habitat_config.act1_progression_config
 					.environment_stable_ticks
 			)
+			act1_snapshot.finale_stable_ticks = (
+				_state.act1_state.finale_stable_ticks
+			)
+			act1_snapshot.finale_stable_required_ticks = (
+				_habitat_config.act1_progression_config
+					.finale_stable_ticks
+			)
+			act1_snapshot.final_report_generated_tick = (
+				_state.act1_state.final_report_generated_tick
+			)
+			act1_snapshot.final_report_available = (
+				_state.act1_state.final_report_generated_tick >= 0
+				and _state.unlocked_observation_card_ids.has(
+					_habitat_config.act1_progression_config
+						.final_report_observation_card_id
+				)
+			)
 	var layout_snapshot: HabitatLayoutSnapshot = _create_layout_snapshot()
 	var colony_snapshot: ColonySnapshot = create_snapshot()
 	return GameSnapshot.new(

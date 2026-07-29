@@ -7,6 +7,10 @@ extends Resource
 @export_range(0.0, 1.0, 0.01) var pollution_avoidance_min_contrast: float = 0.08
 @export_range(1, 10_000, 1) var environment_stable_ticks: int = 30
 @export_range(1, 10_000, 1) var core_migration_stable_ticks: int = 40
+@export_range(1, 10_000, 1) var finale_stable_ticks: int = 40
+@export var final_report_observation_card_id: StringName = (
+	&"glass_observation_report"
+)
 
 
 func is_valid() -> bool:
@@ -19,4 +23,6 @@ func is_valid() -> bool:
 		and pollution_avoidance_min_contrast <= 1.0
 		and environment_stable_ticks > 0
 		and core_migration_stable_ticks > 0
+		and finale_stable_ticks > 0
+		and not final_report_observation_card_id.is_empty()
 	)

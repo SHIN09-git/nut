@@ -30,6 +30,11 @@ func update_after_systems(state: ColonyState) -> void:
 		return
 	var campaign: CampaignState = state.campaign_state
 	var care: FoundingCareConfig = _habitat_config.founding_care_config
+	if (
+		campaign.chapter
+		!= CampaignState.Chapter.ACT1_STABLE_COLONY_SUMMARY
+	):
+		state.act1_state.finale_stable_ticks = 0
 	if state.unlocked_observation_card_ids.has(
 		care.queen_care_observation_card_id
 	):
@@ -67,8 +72,15 @@ func update_after_systems(state: ColonyState) -> void:
 		== CampaignState.Chapter.ACT1_MODULAR_MIGRATION
 	):
 		_collect_modular_migration_evidence(state, campaign)
+		state.act1_state.finale_stable_ticks = 0
+	elif (
+		campaign.chapter
+		== CampaignState.Chapter.ACT1_STABLE_COLONY_SUMMARY
+	):
+		_collect_finale_evidence(state, campaign)
 	else:
 		state.act1_state.environment_stable_ticks = 0
+		state.act1_state.finale_stable_ticks = 0
 	_refresh_status(campaign)
 
 
@@ -183,10 +195,38 @@ func apply_inference_action(
 		_refresh_status(campaign)
 		return true
 
-	campaign.completed_chapter_count = 5
+	if campaign.chapter == CampaignState.Chapter.ACT1_MODULAR_MIGRATION:
+		campaign.completed_chapter_count = 5
+		campaign.chapter = (
+			CampaignState.Chapter.ACT1_STABLE_COLONY_SUMMARY
+		)
+		campaign.status = CampaignState.Status.ACTIVE
+		campaign.chapter_entered_tick = state.simulation_tick
+		campaign.hint_tier = 0
+		campaign.campaign_completed_tick = -1
+		state.act1_state.environment_stable_ticks = 0
+		state.act1_state.finale_stable_ticks = 0
+		state.act1_state.final_report_generated_tick = -1
+		state.record_observation_event(
+			ObservationEvent.Type.CAMPAIGN_CHAPTER_COMPLETED
+		)
+		_refresh_status(campaign)
+		return true
+
+	campaign.completed_chapter_count = 6
 	campaign.status = CampaignState.Status.COMPLETED
 	campaign.campaign_completed_tick = state.simulation_tick
 	campaign.hint_tier = 0
+	state.act1_state.final_report_generated_tick = state.simulation_tick
+	state.unlocked_observation_card_ids[
+		_habitat_config.act1_progression_config
+			.final_report_observation_card_id
+	] = true
+	state.record_observation_event(
+		ObservationEvent.Type.FINAL_REPORT_GENERATED,
+		ObservationEvent.NO_ENTITY_ID,
+		state.act1_state.first_worker_entity_id
+	)
 	state.record_observation_event(
 		ObservationEvent.Type.CAMPAIGN_CHAPTER_COMPLETED
 	)
@@ -233,13 +273,13 @@ func has_valid_state(state: ColonyState) -> bool:
 	if (
 		campaign.chapter < CampaignState.Chapter.ACT1_FOUNDING
 		or campaign.chapter
-			> CampaignState.Chapter.ACT1_MODULAR_MIGRATION
+			> CampaignState.Chapter.ACT1_STABLE_COLONY_SUMMARY
 		or campaign.status < CampaignState.Status.ACTIVE
 		or campaign.status > CampaignState.Status.COMPLETED
 		or campaign.chapter_entered_tick < 0
 		or campaign.chapter_entered_tick > state.simulation_tick
 		or campaign.completed_chapter_count < 0
-		or campaign.completed_chapter_count > 5
+		or campaign.completed_chapter_count > 6
 		or campaign.incorrect_inference_attempts < 0
 		or campaign.hint_tier < 0
 		or campaign.hint_tier > MAX_HINT_TIER
@@ -252,6 +292,13 @@ func has_valid_state(state: ColonyState) -> bool:
 				_habitat_config.act1_progression_config
 					.core_migration_stable_ticks
 			)
+		or state.act1_state.finale_stable_ticks < 0
+		or state.act1_state.finale_stable_ticks
+			> _habitat_config.act1_progression_config
+				.finale_stable_ticks
+		or state.act1_state.final_report_generated_tick < -1
+		or state.act1_state.final_report_generated_tick
+			> state.simulation_tick
 	):
 		return false
 	var allowed_evidence: Array[StringName] = [
@@ -274,6 +321,10 @@ func has_valid_state(state: ColonyState) -> bool:
 		CampaignState.EVIDENCE_CORE_BROOD_MIGRATED,
 		CampaignState.EVIDENCE_QUEEN_MIGRATED,
 		CampaignState.EVIDENCE_FUNCTIONAL_ZONING,
+		CampaignState.EVIDENCE_FIRST_WORKER_HISTORY,
+		CampaignState.EVIDENCE_KEY_INTERVENTIONS,
+		CampaignState.EVIDENCE_FINAL_LAYOUT_STABLE,
+		CampaignState.EVIDENCE_LONG_TERM_PATTERN,
 	]
 	for evidence_id: StringName in campaign.collected_evidence_ids:
 		if not allowed_evidence.has(evidence_id):
@@ -284,6 +335,7 @@ func has_valid_state(state: ColonyState) -> bool:
 		CampaignState.INFERENCE_FORAGING_ROLES,
 		CampaignState.INFERENCE_ENVIRONMENT_GRADIENT,
 		CampaignState.INFERENCE_MIGRATION_CONDITIONS,
+		CampaignState.INFERENCE_LAYOUT_SHAPES_BEHAVIOR,
 	]
 	for inference_id: StringName in campaign.confirmed_inference_ids:
 		if not allowed_inferences.has(inference_id):
@@ -305,6 +357,34 @@ func has_valid_state(state: ColonyState) -> bool:
 	for facility_id: StringName in campaign.unlocked_facility_type_ids:
 		if not allowed_facilities.has(facility_id):
 			return false
+	var final_report_unlocked: bool = (
+		state.unlocked_observation_card_ids.has(
+			_habitat_config.act1_progression_config
+				.final_report_observation_card_id
+		)
+	)
+	if (
+		final_report_unlocked
+			!= (campaign.completed_chapter_count == 6)
+		or (
+			campaign.completed_chapter_count < 5
+			and state.act1_state.finale_stable_ticks != 0
+		)
+		or (
+			campaign.completed_chapter_count < 6
+			and state.act1_state.final_report_generated_tick != -1
+		)
+	):
+		return false
+	if campaign.completed_chapter_count < 5:
+		for finale_evidence_id: StringName in [
+			CampaignState.EVIDENCE_FIRST_WORKER_HISTORY,
+			CampaignState.EVIDENCE_KEY_INTERVENTIONS,
+			CampaignState.EVIDENCE_FINAL_LAYOUT_STABLE,
+			CampaignState.EVIDENCE_LONG_TERM_PATTERN,
+		]:
+			if campaign.collected_evidence_ids.has(finale_evidence_id):
+				return false
 	if not _evidence_matches_observation_cards(state, campaign):
 		return false
 	if not _chapter_unlocks_are_valid(campaign):
@@ -374,14 +454,36 @@ func has_valid_state(state: ColonyState) -> bool:
 		5:
 			return (
 				campaign.chapter
-					== CampaignState.Chapter.ACT1_MODULAR_MIGRATION
-				and campaign.status == CampaignState.Status.COMPLETED
-				and campaign.campaign_completed_tick >= 0
-				and campaign.campaign_completed_tick
-					<= state.simulation_tick
+					== CampaignState.Chapter.ACT1_STABLE_COLONY_SUMMARY
+				and campaign.status == _expected_status(campaign)
+				and campaign.campaign_completed_tick == -1
 				and campaign.confirmed_inference_ids.size() == 5
 				and campaign.confirmed_inference_ids.has(
 					CampaignState.INFERENCE_MIGRATION_CONDITIONS
+				)
+				and state.act1_state.final_report_generated_tick == -1
+				and not state.unlocked_observation_card_ids.has(
+					_habitat_config.act1_progression_config
+						.final_report_observation_card_id
+				)
+			)
+		6:
+			return (
+				campaign.chapter
+					== CampaignState.Chapter.ACT1_STABLE_COLONY_SUMMARY
+				and campaign.status == CampaignState.Status.COMPLETED
+				and campaign.campaign_completed_tick >= 0
+				and campaign.campaign_completed_tick
+					== state.act1_state.final_report_generated_tick
+				and campaign.campaign_completed_tick
+					<= state.simulation_tick
+				and campaign.confirmed_inference_ids.size() == 6
+				and campaign.confirmed_inference_ids.has(
+					CampaignState.INFERENCE_LAYOUT_SHAPES_BEHAVIOR
+				)
+				and state.unlocked_observation_card_ids.has(
+					_habitat_config.act1_progression_config
+						.final_report_observation_card_id
 				)
 			)
 	return false
@@ -419,10 +521,16 @@ func get_available_inference_ids(
 			CampaignState.INFERENCE_ENVIRONMENT_MAXIMUM,
 			CampaignState.INFERENCE_GRADIENT_DIRECTED,
 		]
+	if campaign.chapter == CampaignState.Chapter.ACT1_MODULAR_MIGRATION:
+		return [
+			CampaignState.INFERENCE_MIGRATION_CONDITIONS,
+			CampaignState.INFERENCE_MIGRATION_DIRECTED,
+			CampaignState.INFERENCE_MIGRATION_SIZE,
+		]
 	return [
-		CampaignState.INFERENCE_MIGRATION_CONDITIONS,
-		CampaignState.INFERENCE_MIGRATION_DIRECTED,
-		CampaignState.INFERENCE_MIGRATION_SIZE,
+		CampaignState.INFERENCE_LAYOUT_SHAPES_BEHAVIOR,
+		CampaignState.INFERENCE_FINALE_RANDOM,
+		CampaignState.INFERENCE_FINALE_DIRECTED,
 	]
 
 
@@ -438,7 +546,9 @@ func get_correct_inference_id(
 			return CampaignState.INFERENCE_FORAGING_ROLES
 		CampaignState.Chapter.ACT1_ENVIRONMENT_MANAGEMENT:
 			return CampaignState.INFERENCE_ENVIRONMENT_GRADIENT
-	return CampaignState.INFERENCE_MIGRATION_CONDITIONS
+		CampaignState.Chapter.ACT1_MODULAR_MIGRATION:
+			return CampaignState.INFERENCE_MIGRATION_CONDITIONS
+	return CampaignState.INFERENCE_LAYOUT_SHAPES_BEHAVIOR
 
 
 func is_sugar_action_active(state: ColonyState) -> bool:
@@ -450,7 +560,6 @@ func is_sugar_action_active(state: ColonyState) -> bool:
 		and state.campaign_state.unlocked_facility_type_ids.has(
 			CampaignState.FACILITY_MICRO_FEEDING_PORT
 		)
-		and state.campaign_state.status != CampaignState.Status.COMPLETED
 	)
 
 
@@ -463,7 +572,6 @@ func is_protein_action_active(state: ColonyState) -> bool:
 		and state.campaign_state.unlocked_facility_type_ids.has(
 			CampaignState.FACILITY_PROTEIN_DISH
 		)
-		and state.campaign_state.status != CampaignState.Status.COMPLETED
 	)
 
 
@@ -510,13 +618,20 @@ func _expected_status(campaign: CampaignState) -> CampaignState.Status:
 				CampaignState.EVIDENCE_PARTIAL_MIGRATION,
 				CampaignState.EVIDENCE_ENVIRONMENT_STABLE,
 			]
-		_:
+		CampaignState.Chapter.ACT1_MODULAR_MIGRATION:
 			required = [
 				CampaignState.EVIDENCE_DUAL_NEST_CONNECTED,
 				CampaignState.EVIDENCE_DUAL_NEST_SCOUTED,
 				CampaignState.EVIDENCE_CORE_BROOD_MIGRATED,
 				CampaignState.EVIDENCE_QUEEN_MIGRATED,
 				CampaignState.EVIDENCE_FUNCTIONAL_ZONING,
+			]
+		_:
+			required = [
+				CampaignState.EVIDENCE_FIRST_WORKER_HISTORY,
+				CampaignState.EVIDENCE_KEY_INTERVENTIONS,
+				CampaignState.EVIDENCE_FINAL_LAYOUT_STABLE,
+				CampaignState.EVIDENCE_LONG_TERM_PATTERN,
 			]
 	for evidence_id: StringName in required:
 		if not campaign.collected_evidence_ids.has(evidence_id):
@@ -777,6 +892,127 @@ func _collect_modular_migration_evidence(
 		campaign.collect_evidence(
 			CampaignState.EVIDENCE_FUNCTIONAL_ZONING
 		)
+
+
+func _collect_finale_evidence(
+	state: ColonyState,
+	campaign: CampaignState
+) -> void:
+	var first_worker: AntModel = state.get_ant(
+		state.act1_state.first_worker_entity_id
+	)
+	if (
+		first_worker != null
+		and first_worker.life_stage == AntModel.LifeStage.WORKER
+		and state.act1_state.first_worker_emerged_tick >= 0
+		and state.act1_state.first_worker_emerged_tick
+			<= state.simulation_tick
+		and state.act1_state.first_worker_care_recorded
+	):
+		campaign.collect_evidence(
+			CampaignState.EVIDENCE_FIRST_WORKER_HISTORY
+		)
+	if _key_intervention_history_is_complete(campaign):
+		campaign.collect_evidence(
+			CampaignState.EVIDENCE_KEY_INTERVENTIONS
+		)
+	var dual: FacilityState = _find_dual_chamber(state)
+	var layout_stable: bool = _final_layout_is_stable(state, dual)
+	if layout_stable:
+		campaign.collect_evidence(
+			CampaignState.EVIDENCE_FINAL_LAYOUT_STABLE
+		)
+	if (
+		layout_stable
+		and _migration_tasks_are_idle(state)
+		and campaign.collected_evidence_ids.has(
+			CampaignState.EVIDENCE_FIRST_WORKER_HISTORY
+		)
+		and campaign.collected_evidence_ids.has(
+			CampaignState.EVIDENCE_KEY_INTERVENTIONS
+		)
+	):
+		state.act1_state.finale_stable_ticks = mini(
+			_habitat_config.act1_progression_config.finale_stable_ticks,
+			state.act1_state.finale_stable_ticks + 1
+		)
+	else:
+		state.act1_state.finale_stable_ticks = 0
+	if (
+		state.act1_state.finale_stable_ticks
+		>= _habitat_config.act1_progression_config.finale_stable_ticks
+	):
+		campaign.collect_evidence(
+			CampaignState.EVIDENCE_LONG_TERM_PATTERN
+		)
+
+
+func _migration_tasks_are_idle(state: ColonyState) -> bool:
+	for ant: AntModel in state.ants:
+		if ant.life_stage != AntModel.LifeStage.WORKER:
+			continue
+		if (
+			ant.migration_task == null
+			or ant.migration_task.state
+				!= MigrationTaskModel.State.IDLE
+		):
+			return false
+	return true
+
+
+func _key_intervention_history_is_complete(
+	campaign: CampaignState
+) -> bool:
+	for evidence_id: StringName in [
+		CampaignState.EVIDENCE_QUEEN_CARE,
+		CampaignState.EVIDENCE_FIRST_NUTRIENT_EXCHANGE,
+		CampaignState.EVIDENCE_WASTE_TRAY_CLEANED,
+		CampaignState.EVIDENCE_HYDRATION_RESPONSE,
+		CampaignState.EVIDENCE_FUNCTIONAL_ZONING,
+	]:
+		if not campaign.collected_evidence_ids.has(evidence_id):
+			return false
+	return true
+
+
+func _final_layout_is_stable(
+	state: ColonyState,
+	dual: FacilityState
+) -> bool:
+	if dual == null:
+		return false
+	var brood_zone: HabitatZoneState = state.get_zone(dual.zone_id)
+	var utility_zone: HabitatZoneState = state.get_zone(
+		dual.secondary_zone_id
+	)
+	if (
+		brood_zone == null
+		or utility_zone == null
+		or not brood_zone.discovered
+		or not utility_zone.discovered
+		or state.queen.zone_id != dual.zone_id
+		or not _all_current_brood_in_zone(state, dual.zone_id)
+	):
+		return false
+	return (
+		_dual_chamber_has_external_connection(state, dual)
+		and _zone_has_hydration_module(state, dual.zone_id)
+		and _zone_is_brood_comfortable(brood_zone)
+		and _dual_chamber_has_functional_paths(state, dual)
+	)
+
+
+func _all_current_brood_in_zone(
+	state: ColonyState,
+	zone_id: StringName
+) -> bool:
+	for ant: AntModel in state.ants:
+		if (
+			ant.life_stage != AntModel.LifeStage.WORKER
+			and ant.zone_id != zone_id
+		):
+			return false
+	return true
 
 
 func _find_dual_chamber(state: ColonyState) -> FacilityState:

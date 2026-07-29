@@ -2,7 +2,50 @@ class_name SaveFixtureDowngrade
 extends RefCounted
 
 
+static func strip_r12_fields(envelope: Dictionary) -> void:
+	var habitat: Variant = envelope["frozen_config_bundle"].get("habitat")
+	if typeof(habitat) == TYPE_DICTIONARY:
+		var progression: Variant = habitat.get("act1_progression_config")
+		if typeof(progression) == TYPE_DICTIONARY:
+			progression.erase("finale_stable_ticks")
+			progression.erase("final_report_observation_card_id")
+	var state: Dictionary = envelope["state_payload"]
+	var act1: Variant = state.get("act1")
+	if typeof(act1) == TYPE_DICTIONARY:
+		act1.erase("finale_stable_ticks")
+		act1.erase("final_report_generated_tick")
+	var cards: Variant = state.get("unlocked_observation_card_ids")
+	if typeof(cards) == TYPE_ARRAY:
+		cards.erase("glass_observation_report")
+	var campaign: Variant = state.get("campaign")
+	if typeof(campaign) != TYPE_DICTIONARY:
+		return
+	for evidence_id: String in [
+		"first_worker_history_reviewed",
+		"key_interventions_reviewed",
+		"final_layout_stable",
+		"long_term_colony_pattern",
+	]:
+		(campaign["collected_evidence_ids"] as Array).erase(evidence_id)
+	(campaign["confirmed_inference_ids"] as Array).erase(
+		"layout_shapes_long_term_behavior"
+	)
+	if (
+		int(campaign.get("chapter", -1))
+		== CampaignState.Chapter.ACT1_STABLE_COLONY_SUMMARY
+	):
+		campaign["chapter"] = (
+			CampaignState.Chapter.ACT1_MODULAR_MIGRATION
+		)
+		campaign["completed_chapter_count"] = 5
+		campaign["status"] = CampaignState.Status.COMPLETED
+		campaign["campaign_completed_tick"] = int(
+			state.get("simulation_tick", 0)
+		)
+
+
 static func strip_r11_fields(envelope: Dictionary) -> void:
+	strip_r12_fields(envelope)
 	var habitat: Variant = envelope["frozen_config_bundle"].get("habitat")
 	if typeof(habitat) == TYPE_DICTIONARY:
 		var progression: Variant = habitat.get("act1_progression_config")

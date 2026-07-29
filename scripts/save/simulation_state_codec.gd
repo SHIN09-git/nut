@@ -1,7 +1,8 @@
 class_name SimulationStateCodec
 extends RefCounted
 
-const CURRENT_SCHEMA_ID: String = "r11.authority.v9"
+const CURRENT_SCHEMA_ID: String = "r12.authority.v10"
+const R11_SCHEMA_ID: String = "r11.authority.v9"
 const R10_SCHEMA_ID: String = "r10.authority.v8"
 const R9_SCHEMA_ID: String = "r9.authority.v7"
 const R8_SCHEMA_ID: String = "r8.authority.v6"
@@ -498,6 +499,9 @@ static func _encode_act1_progression_config(
 		"environment_stable_ticks": config.environment_stable_ticks,
 		"core_migration_stable_ticks":
 			config.core_migration_stable_ticks,
+		"finale_stable_ticks": config.finale_stable_ticks,
+		"final_report_observation_card_id":
+			String(config.final_report_observation_card_id),
 	}
 
 
@@ -615,6 +619,9 @@ static func _encode_act1_state(act1: Act1State) -> Dictionary:
 		"first_worker_care_recorded":
 			act1.first_worker_care_recorded,
 		"environment_stable_ticks": act1.environment_stable_ticks,
+		"finale_stable_ticks": act1.finale_stable_ticks,
+		"final_report_generated_tick":
+			act1.final_report_generated_tick,
 	}
 
 
@@ -1250,6 +1257,8 @@ static func _decode_act1_progression_data(value: Variant) -> Dictionary:
 		"pollution_avoidance_min_contrast",
 		"environment_stable_ticks",
 		"core_migration_stable_ticks",
+		"finale_stable_ticks",
+		"final_report_observation_card_id",
 	]
 	if not _is_dictionary_with_keys(value, keys):
 		return _failure("Act 1 progression configuration is invalid")
@@ -1260,6 +1269,9 @@ static func _decode_act1_progression_data(value: Variant) -> Dictionary:
 		)
 		or not _is_integral_number(value["environment_stable_ticks"])
 		or not _is_integral_number(value["core_migration_stable_ticks"])
+		or not _is_integral_number(value["finale_stable_ticks"])
+		or typeof(value["final_report_observation_card_id"])
+			!= TYPE_STRING
 	):
 		return _failure("Act 1 progression configuration is malformed")
 	var data := Act1ProgressionData.new()
@@ -1276,6 +1288,10 @@ static func _decode_act1_progression_data(value: Variant) -> Dictionary:
 	)
 	data.core_migration_stable_ticks = int(
 		value["core_migration_stable_ticks"]
+	)
+	data.finale_stable_ticks = int(value["finale_stable_ticks"])
+	data.final_report_observation_card_id = StringName(
+		value["final_report_observation_card_id"]
 	)
 	if not data.is_valid():
 		return _failure("Act 1 progression configuration is not valid")
@@ -2074,6 +2090,8 @@ static func _decode_act1_state(value: Variant) -> Dictionary:
 		"first_worker_emerged_tick",
 		"first_worker_care_recorded",
 		"environment_stable_ticks",
+		"finale_stable_ticks",
+		"final_report_generated_tick",
 	]
 	if not _is_dictionary_with_keys(value, keys):
 		return _failure("Act 1 state is invalid")
@@ -2087,6 +2105,8 @@ static func _decode_act1_state(value: Variant) -> Dictionary:
 		"first_worker_entity_id",
 		"first_worker_emerged_tick",
 		"environment_stable_ticks",
+		"finale_stable_ticks",
+		"final_report_generated_tick",
 	]:
 		if not _is_integral_number(value[key]):
 			return _failure("Act 1 state contains a non-integer")
@@ -2118,6 +2138,10 @@ static func _decode_act1_state(value: Variant) -> Dictionary:
 	)
 	act1.environment_stable_ticks = int(
 		value["environment_stable_ticks"]
+	)
+	act1.finale_stable_ticks = int(value["finale_stable_ticks"])
+	act1.final_report_generated_tick = int(
+		value["final_report_generated_tick"]
 	)
 	return {"ok": true, "error": "", "act1": act1}
 
@@ -2983,7 +3007,7 @@ static func _decode_event(value: Variant) -> Dictionary:
 		or int(value["tick"]) < 0
 		or int(value["event_type"]) < ObservationEvent.Type.RELOCATION_STARTED
 		or int(value["event_type"])
-			> ObservationEvent.Type.MIGRATION_COMPLETED
+			> ObservationEvent.Type.FINAL_REPORT_GENERATED
 		or typeof(value["source_zone_id"]) != TYPE_STRING
 		or typeof(value["target_zone_id"]) != TYPE_STRING
 	):
