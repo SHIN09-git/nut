@@ -406,6 +406,11 @@
 - 计时、checksum、非法数据、迁移、真实暂停保存／返回／继续路径和旧回归
   由独立测试保护。证据见
   `docs/validation/v1_r17_playtime_evidence_001.md`。
+- 从源码提交 `68c533edf1c28cf2d01d0dc3794d7918db7228b5` 重新导出六文件
+  Windows x86_64 release，并冻结 ZIP
+  `f72ac74a367463429ea7c195cd96ba4e5f0d292e06b314c6b3832ad1d941e1bd`。
+- 隔离发行冒烟、F3 release 门控、真实保存／继续／档案摘要、PCK 剥离和
+  最终文件哈希见 `docs/validation/v1_r17_windows_candidate_001.md`。
 
 ### 下一停止点
 

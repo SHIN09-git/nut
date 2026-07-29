@@ -89,5 +89,5 @@ E:\GAME_R17_UI_RUNTIME
 - 7 名有效首次接触测试者数据仍未提供，保持 `INCOMPLETE`。
 - 10 个首次完整档案、中位 180～240 分钟、至少 7/10 完成率与最终理解度仍未取得，保持 `INCOMPLETE`。
 - 本机计时能力只能提供一致证据，不能替代外部玩家或把缺失数据改写为 `PASS`。
-- R16 已冻结的 Beta ZIP 不包含 R17；外测前必须从 R17 已提交源码重新导出 Windows 候选并冻结新哈希。
+- 包含 R17 的 Windows 候选已从源码提交 `68c533edf1c28cf2d01d0dc3794d7918db7228b5` 重新导出并冻结；完整文件哈希、隔离运行和发行窗口证据见 `docs/validation/v1_r17_windows_candidate_001.md`。
 - `main` 合并、`v1.0.0` Tag、GitHub Release 和商店发布仍需用户另行明确授权。

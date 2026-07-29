@@ -838,6 +838,11 @@ SHA-256 已冻结。验证中发现的高精度完成档案 checksum 往返失�
 摘要，但不替代人工起止、阻塞、介入、完成率与理解度记录。180～240 分钟
 中位时长 Gate 仍为 `INCOMPLETE`。
 
+包含 R17 的 Windows x86_64 候选已从源码提交
+`68c533edf1c28cf2d01d0dc3794d7918db7228b5` 导出并冻结；包内剥离、
+隔离运行、真实保存／继续和最终哈希见
+`docs/validation/v1_r17_windows_candidate_001.md`。
+
 `main` 合并、`v1.0.0` Tag、GitHub Release 或商店发布必须另行明确授权。
 
 ---
