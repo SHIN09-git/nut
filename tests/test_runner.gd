@@ -63,6 +63,9 @@ const DemoSettingsStateTestSuiteScript: Script = preload(
 const SettingsStoreTestSuiteScript: Script = preload(
 	"res://tests/ui/settings_store_test_suite.gd"
 )
+const ProductionAssetsTestSuiteScript: Script = preload(
+	"res://tests/production/production_assets_test_suite.gd"
+)
 const DemoLocalizationTestSuiteScript: Script = preload(
 	"res://tests/ui/demo_localization_test_suite.gd"
 )
@@ -147,6 +150,7 @@ func _run_all_tests() -> void:
 	_run_player_annotation_state_test_suite()
 	_run_demo_settings_state_test_suite()
 	_run_settings_store_test_suite()
+	_run_production_assets_test_suite()
 	_run_demo_localization_test_suite()
 	_run_view_adapter_test_suite()
 	_run_habitat_view_interpolation_test_suite()
@@ -198,6 +202,7 @@ func _validate_suite_scripts() -> bool:
 		PlayerAnnotationStateTestSuiteScript,
 		DemoSettingsStateTestSuiteScript,
 		SettingsStoreTestSuiteScript,
+		ProductionAssetsTestSuiteScript,
 		DemoLocalizationTestSuiteScript,
 		ViewAdapterTestSuiteScript,
 		HabitatViewInterpolationTestSuiteScript,
@@ -370,6 +375,17 @@ func _run_demo_localization_test_suite() -> void:
 	var suite: DemoLocalizationTestSuite = DemoLocalizationTestSuiteScript.new()
 	suite.run()
 	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
+
+
+func _run_production_assets_test_suite() -> void:
+	var suite: ProductionAssetsTestSuite = (
+		ProductionAssetsTestSuiteScript.new()
+	)
+	suite.run(root)
+	_collect_suite_results(
+		suite.get_assertion_count(),
+		suite.get_failure_count()
+	)
 
 
 func _run_view_adapter_test_suite() -> void:

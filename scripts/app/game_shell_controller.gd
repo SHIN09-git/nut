@@ -588,7 +588,10 @@ func _apply_settings(persist: bool) -> void:
 		window.content_scale_factor = 1.0
 	var scale_factor: float = _settings.get_ui_scale_factor()
 	if _ui_scale_theme == null:
-		_ui_scale_theme = Theme.new()
+		_ui_scale_theme = (
+			theme.duplicate(true) as Theme
+			if theme != null else Theme.new()
+		)
 		theme = _ui_scale_theme
 	_ui_scale_theme.default_base_scale = scale_factor
 	_ui_scale_theme.default_font_size = int(round(16.0 * scale_factor))

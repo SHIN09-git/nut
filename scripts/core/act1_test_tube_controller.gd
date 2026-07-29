@@ -76,6 +76,7 @@ var _selected_facility_type_id: StringName = (
 @onready var _journal_panel: Control = %JournalPanel
 @onready var _journal_heading: Label = %JournalHeading
 @onready var _journal_chapter_label: Label = %JournalChapterLabel
+@onready var _journal_chapter_art: ChapterArtView = %JournalChapterArt
 @onready var _journal_status_label: Label = %JournalStatusLabel
 @onready var _journal_objective_label: Label = %JournalObjectiveLabel
 @onready var _journal_evidence_label: Label = %JournalEvidenceLabel
@@ -698,6 +699,7 @@ func _update_journal() -> void:
 		return
 	var campaign: CampaignSnapshot = _latest_snapshot.campaign
 	_journal_chapter_label.text = _chapter_name(campaign.chapter)
+	_journal_chapter_art.set_chapter(campaign.chapter)
 	_journal_status_label.text = _campaign_status(campaign)
 	_journal_objective_label.text = _objective_text(campaign)
 	_journal_evidence_label.text = _evidence_text(campaign)
@@ -1667,7 +1669,10 @@ func _apply_ui_scale() -> void:
 		return
 	var scale_factor: float = _settings_state.get_ui_scale_factor()
 	if _ui_scale_theme == null:
-		_ui_scale_theme = Theme.new()
+		_ui_scale_theme = (
+			theme.duplicate(true) as Theme
+			if theme != null else Theme.new()
+		)
 		theme = _ui_scale_theme
 	_ui_scale_theme.default_base_scale = scale_factor
 	_ui_scale_theme.default_font_size = int(round(16.0 * scale_factor))

@@ -48,6 +48,27 @@ const SUGAR_COLOR: Color = Color(0.96, 0.73, 0.28, 0.95)
 const PROTEIN_COLOR: Color = Color(0.78, 0.34, 0.24, 0.95)
 const CONNECTION_COLOR: Color = Color(0.46, 0.65, 0.56, 0.8)
 const CLOSED_CONNECTION_COLOR: Color = Color(0.75, 0.28, 0.24, 0.9)
+const METAL_DARK: Color = Color(0.12, 0.13, 0.11, 1.0)
+const METAL_MID: Color = Color(0.43, 0.40, 0.29, 1.0)
+const METAL_LIGHT: Color = Color(0.74, 0.67, 0.43, 0.92)
+const GLASS_DARK: Color = Color(0.055, 0.105, 0.105, 0.94)
+const GLASS_LIGHT: Color = Color(0.58, 0.82, 0.76, 0.74)
+const SUBSTRATE_COLOR: Color = Color(0.39, 0.27, 0.14, 0.96)
+const FACILITY_SHADOW: Color = Color(0.0, 0.0, 0.0, 0.36)
+const PRODUCTION_FACILITY_TYPES: Array[StringName] = [
+	&"test_tube_nest",
+	&"micro_feeding_port",
+	&"small_foraging_box",
+	&"connector_tube",
+	&"connector_elbow",
+	&"connector_gate",
+	&"light_cover",
+	&"hydration_module",
+	&"sugar_station",
+	&"protein_dish",
+	&"waste_tray",
+	&"dual_chamber_nest",
+]
 
 var _snapshot: HabitatLayoutSnapshot
 var _camera_zoom: float = 1.0
@@ -65,6 +86,10 @@ func _ready() -> void:
 	focus_mode = Control.FOCUS_ALL
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	queue_redraw()
+
+
+func has_production_style(type_id: StringName) -> bool:
+	return PRODUCTION_FACILITY_TYPES.has(type_id)
 
 
 func _notification(what: int) -> void:
@@ -528,6 +553,14 @@ func _draw_facility(facility: FacilitySnapshot) -> void:
 	rect = rect.grow(-inset)
 	_facility_hit_rects[facility.facility_id] = rect
 	var selected: bool = facility.facility_id == _selected_facility_id
+	draw_rect(
+		Rect2(
+			rect.position + Vector2(3.0, 4.0) * _camera_zoom,
+			rect.size
+		),
+		FACILITY_SHADOW,
+		true
+	)
 	var fill: Color = (
 		FACILITY_COLOR if facility.player_removable else FIXED_FACILITY_COLOR
 	)
@@ -558,20 +591,48 @@ func _draw_facility(facility: FacilitySnapshot) -> void:
 		false,
 		3.0 if selected else 2.0
 	)
+	draw_line(
+		rect.position + Vector2(3.0, 3.0) * _camera_zoom,
+		Vector2(rect.end.x - 3.0 * _camera_zoom, rect.position.y + 3.0 * _camera_zoom),
+		Color(0.82, 0.90, 0.77, 0.18),
+		maxf(1.0, _camera_zoom),
+		true
+	)
 	var center: Vector2 = rect.get_center()
 	match facility.type_id:
 		&"test_tube_nest":
-			draw_line(
-				Vector2(rect.position.x + 12.0, center.y),
-				Vector2(rect.end.x - 12.0, center.y),
-				FACILITY_EDGE,
-				8.0,
-				true
+			var tube_rect: Rect2 = Rect2(
+				Vector2(rect.position.x + 8.0 * _camera_zoom, center.y - 9.0 * _camera_zoom),
+				Vector2(rect.size.x - 16.0 * _camera_zoom, 18.0 * _camera_zoom)
+			)
+			_draw_facility_capsule(tube_rect, GLASS_DARK, GLASS_LIGHT)
+			draw_circle(
+				Vector2(tube_rect.position.x + tube_rect.size.y * 0.5, center.y),
+				tube_rect.size.y * 0.34,
+				HUMIDITY_COLOR
+			)
+			draw_circle(
+				Vector2(tube_rect.end.x - tube_rect.size.y * 0.52, center.y),
+				tube_rect.size.y * 0.31,
+				Color(0.84, 0.82, 0.69, 0.96)
 			)
 		&"micro_feeding_port":
-			draw_circle(center, maxf(5.0, 10.0 * _camera_zoom), FACILITY_EDGE)
+			draw_circle(center + Vector2(1.5, 2.0) * _camera_zoom, 13.0 * _camera_zoom, FACILITY_SHADOW)
+			draw_circle(center, 13.0 * _camera_zoom, METAL_MID)
+			draw_circle(center, 9.0 * _camera_zoom, METAL_DARK)
+			draw_circle(center, 5.0 * _camera_zoom, SUGAR_COLOR)
+			draw_arc(center, 10.5 * _camera_zoom, PI, PI * 1.75, 12, METAL_LIGHT, 1.5 * _camera_zoom, true)
 		&"small_foraging_box":
-			draw_rect(rect.grow(-10.0 * _camera_zoom), FACILITY_EDGE, false, 3.0)
+			var tray: Rect2 = rect.grow(-9.0 * _camera_zoom)
+			draw_rect(tray, METAL_DARK, true)
+			draw_rect(tray.grow(-3.0 * _camera_zoom), SUBSTRATE_COLOR, true)
+			draw_rect(tray, METAL_LIGHT, false, 2.0 * _camera_zoom)
+			for index: int in 4:
+				var pebble: Vector2 = tray.get_center() + Vector2(
+					float(posmod(index * 17, 31) - 15),
+					float(posmod(index * 11, 19) - 9)
+				) * _camera_zoom
+				draw_circle(pebble, 2.2 * _camera_zoom, Color(0.65, 0.53, 0.33, 0.9))
 		&"dual_chamber_nest":
 			if posmod(facility.orientation, 2) == 0:
 				draw_line(
@@ -587,42 +648,84 @@ func _draw_facility(facility: FacilitySnapshot) -> void:
 					FACILITY_EDGE,
 					3.0
 				)
+			var chamber_axis: Vector2 = (
+				Vector2(rect.size.x * 0.23, 0.0)
+				if posmod(facility.orientation, 2) == 0
+				else Vector2(0.0, rect.size.y * 0.23)
+			)
+			for chamber_center: Vector2 in [
+				center - chamber_axis,
+				center + chamber_axis,
+			]:
+				draw_circle(
+					chamber_center,
+					minf(rect.size.x, rect.size.y) * 0.18,
+					Color(0.06, 0.10, 0.085, 0.72)
+				)
+				draw_arc(
+					chamber_center,
+					minf(rect.size.x, rect.size.y) * 0.18,
+					0.0,
+					TAU,
+					24,
+					GLASS_LIGHT,
+					1.5 * _camera_zoom,
+					true
+				)
+		&"connector_tube":
+			var horizontal: bool = rect.size.x >= rect.size.y
+			var tube_start: Vector2 = (
+				Vector2(rect.position.x + 6.0 * _camera_zoom, center.y)
+				if horizontal
+				else Vector2(center.x, rect.position.y + 6.0 * _camera_zoom)
+			)
+			var tube_end: Vector2 = (
+				Vector2(rect.end.x - 6.0 * _camera_zoom, center.y)
+				if horizontal
+				else Vector2(center.x, rect.end.y - 6.0 * _camera_zoom)
+			)
+			draw_line(tube_start, tube_end, METAL_DARK, 11.0 * _camera_zoom, true)
+			draw_line(tube_start, tube_end, GLASS_LIGHT, 5.0 * _camera_zoom, true)
+			for collar: Vector2 in [tube_start, tube_end]:
+				draw_circle(collar, 5.0 * _camera_zoom, METAL_MID)
+				draw_circle(collar, 2.5 * _camera_zoom, GLASS_DARK)
 		&"connector_gate":
-			draw_line(
-				Vector2(center.x, rect.position.y + 8.0),
-				Vector2(center.x, rect.end.y - 8.0),
-				SELECTED_COLOR,
-				5.0
-			)
+			_draw_gate_icon(rect, center)
 		&"connector_elbow":
-			draw_polyline(
-				PackedVector2Array([
-					Vector2(rect.position.x + 8.0, center.y),
-					center,
-					Vector2(center.x, rect.position.y + 8.0),
-				]),
-				FACILITY_EDGE,
-				5.0
-			)
-		&"hydration_module":
-			draw_circle(
+			var elbow: PackedVector2Array = PackedVector2Array([
+				Vector2(rect.position.x + 8.0 * _camera_zoom, center.y),
 				center,
-				maxf(6.0, 12.0 * _camera_zoom),
-				HUMIDITY_COLOR
-			)
-			draw_line(
-				center + Vector2(0.0, -16.0 * _camera_zoom),
-				center + Vector2(0.0, 10.0 * _camera_zoom),
-				Color(0.72, 0.90, 0.96, 0.9),
-				3.0
-			)
+				Vector2(center.x, rect.position.y + 8.0 * _camera_zoom),
+			])
+			draw_polyline(elbow, METAL_DARK, 10.0 * _camera_zoom, true)
+			draw_polyline(elbow, GLASS_LIGHT, 5.0 * _camera_zoom, true)
+			draw_circle(center, 5.0 * _camera_zoom, METAL_LIGHT)
+		&"light_cover":
+			var cover: Rect2 = rect.grow(-7.0 * _camera_zoom)
+			draw_rect(cover, Color(0.13, 0.085, 0.052, 0.98), true)
+			draw_rect(cover, METAL_LIGHT, false, 2.0 * _camera_zoom)
+			for index: int in 3:
+				var rib_x: float = lerpf(
+					cover.position.x,
+					cover.end.x,
+					float(index + 1) / 4.0
+				)
+				draw_line(
+					Vector2(rib_x, cover.position.y + 4.0 * _camera_zoom),
+					Vector2(rib_x, cover.end.y - 4.0 * _camera_zoom),
+					Color(0.56, 0.39, 0.20, 0.8),
+					2.0 * _camera_zoom
+				)
+		&"hydration_module":
+			_draw_hydration_icon(center)
 		&"sugar_station":
-			draw_circle(center, maxf(6.0, 11.0 * _camera_zoom), SUGAR_COLOR)
+			_draw_dish_icon(center, SUGAR_COLOR, true)
 		&"protein_dish":
-			draw_circle(center, maxf(6.0, 11.0 * _camera_zoom), PROTEIN_COLOR)
+			_draw_dish_icon(center, PROTEIN_COLOR, false)
 		&"waste_tray":
 			var tray: Rect2 = rect.grow(-11.0 * _camera_zoom)
-			draw_rect(tray, FACILITY_EDGE, false, 3.0)
+			draw_rect(tray, METAL_DARK, true)
+			draw_rect(tray, METAL_LIGHT, false, 2.5 * _camera_zoom)
 			var fill_height: float = tray.size.y * facility.waste_fill_ratio
 			draw_rect(
 				Rect2(
@@ -632,12 +735,122 @@ func _draw_facility(facility: FacilitySnapshot) -> void:
 				POLLUTION_COLOR,
 				true
 			)
+			for index: int in 3:
+				draw_circle(
+					tray.position + Vector2(
+						tray.size.x * (float(index + 1) / 4.0),
+						tray.size.y * 0.35
+					),
+					2.2 * _camera_zoom,
+					Color(0.82, 0.65, 0.34, 0.9)
+				)
 		_:
 			draw_line(
 				Vector2(rect.position.x + 8.0, center.y),
 				Vector2(rect.end.x - 8.0, center.y),
 				FACILITY_EDGE,
 				5.0
+			)
+
+
+func _draw_facility_capsule(
+	rect: Rect2,
+	fill: Color,
+	edge: Color
+) -> void:
+	var radius: float = rect.size.y * 0.5
+	draw_rect(
+		Rect2(
+			rect.position + Vector2(radius, 0.0),
+			Vector2(maxf(0.0, rect.size.x - radius * 2.0), rect.size.y)
+		),
+		fill,
+		true
+	)
+	draw_circle(rect.position + Vector2(radius, radius), radius, fill)
+	draw_circle(rect.end - Vector2(radius, radius), radius, fill)
+	draw_line(
+		rect.position + Vector2(radius, 1.5 * _camera_zoom),
+		rect.end - Vector2(radius, -1.5 * _camera_zoom),
+		edge,
+		1.5 * _camera_zoom,
+		true
+	)
+
+
+func _draw_gate_icon(rect: Rect2, center: Vector2) -> void:
+	var vertical: bool = rect.size.y >= rect.size.x
+	var start: Vector2 = (
+		Vector2(center.x, rect.position.y + 7.0 * _camera_zoom)
+		if vertical
+		else Vector2(rect.position.x + 7.0 * _camera_zoom, center.y)
+	)
+	var end: Vector2 = (
+		Vector2(center.x, rect.end.y - 7.0 * _camera_zoom)
+		if vertical
+		else Vector2(rect.end.x - 7.0 * _camera_zoom, center.y)
+	)
+	draw_line(start, end, METAL_DARK, 11.0 * _camera_zoom, true)
+	draw_line(start, end, GLASS_LIGHT, 5.0 * _camera_zoom, true)
+	var gate_axis: Vector2 = (
+		Vector2(8.0, 0.0)
+		if vertical else Vector2(0.0, 8.0)
+	) * _camera_zoom
+	draw_line(
+		center - gate_axis,
+		center + gate_axis,
+		SELECTED_COLOR,
+		3.0 * _camera_zoom,
+		true
+	)
+	draw_circle(center, 4.0 * _camera_zoom, METAL_LIGHT)
+
+
+func _draw_hydration_icon(center: Vector2) -> void:
+	var drop: PackedVector2Array = PackedVector2Array([
+		center + Vector2(0.0, -15.0) * _camera_zoom,
+		center + Vector2(10.0, 1.0) * _camera_zoom,
+		center + Vector2(7.0, 10.0) * _camera_zoom,
+		center + Vector2(0.0, 14.0) * _camera_zoom,
+		center + Vector2(-7.0, 10.0) * _camera_zoom,
+		center + Vector2(-10.0, 1.0) * _camera_zoom,
+	])
+	draw_colored_polygon(drop, GLASS_DARK)
+	draw_polyline(drop, GLASS_LIGHT, 2.0 * _camera_zoom, true)
+	draw_line(
+		center + Vector2(-3.0, -4.0) * _camera_zoom,
+		center + Vector2(-5.0, 5.0) * _camera_zoom,
+		Color(0.78, 0.96, 1.0, 0.86),
+		2.0 * _camera_zoom,
+		true
+	)
+
+
+func _draw_dish_icon(
+	center: Vector2,
+	contents: Color,
+	is_liquid: bool
+) -> void:
+	draw_circle(center + Vector2(1.0, 2.0) * _camera_zoom, 14.0 * _camera_zoom, FACILITY_SHADOW)
+	draw_circle(center, 14.0 * _camera_zoom, METAL_MID)
+	draw_circle(center, 10.0 * _camera_zoom, METAL_DARK)
+	if is_liquid:
+		draw_circle(center, 7.0 * _camera_zoom, contents)
+		draw_circle(
+			center + Vector2(-2.5, -2.5) * _camera_zoom,
+			2.0 * _camera_zoom,
+			Color(1.0, 0.92, 0.62, 0.9)
+		)
+	else:
+		for offset: Vector2 in [
+			Vector2(-4.0, 2.0),
+			Vector2(1.0, -3.0),
+			Vector2(4.0, 4.0),
+		]:
+			draw_circle(
+				center + offset * _camera_zoom,
+				3.0 * _camera_zoom,
+				contents
 			)
 
 

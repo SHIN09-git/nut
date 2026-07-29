@@ -31,6 +31,12 @@ const WASTE_COLOR: Color = Color(0.48, 0.30, 0.14, 0.96)
 const WASTE_GLOW: Color = Color(0.70, 0.48, 0.22, 0.26)
 const SCOUT_GLOW: Color = Color(0.42, 0.76, 0.67, 0.30)
 const MIGRATION_GLOW: Color = Color(0.93, 0.66, 0.30, 0.28)
+const TABLE_DARK: Color = Color(0.018, 0.028, 0.025, 1.0)
+const TABLE_WARM: Color = Color(0.11, 0.075, 0.042, 0.24)
+const TABLE_GRAIN: Color = Color(0.31, 0.24, 0.15, 0.13)
+const GLASS_SHADOW: Color = Color(0.0, 0.0, 0.0, 0.44)
+const SUBSTRATE_LIGHT: Color = Color(0.55, 0.44, 0.27, 0.66)
+const CONDENSATION_COLOR: Color = Color(0.64, 0.90, 0.88, 0.50)
 const WORKER_SELECTION_RADIUS: float = 28.0
 
 var _ant_views: Dictionary[int, AntView] = {}
@@ -724,21 +730,47 @@ func _get_nest_rect() -> Rect2:
 func _draw() -> void:
 	if size.x < 280.0 or size.y < 180.0:
 		return
+	_draw_observation_table()
 	var tube: Rect2 = _get_tube_rect()
+	_draw_capsule(
+		Rect2(
+			tube.position + Vector2(7.0, 10.0),
+			tube.size
+		),
+		GLASS_SHADOW
+	)
 	_draw_capsule(tube, GLASS_FILL)
 	var radius: float = tube.size.y * 0.5
 	var left_center: Vector2 = tube.position + Vector2(radius, radius)
 	var water_color: Color = WATER_COLOR
+	var nest_humidity: float = 0.5
 	if _latest_snapshot != null:
 		var nest_environment: HabitatZoneSnapshot = (
 			_latest_snapshot.colony.find_zone(&"test_tube_nest")
 		)
 		if nest_environment != null:
+			nest_humidity = clampf(nest_environment.humidity, 0.0, 1.0)
 			water_color = WATER_COLOR.lerp(
 				Color(0.16, 0.62, 0.72, 0.68),
-				clampf(nest_environment.humidity, 0.0, 1.0) * 0.45
+				nest_humidity * 0.45
 			)
 	draw_circle(left_center, radius - 12.0, water_color)
+	draw_arc(
+		left_center,
+		radius - 24.0,
+		-PI * 0.72,
+		PI * 0.18,
+		28,
+		Color(0.68, 0.92, 0.94, 0.32),
+		3.0,
+		true
+	)
+	for index: int in 5:
+		var bubble: Vector2 = left_center + Vector2(
+			float(posmod(index * 23, 74) - 38),
+			float(posmod(index * 17, 82) - 39)
+		)
+		draw_circle(bubble, 2.0 + float(posmod(index, 3)), Color(0.78, 0.95, 0.96, 0.22))
 	var cotton_x: float = tube.position.x + tube.size.y * 0.80
 	for index: int in 7:
 		var progress: float = float(index) / 6.0
@@ -748,6 +780,11 @@ func _draw() -> void:
 		)
 		draw_circle(center + Vector2(2.0, 2.0), 25.0, COTTON_SHADOW)
 		draw_circle(center, 22.0, COTTON_COLOR)
+		draw_circle(
+			center + Vector2(-6.0, -7.0),
+			7.0,
+			Color(0.94, 0.93, 0.82, 0.42)
+		)
 	var floor_y: float = tube.position.y + tube.size.y * 0.72
 	draw_line(
 		Vector2(cotton_x + 34.0, floor_y),
@@ -756,8 +793,20 @@ func _draw() -> void:
 		5.0,
 		true
 	)
+	for index: int in 28:
+		var progress: float = float(index) / 27.0
+		var grain: Vector2 = Vector2(
+			lerpf(cotton_x + 42.0, tube.end.x - radius * 0.42, progress),
+			floor_y + float(posmod(index * 19, 13) - 4)
+		)
+		draw_circle(
+			grain,
+			1.0 + float(posmod(index, 3)) * 0.45,
+			FLOOR_COLOR.lerp(SUBSTRATE_LIGHT, float(posmod(index, 4)) / 5.0)
+		)
 	_draw_dynamic_zones(tube)
 	_draw_environment_clues(tube)
+	_draw_condensation(tube, nest_humidity)
 	if (
 		_latest_snapshot != null
 		and _latest_snapshot.act1.queen_care.light_cover_applied
@@ -892,7 +941,59 @@ func _draw() -> void:
 		3.0,
 		true
 	)
+	draw_line(
+		Vector2(cotton_x + 40.0, tube.end.y - 20.0),
+		Vector2(tube.end.x - radius * 0.48, tube.end.y - 20.0),
+		Color(0.38, 0.61, 0.58, 0.15),
+		2.0,
+		true
+	)
 	_draw_tube_outline(tube)
+
+
+func _draw_observation_table() -> void:
+	draw_rect(Rect2(Vector2.ZERO, size), TABLE_DARK, true)
+	draw_circle(
+		Vector2(size.x * 0.78, size.y * 0.20),
+		maxf(size.x, size.y) * 0.46,
+		TABLE_WARM
+	)
+	for index: int in 13:
+		var y: float = size.y * (float(index) + 0.5) / 13.0
+		var drift: float = float(posmod(index * 37, 23) - 11)
+		draw_line(
+			Vector2(-20.0, y),
+			Vector2(size.x + 20.0, y + drift),
+			TABLE_GRAIN,
+			1.0,
+			true
+		)
+	draw_circle(
+		Vector2(size.x * 0.11, size.y * 0.18),
+		minf(size.x, size.y) * 0.22,
+		Color(0.03, 0.12, 0.13, 0.18)
+	)
+
+
+func _draw_condensation(tube: Rect2, humidity: float) -> void:
+	var count: int = clampi(roundi(4.0 + humidity * 18.0), 4, 22)
+	var safe_left: float = tube.position.x + tube.size.y * 0.92
+	var safe_width: float = maxf(80.0, tube.end.x - safe_left - tube.size.y * 0.30)
+	for index: int in count:
+		var x: float = safe_left + float(
+			posmod(index * 83 + 17, maxi(1, roundi(safe_width)))
+		)
+		var y: float = tube.position.y + 20.0 + float(
+			posmod(index * 47 + 9, maxi(1, roundi(tube.size.y - 52.0)))
+		)
+		var radius: float = 1.2 + float(posmod(index, 4)) * 0.7
+		draw_circle(Vector2(x, y), radius + 1.0, Color(0.02, 0.08, 0.08, 0.22))
+		draw_circle(Vector2(x - 0.5, y - 0.5), radius, CONDENSATION_COLOR)
+		draw_circle(
+			Vector2(x - radius * 0.35, y - radius * 0.35),
+			maxf(0.5, radius * 0.22),
+			Color(0.92, 1.0, 0.97, 0.62)
+		)
 
 
 func _draw_dynamic_zones(tube: Rect2) -> void:
@@ -928,6 +1029,13 @@ func _draw_dynamic_zones(tube: Rect2) -> void:
 		)
 		draw_rect(chamber, fill, true)
 		draw_rect(chamber, edge, false, 3.0, true)
+		draw_line(
+			chamber.position + Vector2(5.0, 6.0),
+			Vector2(chamber.end.x - 5.0, chamber.position.y + 6.0),
+			Color(0.84, 0.94, 0.88, 0.18),
+			2.0,
+			true
+		)
 		draw_circle(center, 5.0, edge)
 		if not zone.discovered:
 			for index: int in 3:
