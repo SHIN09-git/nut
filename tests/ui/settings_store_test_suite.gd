@@ -12,6 +12,7 @@ func run() -> void:
 	store.delete_for_tests()
 	_test_missing_file_uses_defaults(store)
 	_test_settings_round_trip_is_independent(store)
+	_test_legacy_settings_migrate_with_default_bindings(store)
 	_test_corrupt_file_uses_safe_defaults(store)
 	_test_unsafe_path_is_rejected()
 	store.delete_for_tests()
@@ -57,6 +58,10 @@ func _test_settings_round_trip_is_independent(store: SettingsStore) -> void:
 	_expect_true(state.select_ui_scale(2), "150 percent UI scale is selectable")
 	state.set_reduced_motion(true)
 	_expect_true(state.set_master_volume(0.35), "master volume is accepted")
+	_expect_true(
+		state.set_key_binding(DemoSettingsState.ACTION_HELP, KEY_H),
+		"custom Help shortcut is accepted"
+	)
 	var save_result: Dictionary = store.save(state)
 	_expect_true(save_result.get("ok", false), "settings commit succeeds")
 
@@ -94,6 +99,55 @@ func _test_settings_round_trip_is_independent(store: SettingsStore) -> void:
 		restored.get_master_volume(),
 		0.35,
 		"master volume survives round trip"
+	)
+	_expect_int(
+		restored.get_key_binding(DemoSettingsState.ACTION_HELP),
+		KEY_H,
+		"custom shortcut survives round trip"
+	)
+
+
+func _test_legacy_settings_migrate_with_default_bindings(
+	store: SettingsStore
+) -> void:
+	var legacy_settings: Dictionary = DemoSettingsState.new(
+		"en",
+		Vector2i(1920, 1080),
+		false,
+		1.25,
+		true,
+		0.6
+	).to_dictionary()
+	legacy_settings.erase("key_bindings")
+	var legacy_payload: Dictionary = {
+		"format_version": SettingsStore.LEGACY_FORMAT_VERSION,
+		"settings": legacy_settings,
+	}
+	var absolute_path: String = ProjectSettings.globalize_path(
+		TEST_SETTINGS_PATH
+	)
+	var file: FileAccess = FileAccess.open(absolute_path, FileAccess.WRITE)
+	_expect_true(file != null, "legacy settings fixture can be opened")
+	if file == null:
+		return
+	file.store_string(CanonicalSaveJson.encode(legacy_payload))
+	file.close()
+	var result: Dictionary = store.load_or_default()
+	_expect_true(result.get("ok", false), "legacy settings still load")
+	_expect_true(
+		result.get("migrated", false),
+		"legacy settings are explicitly marked migrated"
+	)
+	var restored: DemoSettingsState = result["settings"]
+	_expect_int(
+		restored.get_key_binding(DemoSettingsState.ACTION_HELP),
+		KEY_F1,
+		"legacy settings receive the default Help shortcut"
+	)
+	_expect_int(
+		restored.get_key_binding(DemoSettingsState.ACTION_JOURNAL),
+		KEY_J,
+		"legacy settings receive the default Journal shortcut"
 	)
 
 
@@ -155,6 +209,13 @@ func _expect_string(actual: String, expected: String, message: String) -> void:
 	if actual == expected:
 		return
 	_record_failure(message, expected, actual)
+
+
+func _expect_int(actual: int, expected: int, message: String) -> void:
+	_assertion_count += 1
+	if actual == expected:
+		return
+	_record_failure(message, str(expected), str(actual))
 
 
 func _expect_vector2i(

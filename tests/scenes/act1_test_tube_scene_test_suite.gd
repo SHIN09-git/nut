@@ -17,6 +17,7 @@ func run(scene_root: Node) -> void:
 	_scene_root = scene_root
 	_test_real_controls_complete_both_chapters()
 	_test_chapter_five_real_layout_and_migration_path()
+	_test_help_overlay_focus_and_pause()
 	_test_pause_and_f3_boundaries()
 	_test_colony_work_projection()
 	_test_waste_tray_clean_button_boundary()
@@ -29,6 +30,52 @@ func get_assertion_count() -> int:
 
 func get_failure_count() -> int:
 	return _failure_count
+
+
+func _test_help_overlay_focus_and_pause() -> void:
+	var controller: Act1TestTubeController = _create_controller(
+		Vector2(1280, 720)
+	)
+	(controller.get_node("%StartObservationButton") as Button).pressed.emit()
+	controller._process(SimulationClock.FIXED_STEP_SECONDS)
+	var journal: Button = controller.get_node("%JournalButton") as Button
+	var help: Button = controller.get_node("%HelpButton") as Button
+	var close: Button = controller.get_node("%HelpCloseButton") as Button
+	journal.grab_focus()
+	var tick_before: int = controller.get_simulation_tick()
+	help.pressed.emit()
+	_expect_true(
+		(controller.get_node("%HelpPanel") as Control).visible,
+		"Help button opens the ordinary controls panel"
+	)
+	_expect_true(
+		controller.is_simulation_paused(),
+		"Help pauses fixed-Tick simulation"
+	)
+	_expect_true(
+		controller.get_viewport().gui_get_focus_owner() == close,
+		"Help gives keyboard focus to its close action"
+	)
+	controller._process(SimulationClock.FIXED_STEP_SECONDS * 10.0)
+	_expect_int(
+		controller.get_simulation_tick(),
+		tick_before,
+		"Help prevents simulation progress while being read"
+	)
+	close.pressed.emit()
+	_expect_true(
+		not (controller.get_node("%HelpPanel") as Control).visible,
+		"Help close action hides the panel"
+	)
+	_expect_true(
+		not controller.is_simulation_paused(),
+		"closing Help restores the prior running state"
+	)
+	_expect_true(
+		controller.get_viewport().gui_get_focus_owner() == journal,
+		"closing Help restores focus to its opener context"
+	)
+	_destroy_controller(controller)
 
 
 func _test_real_controls_complete_both_chapters() -> void:
@@ -359,6 +406,7 @@ func _test_supported_viewport_layouts() -> void:
 			var viewport_rect := Rect2(Vector2.ZERO, viewport_size)
 			for node_path: String in [
 				"%StartObservationButton",
+				"%HelpButton",
 				"%CoverButton",
 				"%JournalButton",
 				"%LayoutButton",
@@ -390,6 +438,21 @@ func _test_supported_viewport_layouts() -> void:
 						int(viewport_size.x),
 						int(viewport_size.y),
 						int(ui_scale * 100.0),
+					]
+			)
+			(controller.get_node("%HelpButton") as Button).pressed.emit()
+			_settle_container_layout(controller)
+			var help_panel: Control = controller.get_node(
+				"%HelpPanel/Center/Panel"
+			) as Control
+			_expect_true(
+				viewport_rect.encloses(help_panel.get_global_rect()),
+				"Help panel fits inside %dx%d at %d%% UI scale (actual %s)"
+					% [
+						int(viewport_size.x),
+						int(viewport_size.y),
+						int(ui_scale * 100.0),
+						str(help_panel.get_global_rect()),
 					]
 			)
 			_destroy_controller(controller)

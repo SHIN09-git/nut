@@ -10,6 +10,7 @@ func run() -> void:
 	_test_selection_rejects_invalid_indices()
 	_test_locale_normalization_and_fullscreen_state()
 	_test_accessibility_and_volume_settings()
+	_test_rebindable_shortcuts()
 	_test_dictionary_round_trip_and_validation()
 
 
@@ -161,6 +162,49 @@ func _test_accessibility_and_volume_settings() -> void:
 	)
 
 
+func _test_rebindable_shortcuts() -> void:
+	var state: DemoSettingsState = DemoSettingsState.new()
+	_expect_int(
+		state.get_key_binding(DemoSettingsState.ACTION_HELP),
+		KEY_F1,
+		"help defaults to F1"
+	)
+	_expect_int(
+		state.get_key_binding(DemoSettingsState.ACTION_JOURNAL),
+		KEY_J,
+		"journal defaults to J"
+	)
+	_expect_true(
+		state.set_key_binding(DemoSettingsState.ACTION_HELP, KEY_H),
+		"a supported unused letter can replace Help"
+	)
+	_expect_int(
+		state.get_key_binding(DemoSettingsState.ACTION_HELP),
+		KEY_H,
+		"the remapped Help key is authoritative"
+	)
+	_expect_true(
+		not state.set_key_binding(
+			DemoSettingsState.ACTION_LAYOUT,
+			KEY_J
+		),
+		"a key already used by another action is rejected"
+	)
+	_expect_true(
+		not state.set_key_binding(
+			DemoSettingsState.ACTION_LAYOUT,
+			KEY_P
+		),
+		"fixed layout editing keys cannot be rebound"
+	)
+	state.reset_key_bindings()
+	_expect_int(
+		state.get_key_binding(DemoSettingsState.ACTION_HELP),
+		KEY_F1,
+		"reset restores the default Help binding"
+	)
+
+
 func _test_dictionary_round_trip_and_validation() -> void:
 	var state: DemoSettingsState = DemoSettingsState.new(
 		"en",
@@ -170,8 +214,13 @@ func _test_dictionary_round_trip_and_validation() -> void:
 		true,
 		0.45
 	)
+	_expect_true(
+		state.set_key_binding(DemoSettingsState.ACTION_HELP, KEY_H),
+		"round-trip fixture accepts a custom Help key"
+	)
 	var restored: DemoSettingsState = DemoSettingsState.from_dictionary(
-		state.to_dictionary()
+		state.to_dictionary(),
+		true
 	)
 	_expect_true(restored != null, "valid settings dictionary restores")
 	if restored != null:
@@ -191,6 +240,11 @@ func _test_dictionary_round_trip_and_validation() -> void:
 			"reduced motion restores"
 		)
 		_expect_float(restored.get_master_volume(), 0.45, "volume restores")
+		_expect_int(
+			restored.get_key_binding(DemoSettingsState.ACTION_HELP),
+			KEY_H,
+			"custom shortcut restores"
+		)
 	var invalid: Dictionary = state.to_dictionary()
 	invalid["ui_scale_index"] = 99
 	_expect_true(
@@ -202,6 +256,23 @@ func _test_dictionary_round_trip_and_validation() -> void:
 	_expect_true(
 		DemoSettingsState.from_dictionary(invalid) == null,
 		"NaN persisted volume is rejected"
+	)
+	invalid = state.to_dictionary()
+	var duplicate_bindings: Dictionary = invalid["key_bindings"]
+	duplicate_bindings["layout"] = duplicate_bindings["journal"]
+	_expect_true(
+		DemoSettingsState.from_dictionary(invalid, true) == null,
+		"duplicate persisted shortcuts are rejected"
+	)
+	var legacy: Dictionary = state.to_dictionary()
+	legacy.erase("key_bindings")
+	_expect_true(
+		DemoSettingsState.from_dictionary(legacy) != null,
+		"legacy settings without shortcuts receive safe defaults"
+	)
+	_expect_true(
+		DemoSettingsState.from_dictionary(legacy, true) == null,
+		"current settings require the shortcut bundle"
 	)
 
 
@@ -217,6 +288,13 @@ func _expect_string(actual: String, expected: String, message: String) -> void:
 	if actual == expected:
 		return
 	_record_failure(message, expected, actual)
+
+
+func _expect_int(actual: int, expected: int, message: String) -> void:
+	_assertion_count += 1
+	if actual == expected:
+		return
+	_record_failure(message, str(expected), str(actual))
 
 
 func _expect_vector2i(

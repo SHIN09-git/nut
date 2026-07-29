@@ -312,11 +312,113 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "Reduce Motion"
 
+[node name="ControlsButton" type="Button" parent="ShellOverlay/Center/SettingsPage/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+text = "Keyboard Controls"
+
 [node name="SettingsBackButton" type="Button" parent="ShellOverlay/Center/SettingsPage/Margin/Content"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
 text = "Save & Back"
+
+[node name="ControlsPage" type="PanelContainer" parent="ShellOverlay/Center"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(650, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBox_panel")
+
+[node name="Margin" type="MarginContainer" parent="ShellOverlay/Center/ControlsPage"]
+layout_mode = 2
+theme_override_constants/margin_left = 40
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 24
+
+[node name="Content" type="VBoxContainer" parent="ShellOverlay/Center/ControlsPage/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ControlsHeading" type="Label" parent="ShellOverlay/Center/ControlsPage/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.84, 0.58, 1)
+theme_override_font_sizes/font_size = 30
+text = "Keyboard Controls"
+
+[node name="ControlsDescription" type="Label" parent="ShellOverlay/Center/ControlsPage/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.76, 0.79, 0.72, 1)
+text = "Choose a shortcut, then press a supported letter or function key."
+autowrap_mode = 2
+
+[node name="HelpBindingRow" type="HBoxContainer" parent="ShellOverlay/Center/ControlsPage/Margin/Content"]
+layout_mode = 2
+
+[node name="HelpBindingLabel" type="Label" parent="ShellOverlay/Center/ControlsPage/Margin/Content/HelpBindingRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(300, 42)
+layout_mode = 2
+text = "Open Help"
+vertical_alignment = 1
+
+[node name="HelpBindingButton" type="Button" parent="ShellOverlay/Center/ControlsPage/Margin/Content/HelpBindingRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(180, 42)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "F1"
+
+[node name="JournalBindingRow" type="HBoxContainer" parent="ShellOverlay/Center/ControlsPage/Margin/Content"]
+layout_mode = 2
+
+[node name="JournalBindingLabel" type="Label" parent="ShellOverlay/Center/ControlsPage/Margin/Content/JournalBindingRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(300, 42)
+layout_mode = 2
+text = "Observation Journal"
+vertical_alignment = 1
+
+[node name="JournalBindingButton" type="Button" parent="ShellOverlay/Center/ControlsPage/Margin/Content/JournalBindingRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(180, 42)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "J"
+
+[node name="LayoutBindingRow" type="HBoxContainer" parent="ShellOverlay/Center/ControlsPage/Margin/Content"]
+layout_mode = 2
+
+[node name="LayoutBindingLabel" type="Label" parent="ShellOverlay/Center/ControlsPage/Margin/Content/LayoutBindingRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(300, 42)
+layout_mode = 2
+text = "Module Layout"
+vertical_alignment = 1
+
+[node name="LayoutBindingButton" type="Button" parent="ShellOverlay/Center/ControlsPage/Margin/Content/LayoutBindingRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(180, 42)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "L"
+
+[node name="ControlsResetButton" type="Button" parent="ShellOverlay/Center/ControlsPage/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+text = "Reset Shortcuts"
+
+[node name="ControlsBackButton" type="Button" parent="ShellOverlay/Center/ControlsPage/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+text = "Back"
 
 [node name="ShellStatusLabel" type="Label" parent="ShellOverlay"]
 unique_name_in_owner = true

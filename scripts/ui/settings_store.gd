@@ -1,7 +1,8 @@
 class_name SettingsStore
 extends RefCounted
 
-const FORMAT_VERSION: int = 1
+const FORMAT_VERSION: int = 2
+const LEGACY_FORMAT_VERSION: int = 1
 const DEFAULT_PATH: String = "user://settings.json"
 const MAX_SETTINGS_BYTES: int = 32 * 1024
 
@@ -120,16 +121,27 @@ func _load_absolute(absolute_path: String) -> Dictionary:
 			typeof(root["format_version"]) != TYPE_INT
 			and typeof(root["format_version"]) != TYPE_FLOAT
 		)
-		or int(root["format_version"]) != FORMAT_VERSION
 		or typeof(root["settings"]) != TYPE_DICTIONARY
 	):
 		return _failure("Settings format is invalid")
+	var format_version: int = int(root["format_version"])
+	if (
+		format_version != FORMAT_VERSION
+		and format_version != LEGACY_FORMAT_VERSION
+	):
+		return _failure("Settings format is unsupported")
 	var settings: DemoSettingsState = DemoSettingsState.from_dictionary(
-		root["settings"]
+		root["settings"],
+		format_version == FORMAT_VERSION
 	)
 	if settings == null:
 		return _failure("Settings values are invalid")
-	return {"ok": true, "error": "", "settings": settings}
+	return {
+		"ok": true,
+		"error": "",
+		"settings": settings,
+		"migrated": format_version == LEGACY_FORMAT_VERSION,
+	}
 
 
 func _is_safe_user_path(path: String) -> bool:

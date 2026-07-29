@@ -27,6 +27,9 @@ var _ui_scale_theme: Theme
 var _preparation_gate_active: bool = true
 var _pause_menu_open: bool = false
 var _journal_open: bool = false
+var _help_open: bool = false
+var _help_was_clock_paused: bool = false
+var _help_return_focus: Control
 var _magnifier_active: bool = false
 var _completion_dismissed: bool = false
 var _fatal_error: String = ""
@@ -38,6 +41,7 @@ var _selected_facility_type_id: StringName = (
 @onready var _title_label: Label = %Title
 @onready var _chapter_label: Label = %ChapterLabel
 @onready var _status_label: Label = %StatusLabel
+@onready var _help_button: Button = %HelpButton
 @onready var _pause_button: Button = %PauseButton
 @onready var _speed_1x_button: Button = %Speed1xButton
 @onready var _speed_4x_button: Button = %Speed4xButton
@@ -61,6 +65,7 @@ var _selected_facility_type_id: StringName = (
 @onready var _zoom_out_button: Button = %ZoomOutButton
 @onready var _reset_camera_button: Button = %ResetCameraButton
 @onready var _zoom_in_button: Button = %ZoomInButton
+@onready var _action_feedback_label: Label = %ActionFeedbackLabel
 @onready var _journal_button: Button = %JournalButton
 @onready var _inspect_panel: PanelContainer = %InspectPanel
 @onready var _inspect_label: Label = %InspectLabel
@@ -88,6 +93,10 @@ var _selected_facility_type_id: StringName = (
 @onready var _completion_return_button: Button = (
 	%CompletionReturnTitleButton
 )
+@onready var _help_panel: Control = %HelpPanel
+@onready var _help_heading: Label = %HelpHeading
+@onready var _help_body: Label = %HelpBody
+@onready var _help_close_button: Button = %HelpCloseButton
 @onready var _pause_menu: Control = %PauseMenu
 @onready var _pause_heading: Label = %PauseHeading
 @onready var _resume_button: Button = %ResumeButton
@@ -143,10 +152,39 @@ func _unhandled_input(event: InputEvent) -> void:
 		_update_debug()
 		get_viewport().set_input_as_handled()
 	elif (
-		key_event.keycode == KEY_L
+		_settings_state != null
+		and key_event.keycode == _settings_state.get_key_binding(
+			DemoSettingsState.ACTION_HELP
+		)
+	):
+		if _help_open:
+			_close_help()
+		elif not _pause_menu_open and not _journal_open:
+			_open_help()
+		get_viewport().set_input_as_handled()
+	elif (
+		_settings_state != null
+		and key_event.keycode == _settings_state.get_key_binding(
+			DemoSettingsState.ACTION_JOURNAL
+		)
+		and not _preparation_gate_active
+		and not _pause_menu_open
+		and not _help_open
+	):
+		if _journal_open:
+			_close_journal()
+		else:
+			_open_journal()
+		get_viewport().set_input_as_handled()
+	elif (
+		_settings_state != null
+		and key_event.keycode == _settings_state.get_key_binding(
+			DemoSettingsState.ACTION_LAYOUT
+		)
 		and not _preparation_gate_active
 		and not _pause_menu_open
 		and not _journal_open
+		and not _help_open
 	):
 		_set_facility_layout_mode(not _habitat_view.is_layout_mode())
 		get_viewport().set_input_as_handled()
@@ -156,6 +194,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		and not _preparation_gate_active
 		and not _pause_menu_open
 		and not _journal_open
+		and not _help_open
 	):
 		_on_place_box_pressed()
 		get_viewport().set_input_as_handled()
@@ -164,13 +203,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		and not _preparation_gate_active
 		and not _pause_menu_open
 		and not _journal_open
+		and not _help_open
 		and _habitat_view.handle_layout_keyboard_action(
 			key_event.keycode
 		)
 	):
 		get_viewport().set_input_as_handled()
 	elif key_event.keycode == KEY_ESCAPE:
-		if _journal_open:
+		if _help_open:
+			_close_help()
+		elif _journal_open:
 			_close_journal()
 		elif _pause_menu_open:
 			_close_pause_menu()
@@ -181,6 +223,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _connect_controls() -> void:
 	_start_button.pressed.connect(_on_start_pressed)
+	_help_button.pressed.connect(_open_help)
+	_help_close_button.pressed.connect(_close_help)
 	_pause_button.pressed.connect(_open_pause_menu)
 	_resume_button.pressed.connect(_close_pause_menu)
 	_save_button.pressed.connect(_on_save_pressed)
@@ -241,6 +285,9 @@ func _connect_controls() -> void:
 	_habitat_view.facility_selection_changed.connect(
 		func(_facility_id: int) -> void:
 			_update_controls()
+	)
+	_habitat_view.facility_feedback_requested.connect(
+		_on_facility_feedback_requested
 	)
 
 
@@ -403,6 +450,9 @@ func _on_facility_placement_requested(
 	):
 		_apply_snapshot()
 		_guidance_label.text = tr("R7_LAYOUT_ACTION_PENDING")
+		_show_action_feedback("R13_ACTION_QUEUED", false)
+	else:
+		_show_action_feedback("R13_ACTION_UNAVAILABLE", true)
 
 
 func _on_facility_rotation_requested(
@@ -415,12 +465,18 @@ func _on_facility_rotation_requested(
 	):
 		_apply_snapshot()
 		_guidance_label.text = tr("R7_LAYOUT_ACTION_PENDING")
+		_show_action_feedback("R13_ACTION_QUEUED", false)
+	else:
+		_show_action_feedback("R13_ACTION_UNAVAILABLE", true)
 
 
 func _on_facility_removal_requested(facility_id: int) -> void:
 	if _colony_simulation.submit_remove_facility_action(facility_id):
 		_apply_snapshot()
 		_guidance_label.text = tr("R7_LAYOUT_ACTION_PENDING")
+		_show_action_feedback("R13_ACTION_QUEUED", false)
+	else:
+		_show_action_feedback("R13_ACTION_UNAVAILABLE", true)
 
 
 func _on_magnifier_pressed() -> void:
@@ -439,7 +495,7 @@ func _on_worker_selected(entity_id: int) -> void:
 
 
 func _open_journal() -> void:
-	if _preparation_gate_active or _pause_menu_open:
+	if _preparation_gate_active or _pause_menu_open or _help_open:
 		return
 	_journal_open = true
 	_journal_panel.visible = true
@@ -484,7 +540,7 @@ func _on_inference_pressed(index: int) -> void:
 
 
 func _open_pause_menu() -> void:
-	if _preparation_gate_active or _journal_open:
+	if _preparation_gate_active or _journal_open or _help_open:
 		return
 	_pause_menu_open = true
 	_pause_menu.visible = true
@@ -553,6 +609,90 @@ func _update_main_panel() -> void:
 	)
 
 
+func _open_help() -> void:
+	if _help_open or _pause_menu_open or _journal_open:
+		return
+	_help_return_focus = get_viewport().gui_get_focus_owner()
+	_help_was_clock_paused = (
+		true
+		if _simulation_clock == null
+		else _simulation_clock.is_paused()
+	)
+	_help_open = true
+	_help_panel.visible = true
+	if _simulation_clock != null:
+		_simulation_clock.set_paused(true)
+	_habitat_view.set_visuals_paused(true)
+	_update_help_copy()
+	_help_close_button.grab_focus()
+	_update_controls()
+
+
+func _close_help() -> void:
+	if not _help_open:
+		return
+	_help_open = false
+	_help_panel.visible = false
+	if (
+		_simulation_clock != null
+		and not _preparation_gate_active
+		and not _pause_menu_open
+	):
+		_simulation_clock.set_paused(_help_was_clock_paused)
+		_habitat_view.set_visuals_paused(_help_was_clock_paused)
+	if (
+		is_instance_valid(_help_return_focus)
+		and _help_return_focus.is_visible_in_tree()
+		and _help_return_focus.focus_mode != Control.FOCUS_NONE
+	):
+		_help_return_focus.grab_focus()
+	else:
+		_help_button.grab_focus()
+	_help_return_focus = null
+	_update_controls()
+
+
+func _update_help_copy() -> void:
+	if _settings_state == null:
+		return
+	_help_heading.text = tr("R13_HELP_HEADING")
+	_help_body.text = tr("R13_HELP_BODY") % [
+		_settings_state.get_key_binding_label(
+			DemoSettingsState.ACTION_HELP
+		),
+		_settings_state.get_key_binding_label(
+			DemoSettingsState.ACTION_JOURNAL
+		),
+		_settings_state.get_key_binding_label(
+			DemoSettingsState.ACTION_LAYOUT
+		),
+	]
+
+
+func _on_facility_feedback_requested(feedback: int) -> void:
+	match feedback:
+		FacilityLayoutView.InteractionFeedback.PLACEMENT_INVALID:
+			_show_action_feedback("R13_LAYOUT_INVALID", true)
+		FacilityLayoutView.InteractionFeedback.SELECTION_REQUIRED:
+			_show_action_feedback("R13_LAYOUT_SELECT_FIRST", true)
+		FacilityLayoutView.InteractionFeedback.ACTION_PENDING:
+			_show_action_feedback("R13_LAYOUT_WAIT_PENDING", true)
+		_:
+			_show_action_feedback("R13_LAYOUT_NO_SUPPLY", true)
+
+
+func _show_action_feedback(message_key: String, is_error: bool) -> void:
+	_action_feedback_label.text = "%s %s" % [
+		"!" if is_error else "✓",
+		tr(message_key),
+	]
+	_action_feedback_label.modulate = (
+		Color(1.0, 0.68, 0.56)
+		if is_error else Color(0.68, 0.9, 0.72)
+	)
+	_action_feedback_label.visible = true
+
+
 func _update_journal() -> void:
 	if _latest_snapshot == null:
 		return
@@ -588,6 +728,7 @@ func _update_controls() -> void:
 		_preparation_gate_active
 		or _pause_menu_open
 		or _journal_open
+		or _help_open
 		or not _fatal_error.is_empty()
 	)
 	var care: QueenCareSnapshot = _latest_snapshot.act1.queen_care
@@ -705,7 +846,10 @@ func _update_controls() -> void:
 	_magnifier_button.disabled = blocked
 	_magnifier_button.button_pressed = _magnifier_active
 	_journal_button.disabled = (
-		_preparation_gate_active or _pause_menu_open
+		_preparation_gate_active or _pause_menu_open or _help_open
+	)
+	_help_button.disabled = (
+		_pause_menu_open or _journal_open or not _fatal_error.is_empty()
 	)
 	for button: Button in [
 		_pause_button,
@@ -1359,6 +1503,13 @@ func _refresh_copy() -> void:
 	_title_label.text = tr("ACT1_TITLE")
 	_objective_heading.text = tr("ACT1_OBJECTIVE_HEADING")
 	_evidence_heading.text = tr("ACT1_EVIDENCE_HEADING")
+	_help_button.text = "?"
+	_help_button.tooltip_text = tr("R13_HELP_TOOLTIP") % (
+		_settings_state.get_key_binding_label(
+			DemoSettingsState.ACTION_HELP
+		)
+		if _settings_state != null else "F1"
+	)
 	_cover_button.text = tr("ACT1_TOOL_COVER")
 	_magnifier_button.text = tr("ACT1_TOOL_MAGNIFIER")
 	_sugar_button.text = tr("ACT1_TOOL_SUGAR")
@@ -1386,6 +1537,8 @@ func _refresh_copy() -> void:
 	)
 	_continue_button.text = tr("ACT1_CONTINUE_FREEPLAY")
 	_completion_return_button.text = tr("R12_SAVE_RETURN_TITLE")
+	_help_close_button.text = tr("R13_HELP_CLOSE")
+	_update_help_copy()
 	_pause_heading.text = tr("UI_PAUSE_HEADING")
 	_resume_button.text = tr("UI_RESUME")
 	_save_button.text = tr("UI_SAVE_GAME")
@@ -1444,6 +1597,9 @@ func start_new_profile() -> bool:
 	_simulation_clock = SimulationClock.new()
 	_simulation_clock.tick_requested.connect(_on_tick_requested)
 	_fatal_error = ""
+	_help_open = false
+	_help_panel.visible = false
+	_help_return_focus = null
 	_magnifier_active = false
 	_completion_dismissed = false
 	_habitat_view.reset_projection()
@@ -1480,6 +1636,9 @@ func restore_loaded_session(
 	_preparation_gate_active = false
 	_preparation_gate.visible = false
 	_fatal_error = ""
+	_help_open = false
+	_help_panel.visible = false
+	_help_return_focus = null
 	_habitat_view.set_layout_mode(false)
 	_completion_dismissed = false
 	_habitat_view.reset_projection()

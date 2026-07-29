@@ -75,6 +75,9 @@ const HabitatViewInterpolationTestSuiteScript: Script = preload(
 const ReducedMotionTestSuiteScript: Script = preload(
 	"res://tests/view/reduced_motion_test_suite.gd"
 )
+const FacilityLayoutAccessibilityTestSuiteScript: Script = preload(
+	"res://tests/view/facility_layout_accessibility_test_suite.gd"
+)
 const WorkerObservationPanelTestSuiteScript: Script = preload(
 	"res://tests/view/worker_observation_panel_test_suite.gd"
 )
@@ -148,6 +151,7 @@ func _run_all_tests() -> void:
 	_run_view_adapter_test_suite()
 	_run_habitat_view_interpolation_test_suite()
 	_run_reduced_motion_test_suite()
+	_run_facility_layout_accessibility_test_suite()
 	_run_worker_observation_panel_test_suite()
 	_run_lifecycle_debug_scene_test_suite()
 	_run_humidity_main_scene_test_suite()
@@ -198,6 +202,7 @@ func _validate_suite_scripts() -> bool:
 		ViewAdapterTestSuiteScript,
 		HabitatViewInterpolationTestSuiteScript,
 		ReducedMotionTestSuiteScript,
+		FacilityLayoutAccessibilityTestSuiteScript,
 		WorkerObservationPanelTestSuiteScript,
 		LifecycleDebugSceneTestSuiteScript,
 		HumidityMainSceneTestSuiteScript,
@@ -383,6 +388,14 @@ func _run_habitat_view_interpolation_test_suite() -> void:
 
 func _run_reduced_motion_test_suite() -> void:
 	var suite: ReducedMotionTestSuite = ReducedMotionTestSuiteScript.new()
+	suite.run(root)
+	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
+
+
+func _run_facility_layout_accessibility_test_suite() -> void:
+	var suite: FacilityLayoutAccessibilityTestSuite = (
+		FacilityLayoutAccessibilityTestSuiteScript.new()
+	)
 	suite.run(root)
 	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
 

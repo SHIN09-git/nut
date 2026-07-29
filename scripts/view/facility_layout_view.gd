@@ -10,6 +10,20 @@ signal rotation_requested(facility_id: int, orientation: int)
 signal removal_requested(facility_id: int)
 signal selection_changed(facility_id: int)
 signal camera_changed(zoom: float, offset: Vector2)
+signal interaction_feedback(feedback: int)
+
+enum PlacementCue {
+	NONE,
+	VALID,
+	INVALID,
+}
+
+enum InteractionFeedback {
+	PLACEMENT_UNAVAILABLE,
+	PLACEMENT_INVALID,
+	SELECTION_REQUIRED,
+	ACTION_PENDING,
+}
 
 const CELL_SIZE: float = 64.0
 const MIN_ZOOM: float = 0.65
@@ -75,7 +89,13 @@ func apply_snapshot(snapshot: HabitatLayoutSnapshot) -> bool:
 
 
 func begin_placement(type_id: StringName) -> bool:
-	if _snapshot == null or _snapshot.action_pending:
+	if _snapshot == null:
+		interaction_feedback.emit(
+			InteractionFeedback.PLACEMENT_UNAVAILABLE
+		)
+		return false
+	if _snapshot.action_pending:
+		interaction_feedback.emit(InteractionFeedback.ACTION_PENDING)
 		return false
 	for option: FacilityPlacementOptionSnapshot in (
 		_snapshot.placement_options
@@ -89,6 +109,7 @@ func begin_placement(type_id: StringName) -> bool:
 		grab_focus()
 		queue_redraw()
 		return true
+	interaction_feedback.emit(InteractionFeedback.PLACEMENT_UNAVAILABLE)
 	return false
 
 
@@ -107,6 +128,20 @@ func get_placement_slot() -> Vector2i:
 
 func get_placement_orientation() -> int:
 	return _placement_orientation
+
+
+func get_placement_cue() -> PlacementCue:
+	if not is_placing() or _snapshot == null:
+		return PlacementCue.NONE
+	return (
+		PlacementCue.VALID
+		if _snapshot.can_place(
+			_placement_type_id,
+			_placement_slot,
+			_placement_orientation
+		)
+		else PlacementCue.INVALID
+	)
 
 
 func get_selected_facility_id() -> int:
@@ -215,12 +250,17 @@ func handle_keyboard_action(keycode: Key) -> bool:
 
 
 func request_rotate_selected() -> bool:
-	if _snapshot == null or _snapshot.action_pending:
+	if _snapshot == null:
+		interaction_feedback.emit(InteractionFeedback.SELECTION_REQUIRED)
+		return false
+	if _snapshot.action_pending:
+		interaction_feedback.emit(InteractionFeedback.ACTION_PENDING)
 		return false
 	var facility: FacilitySnapshot = _snapshot.get_facility(
 		_selected_facility_id
 	)
 	if facility == null or not facility.player_removable:
+		interaction_feedback.emit(InteractionFeedback.SELECTION_REQUIRED)
 		return false
 	rotation_requested.emit(
 		facility.facility_id,
@@ -230,12 +270,17 @@ func request_rotate_selected() -> bool:
 
 
 func request_remove_selected() -> bool:
-	if _snapshot == null or _snapshot.action_pending:
+	if _snapshot == null:
+		interaction_feedback.emit(InteractionFeedback.SELECTION_REQUIRED)
+		return false
+	if _snapshot.action_pending:
+		interaction_feedback.emit(InteractionFeedback.ACTION_PENDING)
 		return false
 	var facility: FacilitySnapshot = _snapshot.get_facility(
 		_selected_facility_id
 	)
 	if facility == null or not facility.player_removable:
+		interaction_feedback.emit(InteractionFeedback.SELECTION_REQUIRED)
 		return false
 	removal_requested.emit(facility.facility_id)
 	return true
@@ -243,12 +288,14 @@ func request_remove_selected() -> bool:
 
 func select_next_facility() -> bool:
 	if _snapshot == null or _snapshot.facilities.is_empty():
+		interaction_feedback.emit(InteractionFeedback.SELECTION_REQUIRED)
 		return false
 	var candidate_ids: Array[int] = []
 	for facility: FacilitySnapshot in _snapshot.facilities:
 		if facility.player_removable:
 			candidate_ids.append(facility.facility_id)
 	if candidate_ids.is_empty():
+		interaction_feedback.emit(InteractionFeedback.SELECTION_REQUIRED)
 		return false
 	candidate_ids.sort()
 	var next_index: int = 0
@@ -335,16 +382,20 @@ func _move_cursor_or_camera(direction: Vector2i) -> bool:
 
 
 func _submit_current_placement() -> bool:
-	if (
-		_snapshot == null
-		or _snapshot.action_pending
-		or _placement_type_id.is_empty()
-		or not _snapshot.can_place(
+	if _snapshot == null or _placement_type_id.is_empty():
+		interaction_feedback.emit(
+			InteractionFeedback.PLACEMENT_UNAVAILABLE
+		)
+		return false
+	if _snapshot.action_pending:
+		interaction_feedback.emit(InteractionFeedback.ACTION_PENDING)
+		return false
+	if not _snapshot.can_place(
 			_placement_type_id,
 			_placement_slot,
 			_placement_orientation
-		)
-	):
+		):
+		interaction_feedback.emit(InteractionFeedback.PLACEMENT_INVALID)
 		return false
 	placement_requested.emit(
 		_placement_type_id,
@@ -635,11 +686,38 @@ func _draw_connections() -> void:
 		)
 		if connection.gated:
 			var middle: Vector2 = first_center.lerp(second_center, 0.5)
+			var cue_size: float = maxf(5.0, 8.0 * _camera_zoom)
 			draw_circle(
 				middle,
 				maxf(4.0, 7.0 * _camera_zoom),
 				SELECTED_COLOR if connection.open else CLOSED_CONNECTION_COLOR
 			)
+			if connection.open:
+				draw_line(
+					middle + Vector2(-cue_size, -cue_size * 0.35),
+					middle + Vector2(cue_size, -cue_size * 0.35),
+					TEXT_COLOR,
+					2.0
+				)
+				draw_line(
+					middle + Vector2(-cue_size, cue_size * 0.35),
+					middle + Vector2(cue_size, cue_size * 0.35),
+					TEXT_COLOR,
+					2.0
+				)
+			else:
+				draw_line(
+					middle + Vector2(-cue_size, -cue_size),
+					middle + Vector2(cue_size, cue_size),
+					TEXT_COLOR,
+					2.5
+				)
+				draw_line(
+					middle + Vector2(-cue_size, cue_size),
+					middle + Vector2(cue_size, -cue_size),
+					TEXT_COLOR,
+					2.5
+				)
 
 
 func _find_zone_facility(zone_id: StringName) -> FacilitySnapshot:
@@ -676,6 +754,38 @@ func _draw_placement_preview() -> void:
 		true
 	)
 	draw_rect(rect, SELECTED_COLOR, false, 3.0)
+	var center: Vector2 = rect.get_center()
+	var cue_size: float = maxf(8.0, 14.0 * _camera_zoom)
+	if valid:
+		draw_line(
+			center + Vector2(-cue_size, 0.0),
+			center + Vector2(-cue_size * 0.25, cue_size * 0.7),
+			TEXT_COLOR,
+			4.0,
+			true
+		)
+		draw_line(
+			center + Vector2(-cue_size * 0.25, cue_size * 0.7),
+			center + Vector2(cue_size, -cue_size * 0.75),
+			TEXT_COLOR,
+			4.0,
+			true
+		)
+	else:
+		draw_line(
+			center + Vector2(-cue_size, -cue_size),
+			center + Vector2(cue_size, cue_size),
+			TEXT_COLOR,
+			4.0,
+			true
+		)
+		draw_line(
+			center + Vector2(-cue_size, cue_size),
+			center + Vector2(cue_size, -cue_size),
+			TEXT_COLOR,
+			4.0,
+			true
+		)
 
 
 func _draw_hud() -> void:
@@ -686,6 +796,15 @@ func _draw_hud() -> void:
 		if is_placing()
 		else tr("R7_LAYOUT_NAVIGATION_HINT")
 	)
+	if is_placing():
+		hint = "%s · %s" % [
+			(
+				"✓ " + tr("R13_LAYOUT_PREVIEW_VALID")
+				if get_placement_cue() == PlacementCue.VALID
+				else "✕ " + tr("R13_LAYOUT_PREVIEW_INVALID")
+			),
+			hint,
+		]
 	draw_string(
 		font,
 		Vector2(18.0, 28.0),

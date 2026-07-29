@@ -31,6 +31,7 @@ func run(scene_root: Node) -> void:
 	_test_profile_delete_requires_confirmation()
 	_test_settings_persist_outside_the_profile()
 	_test_game_settings_stay_synchronized_with_the_shell()
+	_test_shortcut_rebinding_reaches_the_running_game()
 	_test_exit_uses_an_explicit_application_boundary()
 	_test_shell_pages_fit_supported_viewports()
 	_cleanup()
@@ -300,6 +301,98 @@ func _test_game_settings_stay_synchronized_with_the_shell() -> void:
 		2,
 		"returning to title preserves the game-selected UI scale"
 	)
+	_destroy_shell(shell)
+	SettingsStore.new(TEST_SETTINGS_PATH).delete_for_tests()
+
+
+func _test_shortcut_rebinding_reaches_the_running_game() -> void:
+	ProfileStore.new(TEST_PROFILE_PATH).delete_profile()
+	var shell: GameShellController = _create_shell(Vector2(1280, 720))
+	(shell.get_node("%SettingsButton") as Button).pressed.emit()
+	(shell.get_node("%ControlsButton") as Button).pressed.emit()
+	_expect_string(
+		String(shell.get_active_page_name()),
+		"ControlsPage",
+		"keyboard settings open as a dedicated focused page"
+	)
+	var help_binding: Button = shell.get_node(
+		"%HelpBindingButton"
+	) as Button
+	_expect_true(
+		shell.get_viewport().gui_get_focus_owner() == help_binding,
+		"shortcut page focuses its first binding"
+	)
+	help_binding.pressed.emit()
+	var h_key: InputEventKey = InputEventKey.new()
+	h_key.keycode = KEY_H
+	h_key.pressed = true
+	shell._unhandled_input(h_key)
+	_expect_int(
+		shell.get_settings_state().get_key_binding(
+			DemoSettingsState.ACTION_HELP
+		),
+		KEY_H,
+		"captured Help binding updates shell-owned settings"
+	)
+	var persisted: Dictionary = SettingsStore.new(
+		TEST_SETTINGS_PATH
+	).load_or_default()
+	_expect_int(
+		(persisted["settings"] as DemoSettingsState).get_key_binding(
+			DemoSettingsState.ACTION_HELP
+		),
+		KEY_H,
+		"captured Help binding persists independently"
+	)
+
+	var layout_binding: Button = shell.get_node(
+		"%LayoutBindingButton"
+	) as Button
+	layout_binding.pressed.emit()
+	shell._unhandled_input(h_key)
+	_expect_int(
+		shell.get_settings_state().get_key_binding(
+			DemoSettingsState.ACTION_LAYOUT
+		),
+		KEY_L,
+		"duplicate shortcut is rejected without mutating Layout"
+	)
+	var escape: InputEventKey = InputEventKey.new()
+	escape.keycode = KEY_ESCAPE
+	escape.pressed = true
+	shell._unhandled_input(escape)
+	shell._unhandled_input(escape)
+	shell._unhandled_input(escape)
+	_expect_string(
+		String(shell.get_active_page_name()),
+		"TitlePage",
+		"Escape cancels capture, then returns through Settings to Title"
+	)
+	(shell.get_node("%NewGameButton") as Button).pressed.emit()
+	var game: Act1TestTubeController = (
+		shell.get_game_controller() as Act1TestTubeController
+	)
+	_expect_true(game != null, "rebound shortcut fixture starts Act 1")
+	if game != null:
+		(game.get_node("%StartObservationButton") as Button).pressed.emit()
+		game._unhandled_input(h_key)
+		_expect_true(
+			(game.get_node("%HelpPanel") as Control).visible,
+			"rebound Help key opens the in-game help panel"
+		)
+		_expect_true(
+			game.is_simulation_paused(),
+			"opening Help pauses the simulation"
+		)
+		game._unhandled_input(h_key)
+		_expect_true(
+			not (game.get_node("%HelpPanel") as Control).visible,
+			"the same rebound key closes Help"
+		)
+		_expect_true(
+			not game.is_simulation_paused(),
+			"closing Help restores the prior running state"
+		)
 	_destroy_shell(shell)
 	SettingsStore.new(TEST_SETTINGS_PATH).delete_for_tests()
 

@@ -10,6 +10,7 @@ signal facility_placement_requested(
 signal facility_rotation_requested(facility_id: int, orientation: int)
 signal facility_removal_requested(facility_id: int)
 signal facility_selection_changed(facility_id: int)
+signal facility_feedback_requested(feedback: int)
 
 const ANT_VIEW_SCRIPT: Script = preload("res://scripts/view/ant_view.gd")
 
@@ -68,6 +69,10 @@ func _ready() -> void:
 	_facility_layout_view.selection_changed.connect(
 		func(facility_id: int) -> void:
 			facility_selection_changed.emit(facility_id)
+	)
+	_facility_layout_view.interaction_feedback.connect(
+		func(feedback: int) -> void:
+			facility_feedback_requested.emit(feedback)
 	)
 	_layout_projection()
 	queue_redraw()
@@ -246,6 +251,10 @@ func handle_layout_keyboard_action(keycode: Key) -> bool:
 
 func get_selected_facility_id() -> int:
 	return _facility_layout_view.get_selected_facility_id()
+
+
+func get_layout_placement_cue() -> int:
+	return _facility_layout_view.get_placement_cue()
 
 
 func request_rotate_selected_facility() -> bool:

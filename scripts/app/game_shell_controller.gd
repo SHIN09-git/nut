@@ -29,12 +29,14 @@ var _game_controller: Node
 var _active_page: Control
 var _confirm_action: ConfirmAction = ConfirmAction.NONE
 var _ui_scale_theme: Theme
+var _pending_binding_action: StringName = &""
 
 @onready var _game_host: Control = %GameHost
 @onready var _shell_overlay: Control = %ShellOverlay
 @onready var _title_page: Control = %TitlePage
 @onready var _profiles_page: Control = %ProfilesPage
 @onready var _settings_page: Control = %SettingsPage
+@onready var _controls_page: Control = %ControlsPage
 @onready var _confirm_panel: Control = %ConfirmPanel
 @onready var _title_heading: Label = %TitleHeading
 @onready var _title_subtitle: Label = %TitleSubtitle
@@ -60,7 +62,18 @@ var _ui_scale_theme: Theme
 @onready var _language_label: Label = %ShellLanguageLabel
 @onready var _language_option: OptionButton = %ShellLanguageOption
 @onready var _reduced_motion_check: CheckButton = %ShellReducedMotionCheck
+@onready var _controls_button: Button = %ControlsButton
 @onready var _settings_back_button: Button = %SettingsBackButton
+@onready var _controls_heading: Label = %ControlsHeading
+@onready var _controls_description: Label = %ControlsDescription
+@onready var _help_binding_label: Label = %HelpBindingLabel
+@onready var _help_binding_button: Button = %HelpBindingButton
+@onready var _journal_binding_label: Label = %JournalBindingLabel
+@onready var _journal_binding_button: Button = %JournalBindingButton
+@onready var _layout_binding_label: Label = %LayoutBindingLabel
+@onready var _layout_binding_button: Button = %LayoutBindingButton
+@onready var _controls_reset_button: Button = %ControlsResetButton
+@onready var _controls_back_button: Button = %ControlsBackButton
 @onready var _confirm_heading: Label = %ConfirmHeading
 @onready var _confirm_description: Label = %ConfirmDescription
 @onready var _confirm_accept_button: Button = %ConfirmAcceptButton
@@ -105,11 +118,38 @@ func _unhandled_input(event: InputEvent) -> void:
 		key_event == null
 		or not key_event.pressed
 		or key_event.echo
-		or key_event.keycode != KEY_ESCAPE
 	):
+		return
+	if not _pending_binding_action.is_empty():
+		if key_event.keycode == KEY_ESCAPE:
+			var cancelled_button: Button = _binding_button_for_action(
+				_pending_binding_action
+			)
+			_pending_binding_action = &""
+			_refresh_binding_buttons()
+			_show_status(tr("R13_BINDING_CANCELLED"), false)
+			cancelled_button.grab_focus()
+		elif _settings.set_key_binding(
+			_pending_binding_action,
+			key_event.keycode
+		):
+			var changed_button: Button = _binding_button_for_action(
+				_pending_binding_action
+			)
+			_pending_binding_action = &""
+			_apply_settings(true)
+			_show_status(tr("R13_BINDING_SAVED"), false)
+			changed_button.grab_focus()
+		else:
+			_show_status(tr("R13_BINDING_INVALID"), true)
+		get_viewport().set_input_as_handled()
+		return
+	if key_event.keycode != KEY_ESCAPE:
 		return
 	if _confirm_panel.visible:
 		_close_confirmation()
+	elif _active_page == _controls_page:
+		_show_settings_page()
 	elif _active_page != _title_page:
 		_show_title_page()
 	get_viewport().set_input_as_handled()
@@ -130,6 +170,18 @@ func _connect_controls() -> void:
 	)
 	_profile_back_button.pressed.connect(_show_title_page)
 	_settings_back_button.pressed.connect(_show_title_page)
+	_controls_button.pressed.connect(_show_controls_page)
+	_controls_back_button.pressed.connect(_show_settings_page)
+	_controls_reset_button.pressed.connect(_reset_key_bindings)
+	_help_binding_button.pressed.connect(
+		_begin_binding_capture.bind(DemoSettingsState.ACTION_HELP)
+	)
+	_journal_binding_button.pressed.connect(
+		_begin_binding_capture.bind(DemoSettingsState.ACTION_JOURNAL)
+	)
+	_layout_binding_button.pressed.connect(
+		_begin_binding_capture.bind(DemoSettingsState.ACTION_LAYOUT)
+	)
 	_confirm_accept_button.pressed.connect(_on_confirmation_accepted)
 	_confirm_cancel_button.pressed.connect(_close_confirmation)
 	_master_volume_slider.value_changed.connect(_on_master_volume_changed)
@@ -162,6 +214,7 @@ func _populate_setting_controls() -> void:
 	_master_volume_slider.set_value_no_signal(
 		_settings.get_master_volume()
 	)
+	_refresh_binding_buttons()
 
 
 func _refresh_copy() -> void:
@@ -184,7 +237,16 @@ func _refresh_copy() -> void:
 	_ui_scale_label.text = tr("UI_SCALE")
 	_language_label.text = tr("UI_LANGUAGE")
 	_reduced_motion_check.text = tr("UI_REDUCED_MOTION")
+	_controls_button.text = tr("R13_CONTROLS_OPEN")
 	_settings_back_button.text = tr("SHELL_SAVE_BACK")
+	_controls_heading.text = tr("R13_CONTROLS_HEADING")
+	_controls_description.text = tr("R13_CONTROLS_DESCRIPTION")
+	_help_binding_label.text = tr("R13_BINDING_HELP")
+	_journal_binding_label.text = tr("R13_BINDING_JOURNAL")
+	_layout_binding_label.text = tr("R13_BINDING_LAYOUT")
+	_controls_reset_button.text = tr("R13_BINDING_RESET")
+	_controls_back_button.text = tr("SHELL_BACK")
+	_refresh_binding_buttons()
 	_confirm_accept_button.text = tr("SHELL_CONFIRM")
 	_confirm_cancel_button.text = tr("SHELL_CANCEL")
 	if _language_option.item_count >= 2:
@@ -210,9 +272,17 @@ func _show_profiles_page() -> void:
 
 
 func _show_settings_page() -> void:
+	_pending_binding_action = &""
 	_populate_setting_controls()
 	_show_shell_page(_settings_page)
 	_master_volume_slider.grab_focus()
+
+
+func _show_controls_page() -> void:
+	_pending_binding_action = &""
+	_refresh_binding_buttons()
+	_show_shell_page(_controls_page)
+	_help_binding_button.grab_focus()
 
 
 func _show_shell_page(page: Control) -> void:
@@ -220,6 +290,7 @@ func _show_shell_page(page: Control) -> void:
 	_title_page.visible = page == _title_page
 	_profiles_page.visible = page == _profiles_page
 	_settings_page.visible = page == _settings_page
+	_controls_page.visible = page == _controls_page
 	_confirm_panel.visible = false
 	_confirm_action = ConfirmAction.NONE
 	_active_page = page
@@ -461,6 +532,49 @@ func _on_reduced_motion_toggled(enabled: bool) -> void:
 	_apply_settings(true)
 
 
+func _begin_binding_capture(action_id: StringName) -> void:
+	if not DemoSettingsState.BINDABLE_ACTIONS.has(action_id):
+		return
+	_pending_binding_action = action_id
+	_refresh_binding_buttons()
+	var button: Button = _binding_button_for_action(action_id)
+	button.text = tr("R13_BINDING_PRESS_KEY")
+	button.grab_focus()
+	_show_status(tr("R13_BINDING_WAITING"), false)
+
+
+func _reset_key_bindings() -> void:
+	_pending_binding_action = &""
+	_settings.reset_key_bindings()
+	_apply_settings(true)
+	_show_status(tr("R13_BINDING_RESET_DONE"), false)
+	_controls_reset_button.grab_focus()
+
+
+func _refresh_binding_buttons() -> void:
+	if _settings == null:
+		return
+	_help_binding_button.text = _settings.get_key_binding_label(
+		DemoSettingsState.ACTION_HELP
+	)
+	_journal_binding_button.text = _settings.get_key_binding_label(
+		DemoSettingsState.ACTION_JOURNAL
+	)
+	_layout_binding_button.text = _settings.get_key_binding_label(
+		DemoSettingsState.ACTION_LAYOUT
+	)
+
+
+func _binding_button_for_action(action_id: StringName) -> Button:
+	match action_id:
+		DemoSettingsState.ACTION_HELP:
+			return _help_binding_button
+		DemoSettingsState.ACTION_JOURNAL:
+			return _journal_binding_button
+		_:
+			return _layout_binding_button
+
+
 func _on_game_settings_changed(settings: DemoSettingsState) -> void:
 	_settings = settings
 	_settings_store.save(_settings)
@@ -591,7 +705,10 @@ func _format_duration(seconds: float) -> String:
 
 
 func _show_status(message: String, is_error: bool) -> void:
-	_status_label.text = message
+	_status_label.text = "%s %s" % [
+		"!" if is_error else "✓",
+		message,
+	]
 	_status_label.modulate = (
 		Color(1.0, 0.62, 0.52)
 		if is_error
