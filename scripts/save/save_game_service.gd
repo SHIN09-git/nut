@@ -256,16 +256,40 @@ func _verify_and_migrate_envelope(envelope: Dictionary) -> Dictionary:
 		return _failure("Unsupported save format version")
 	if String(envelope["content_manifest_id"]) != CURRENT_CONTENT_MANIFEST_ID:
 		return _failure("Save content manifest is not compatible")
-	if not _checksum_matches(envelope):
+	var current_checksum_matches: bool = _checksum_matches(envelope)
+	var legacy_checksum_matches: bool = (
+		_checksum_matches_legacy(envelope)
+	)
+	if not current_checksum_matches and not legacy_checksum_matches:
 		return _failure("Save checksum does not match")
-	if (
+	var expected_config_hash: String = String(
+		envelope["frozen_config_hash"]
+	)
+	var current_config_hash_matches: bool = (
 		CanonicalSaveJson.sha256(envelope["frozen_config_bundle"])
-		!= String(envelope["frozen_config_hash"])
-	):
+		== expected_config_hash
+	)
+	var legacy_config_hash_matches: bool = (
+		CanonicalSaveJson.sha256_legacy(
+			envelope["frozen_config_bundle"]
+		)
+		== expected_config_hash
+	)
+	if not current_config_hash_matches and not legacy_config_hash_matches:
 		return _failure("Frozen configuration hash does not match")
 
 	var migrated: bool = false
 	var current: Dictionary = envelope.duplicate(true)
+	if not current_checksum_matches or not current_config_hash_matches:
+		current["frozen_config_hash"] = CanonicalSaveJson.sha256(
+			current["frozen_config_bundle"]
+		)
+		current = seal_envelope(current)
+		if current.is_empty():
+			return _failure(
+				"Legacy numeric encoding could not be migrated"
+			)
+		migrated = true
 	match String(current["state_schema_id"]):
 		SimulationStateCodec.CURRENT_SCHEMA_ID:
 			pass
@@ -2021,6 +2045,19 @@ func _checksum_matches(envelope: Dictionary) -> bool:
 	return (
 		expected_checksum.length() == CHECKSUM_LENGTH
 		and CanonicalSaveJson.sha256(checksum_input) == expected_checksum
+	)
+
+
+func _checksum_matches_legacy(envelope: Dictionary) -> bool:
+	var checksum_input: Dictionary = envelope.duplicate(true)
+	var expected_checksum: String = String(
+		checksum_input.get("save_checksum", "")
+	)
+	checksum_input.erase("save_checksum")
+	return (
+		expected_checksum.length() == CHECKSUM_LENGTH
+		and CanonicalSaveJson.sha256_legacy(checksum_input)
+			== expected_checksum
 	)
 
 

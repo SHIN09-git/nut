@@ -1,6 +1,10 @@
 class_name Act1FinaleTestSuite
 extends RefCounted
 
+const FINAL_DISK_SAVE_PATH: String = (
+	"user://r12_finale_tests/completed.json"
+)
+
 var _assertion_count: int = 0
 var _failure_count: int = 0
 
@@ -13,6 +17,7 @@ func run() -> void:
 	_test_finale_save_round_trips()
 	_test_r11_completion_enters_finale()
 	_test_finale_speed_equivalence()
+	_cleanup_save_path(FINAL_DISK_SAVE_PATH)
 
 
 func get_assertion_count() -> int:
@@ -268,6 +273,49 @@ func _test_finale_save_round_trips() -> void:
 				and restored_final.act1.final_report_available,
 			"completed report authority survives save/load"
 		)
+	var final_clock := SimulationClock.new()
+	_expect_true(
+		final_clock.restore_save_boundary(
+			completed._state.simulation_tick,
+			SimulationClock.VERY_FAST_SPEED,
+			true
+		),
+		"completed report disk clock restores"
+	)
+	var service := SaveGameService.new()
+	var final_envelope: Dictionary = service.create_envelope(
+		completed,
+		final_clock,
+		"r12_final_disk",
+		"2026-07-29T10:30:00Z"
+	)
+	var disk_result: Dictionary = service.save_to_path(
+		FINAL_DISK_SAVE_PATH,
+		final_envelope
+	)
+	_expect_true(
+		disk_result.get("ok", false),
+		"completed report commits to disk: %s"
+			% disk_result.get("error", "")
+	)
+	var disk_load_result: Dictionary = service.load_from_path(
+		FINAL_DISK_SAVE_PATH
+	)
+	_expect_true(
+		disk_load_result.get("ok", false),
+		"completed report reloads from disk: %s"
+			% disk_load_result.get("error", "")
+	)
+	if disk_load_result.get("ok", false):
+		var disk_snapshot: GameSnapshot = (
+			disk_load_result["simulation"].create_game_snapshot()
+		)
+		_expect_true(
+			disk_snapshot.campaign.completed
+				and disk_snapshot.act1.final_report_available,
+			"completed report survives disk JSON precision"
+		)
+	_cleanup_save_path(FINAL_DISK_SAVE_PATH)
 
 
 func _test_r11_completion_enters_finale() -> void:
@@ -412,6 +460,17 @@ func _advance_ticks(simulation: ColonySimulation, count: int) -> bool:
 		if not simulation.advance_tick(simulation._state.simulation_tick + 1):
 			return false
 	return true
+
+
+func _cleanup_save_path(path: String) -> void:
+	var absolute_path: String = ProjectSettings.globalize_path(path)
+	for candidate: String in [
+		absolute_path,
+		absolute_path + ".bak",
+		absolute_path + ".tmp",
+	]:
+		if FileAccess.file_exists(candidate):
+			DirAccess.remove_absolute(candidate)
 
 
 func _expect_ready(

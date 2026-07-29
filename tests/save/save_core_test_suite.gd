@@ -25,6 +25,7 @@ var _failure_count: int = 0
 
 func run() -> void:
 	_test_canonical_encoding()
+	_test_legacy_numeric_encoding_migrates()
 	_test_combined_round_trip_during_relocation()
 	_test_pending_command_survives_boundary()
 	_test_mid_tick_capture_is_deferred()
@@ -74,6 +75,62 @@ func _test_canonical_encoding() -> void:
 		"",
 		"canonical save encoding rejects NaN"
 	)
+	var precision_fixture: Dictionary = {
+		"waste_stored": 0.000916170838666018,
+	}
+	var encoded: String = CanonicalSaveJson.encode(precision_fixture)
+	var parser := JSON.new()
+	_expect_int(
+		parser.parse(encoded),
+		OK,
+		"canonical high-precision float JSON parses"
+	)
+	_expect_string(
+		CanonicalSaveJson.encode(parser.data),
+		encoded,
+		"canonical high-precision float encoding is JSON-round-trip stable"
+	)
+
+
+func _test_legacy_numeric_encoding_migrates() -> void:
+	var simulation: ColonySimulation = _new_combined_simulation()
+	_expect_true(
+		_advance_ticks(simulation, 2),
+		"legacy numeric fixture advances"
+	)
+	var service := SaveGameService.new()
+	var legacy: Dictionary = service.create_envelope(
+		simulation,
+		_clock_at(2),
+		TEST_SLOT_ID,
+		TEST_TIMESTAMP
+	)
+	legacy["state_payload"]["zones"][0]["humidity"] = 0.6300000000000001
+	legacy["frozen_config_hash"] = CanonicalSaveJson.sha256_legacy(
+		legacy["frozen_config_bundle"]
+	)
+	legacy["save_checksum"] = ""
+	var checksum_input: Dictionary = legacy.duplicate(true)
+	checksum_input.erase("save_checksum")
+	legacy["save_checksum"] = CanonicalSaveJson.sha256_legacy(
+		checksum_input
+	)
+	var result: Dictionary = service.load_envelope(legacy)
+	_expect_true(
+		result.get("ok", false),
+		"legacy numeric checksum remains loadable: %s"
+			% result.get("error", "")
+	)
+	_expect_true(
+		result.get("migrated", false),
+		"legacy numeric encoding is explicitly resealed"
+	)
+	if result.get("ok", false):
+		_expect_string(
+			result["envelope"]["save_checksum"],
+			service.seal_envelope(result["envelope"])["save_checksum"],
+			"legacy numeric envelope is resealed with current encoding"
+		)
 
 
 func _test_combined_round_trip_during_relocation() -> void:

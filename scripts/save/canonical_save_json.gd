@@ -1,8 +1,18 @@
 class_name CanonicalSaveJson
 extends RefCounted
 
+const FLOAT_DECIMAL_PLACES: int = 17
+
 
 static func encode(value: Variant) -> String:
+	return _encode(value, false)
+
+
+static func encode_legacy(value: Variant) -> String:
+	return _encode(value, true)
+
+
+static func _encode(value: Variant, legacy_float_format: bool) -> String:
 	match typeof(value):
 		TYPE_NIL:
 			return "null"
@@ -13,13 +23,18 @@ static func encode(value: Variant) -> String:
 				return ""
 			if value == floorf(value):
 				return str(int(value))
-			return JSON.stringify(value)
+			if legacy_float_format:
+				return JSON.stringify(value)
+			return String.num(value, FLOAT_DECIMAL_PLACES)
 		TYPE_STRING_NAME:
 			return JSON.stringify(String(value))
 		TYPE_ARRAY:
 			var array_parts: PackedStringArray = []
 			for item: Variant in value:
-				var encoded_item: String = encode(item)
+				var encoded_item: String = _encode(
+					item,
+					legacy_float_format
+				)
 				if encoded_item.is_empty():
 					return ""
 				array_parts.append(encoded_item)
@@ -41,7 +56,10 @@ static func encode(value: Variant) -> String:
 			keys.sort()
 			var object_parts: PackedStringArray = []
 			for key: String in keys:
-				var encoded_value: String = encode(value[key_lookup[key]])
+				var encoded_value: String = _encode(
+					value[key_lookup[key]],
+					legacy_float_format
+				)
 				if encoded_value.is_empty():
 					return ""
 				object_parts.append(
@@ -54,4 +72,9 @@ static func encode(value: Variant) -> String:
 
 static func sha256(value: Variant) -> String:
 	var encoded: String = encode(value)
+	return "" if encoded.is_empty() else encoded.sha256_text()
+
+
+static func sha256_legacy(value: Variant) -> String:
+	var encoded: String = encode_legacy(value)
 	return "" if encoded.is_empty() else encoded.sha256_text()
