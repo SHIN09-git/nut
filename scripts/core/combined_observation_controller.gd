@@ -5,6 +5,7 @@ signal application_exit_requested
 signal save_profile_requested
 signal return_to_title_requested
 signal settings_changed(settings: DemoSettingsState)
+signal presentation_audio_cue_requested(cue_id: StringName)
 
 const SPECIES_A_DATA: SpeciesData = preload(
 	"res://data/species/species_a.tres"
@@ -332,6 +333,7 @@ func _on_stage_action_button_pressed() -> void:
 		ScenarioSequenceSnapshot.Phase.HUMIDITY_OBSERVATION:
 			if _colony_simulation.submit_water_action():
 				_apply_game_snapshot()
+				presentation_audio_cue_requested.emit(&"water_drop")
 				_set_copy(
 					_feedback_label,
 					tr("FEEDBACK_WATER_SUBMITTED"),
@@ -362,6 +364,7 @@ func _open_journal() -> void:
 	_journal_open = true
 	_journal_panel.visible = true
 	_update_campaign_journal()
+	presentation_audio_cue_requested.emit(&"journal_open")
 	var focus_button: Button = _journal_close_button
 	for button: Button in _inference_buttons:
 		if button.visible and not button.disabled:
@@ -401,6 +404,7 @@ func _on_inference_button_pressed(index: int) -> void:
 	):
 		return
 	_apply_game_snapshot()
+	presentation_audio_cue_requested.emit(&"ui_confirm")
 	_set_copy(
 		_feedback_label,
 		tr("CAMPAIGN_INFERENCE_SUBMITTED"),
@@ -419,6 +423,7 @@ func _on_sugar_drop_requested() -> void:
 		return
 	_set_sugar_tool_armed(false)
 	_apply_game_snapshot()
+	presentation_audio_cue_requested.emit(&"facility_place")
 	_set_copy(
 		_feedback_label,
 		tr("FEEDBACK_SUGAR_SUBMITTED"),
@@ -480,6 +485,7 @@ func _on_start_observation_button_pressed() -> void:
 	_habitat_view.set_visuals_paused(false)
 	_update_control_state()
 	_update_debug_panel()
+	presentation_audio_cue_requested.emit(&"ui_confirm")
 
 
 func _on_speed_button_pressed(multiplier: int) -> void:
@@ -500,6 +506,9 @@ func _toggle_debug_panel() -> void:
 
 
 func _apply_game_snapshot() -> void:
+	var previous_chapter: int = -1
+	if _latest_snapshot != null and _latest_snapshot.campaign != null:
+		previous_chapter = _latest_snapshot.campaign.chapter
 	_latest_snapshot = _colony_simulation.create_game_snapshot()
 	if (
 		_latest_snapshot == null
@@ -537,6 +546,11 @@ func _apply_game_snapshot() -> void:
 	_update_player_guidance()
 	_update_control_state()
 	_update_debug_panel()
+	if (
+		previous_chapter >= 0
+		and previous_chapter != _latest_snapshot.campaign.chapter
+	):
+		presentation_audio_cue_requested.emit(&"chapter_complete")
 
 
 func _update_worker_observation_panel() -> void:

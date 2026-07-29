@@ -1,7 +1,8 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/app/game_shell_controller.gd" id="1_shell"]
 [ext_resource type="Texture2D" path="res://assets/production/backgrounds/title_observation_desk.png" id="2_title_background"]
+[ext_resource type="Script" path="res://scripts/audio/audio_director.gd" id="3_audio"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBox_panel"]
 bg_color = Color(0.034, 0.047, 0.043, 0.93)
@@ -90,6 +91,19 @@ grow_horizontal = 2
 grow_vertical = 2
 theme = SubResource("Theme_shell")
 script = ExtResource("1_shell")
+
+[node name="AudioDirector" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("3_audio")
+
+[node name="AmbientPlayer" type="AudioStreamPlayer" parent="AudioDirector"]
+unique_name_in_owner = true
+bus = &"Ambient"
+
+[node name="EffectsPlayer" type="AudioStreamPlayer" parent="AudioDirector"]
+unique_name_in_owner = true
+max_polyphony = 4
+bus = &"SFX"
 
 [node name="GameHost" type="Control" parent="."]
 unique_name_in_owner = true
@@ -324,6 +338,42 @@ size_flags_horizontal = 3
 max_value = 1.0
 step = 0.05
 value = 0.8
+
+[node name="AmbientVolumeRow" type="HBoxContainer" parent="ShellOverlay/Center/SettingsPage/Margin/Content"]
+layout_mode = 2
+
+[node name="ShellAmbientVolumeLabel" type="Label" parent="ShellOverlay/Center/SettingsPage/Margin/Content/AmbientVolumeRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(220, 40)
+layout_mode = 2
+text = "Ambient Volume"
+vertical_alignment = 1
+
+[node name="ShellAmbientVolumeSlider" type="HSlider" parent="ShellOverlay/Center/SettingsPage/Margin/Content/AmbientVolumeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 1.0
+step = 0.05
+value = 0.42
+
+[node name="EffectsVolumeRow" type="HBoxContainer" parent="ShellOverlay/Center/SettingsPage/Margin/Content"]
+layout_mode = 2
+
+[node name="ShellEffectsVolumeLabel" type="Label" parent="ShellOverlay/Center/SettingsPage/Margin/Content/EffectsVolumeRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(220, 40)
+layout_mode = 2
+text = "Effects Volume"
+vertical_alignment = 1
+
+[node name="ShellEffectsVolumeSlider" type="HSlider" parent="ShellOverlay/Center/SettingsPage/Margin/Content/EffectsVolumeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 1.0
+step = 0.05
+value = 0.72
 
 [node name="ResolutionRow" type="HBoxContainer" parent="ShellOverlay/Center/SettingsPage/Margin/Content"]
 layout_mode = 2

@@ -63,6 +63,11 @@ func _test_title_new_save_return_and_continue_path() -> void:
 			== shell.get_node("%NewGameButton"),
 		"title page gives keyboard focus to New Game"
 	)
+	_expect_true(
+		not (shell.get_node("%ShellLanguageOption") as OptionButton)
+			.text.is_empty(),
+		"the selected language is visible before the first settings change"
+	)
 
 	(shell.get_node("%NewGameButton") as Button).pressed.emit()
 	var game: Act1TestTubeController = (
@@ -208,6 +213,16 @@ func _test_settings_persist_outside_the_profile() -> void:
 	) as HSlider
 	volume.set_value_no_signal(0.4)
 	volume.value_changed.emit(0.4)
+	var ambient_volume: HSlider = shell.get_node(
+		"%ShellAmbientVolumeSlider"
+	) as HSlider
+	ambient_volume.set_value_no_signal(0.25)
+	ambient_volume.value_changed.emit(0.25)
+	var effects_volume: HSlider = shell.get_node(
+		"%ShellEffectsVolumeSlider"
+	) as HSlider
+	effects_volume.set_value_no_signal(0.65)
+	effects_volume.value_changed.emit(0.65)
 	var language: OptionButton = shell.get_node(
 		"%ShellLanguageOption"
 	) as OptionButton
@@ -236,6 +251,16 @@ func _test_settings_persist_outside_the_profile() -> void:
 		restored.get_master_volume(),
 		0.4,
 		"master volume persists"
+	)
+	_expect_float(
+		restored.get_ambient_volume(),
+		0.25,
+		"ambient volume persists independently"
+	)
+	_expect_float(
+		restored.get_effects_volume(),
+		0.65,
+		"effects volume persists independently"
 	)
 	_expect_string(restored.get_locale_code(), "en", "language persists")
 	_expect_true(
@@ -413,31 +438,44 @@ func _test_shell_pages_fit_supported_viewports() -> void:
 		Vector2(1280, 720),
 		Vector2(1920, 1080),
 	]:
-		var shell: GameShellController = _create_shell(viewport_size)
-		for button_name: String in ["%ProfilesButton", "%SettingsButton"]:
-			(shell.get_node(button_name) as Button).pressed.emit()
-			_settle_container_layout(shell)
-			var page: Control = (
-				shell.get_node("%ProfilesPage")
-				if button_name == "%ProfilesButton"
-				else shell.get_node("%SettingsPage")
-			) as Control
-			var rect: Rect2 = page.get_global_rect()
-			_expect_true(
-				rect.position.x >= 0.0
-					and rect.position.y >= 0.0
-					and rect.end.x <= viewport_size.x
-					and rect.end.y <= viewport_size.y,
-				"%s fits inside %dx%d (actual %s)"
-				% [
-					page.name,
-					int(viewport_size.x),
-					int(viewport_size.y),
-					str(rect),
-				]
-			)
-			(shell.get_node("%ProfileBackButton") as Button).pressed.emit()
-		_destroy_shell(shell)
+		for ui_scale_index: int in [0, 2]:
+			var shell: GameShellController = _create_shell(viewport_size)
+			shell.get_settings_state().select_ui_scale(ui_scale_index)
+			shell._apply_settings(false)
+			for button_name: String in [
+				"%ProfilesButton",
+				"%SettingsButton",
+			]:
+				(shell.get_node(button_name) as Button).pressed.emit()
+				_settle_container_layout(shell)
+				var page: Control = (
+					shell.get_node("%ProfilesPage")
+						if button_name == "%ProfilesButton"
+						else shell.get_node("%SettingsPage")
+				) as Control
+				var rect: Rect2 = page.get_global_rect()
+				_expect_true(
+					rect.position.x >= 0.0
+						and rect.position.y >= 0.0
+						and rect.end.x <= viewport_size.x
+						and rect.end.y <= viewport_size.y,
+					"%s fits inside %dx%d at %d%% (actual %s)"
+					% [
+						page.name,
+						int(viewport_size.x),
+						int(viewport_size.y),
+						int(
+							DemoSettingsState.UI_SCALE_FACTORS[
+								ui_scale_index
+							] * 100.0
+						),
+						str(rect),
+					]
+				)
+				(
+					shell.get_node("%ProfileBackButton") as Button
+				).pressed.emit()
+			_destroy_shell(shell)
 
 
 func _create_shell(viewport_size: Vector2) -> GameShellController:

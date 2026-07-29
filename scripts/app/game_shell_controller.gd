@@ -32,6 +32,7 @@ var _ui_scale_theme: Theme
 var _pending_binding_action: StringName = &""
 
 @onready var _game_host: Control = %GameHost
+@onready var _audio_director: AudioDirector = %AudioDirector
 @onready var _shell_overlay: Control = %ShellOverlay
 @onready var _title_page: Control = %TitlePage
 @onready var _profiles_page: Control = %ProfilesPage
@@ -54,6 +55,10 @@ var _pending_binding_action: StringName = &""
 @onready var _settings_heading: Label = %SettingsHeading
 @onready var _master_volume_label: Label = %ShellMasterVolumeLabel
 @onready var _master_volume_slider: HSlider = %ShellMasterVolumeSlider
+@onready var _ambient_volume_label: Label = %ShellAmbientVolumeLabel
+@onready var _ambient_volume_slider: HSlider = %ShellAmbientVolumeSlider
+@onready var _effects_volume_label: Label = %ShellEffectsVolumeLabel
+@onready var _effects_volume_slider: HSlider = %ShellEffectsVolumeSlider
 @onready var _resolution_label: Label = %ShellResolutionLabel
 @onready var _resolution_option: OptionButton = %ShellResolutionOption
 @onready var _fullscreen_check: CheckButton = %ShellFullscreenCheck
@@ -185,11 +190,29 @@ func _connect_controls() -> void:
 	_confirm_accept_button.pressed.connect(_on_confirmation_accepted)
 	_confirm_cancel_button.pressed.connect(_close_confirmation)
 	_master_volume_slider.value_changed.connect(_on_master_volume_changed)
+	_ambient_volume_slider.value_changed.connect(
+		_on_ambient_volume_changed
+	)
+	_effects_volume_slider.value_changed.connect(
+		_on_effects_volume_changed
+	)
 	_resolution_option.item_selected.connect(_on_resolution_selected)
 	_fullscreen_check.toggled.connect(_on_fullscreen_toggled)
 	_ui_scale_option.item_selected.connect(_on_ui_scale_selected)
 	_language_option.item_selected.connect(_on_language_selected)
 	_reduced_motion_check.toggled.connect(_on_reduced_motion_toggled)
+	for node: Node in _shell_overlay.find_children(
+		"*",
+		"BaseButton",
+		true,
+		false
+	):
+		var button: BaseButton = node as BaseButton
+		if (
+			button != null
+			and not button.pressed.is_connected(_play_ui_confirm)
+		):
+			button.pressed.connect(_play_ui_confirm)
 
 
 func _populate_setting_controls() -> void:
@@ -202,8 +225,8 @@ func _populate_setting_controls() -> void:
 		_ui_scale_option.add_item("%d%%" % int(scale_factor * 100.0))
 	_ui_scale_option.select(_settings.get_ui_scale_index())
 	_language_option.clear()
-	_language_option.add_item("")
-	_language_option.add_item("")
+	_language_option.add_item(tr("UI_LANGUAGE_ZH"))
+	_language_option.add_item(tr("UI_LANGUAGE_EN"))
 	_language_option.select(_settings.get_locale_index())
 	_fullscreen_check.set_pressed_no_signal(
 		_settings.is_fullscreen_requested()
@@ -213,6 +236,12 @@ func _populate_setting_controls() -> void:
 	)
 	_master_volume_slider.set_value_no_signal(
 		_settings.get_master_volume()
+	)
+	_ambient_volume_slider.set_value_no_signal(
+		_settings.get_ambient_volume()
+	)
+	_effects_volume_slider.set_value_no_signal(
+		_settings.get_effects_volume()
 	)
 	_refresh_binding_buttons()
 
@@ -232,6 +261,8 @@ func _refresh_copy() -> void:
 	_profile_back_button.text = tr("SHELL_BACK")
 	_settings_heading.text = tr("SHELL_SETTINGS")
 	_master_volume_label.text = tr("UI_MASTER_VOLUME")
+	_ambient_volume_label.text = tr("R15_AMBIENT_VOLUME")
+	_effects_volume_label.text = tr("R15_EFFECTS_VOLUME")
 	_resolution_label.text = tr("UI_RESOLUTION")
 	_fullscreen_check.text = tr("UI_FULLSCREEN")
 	_ui_scale_label.text = tr("UI_SCALE")
@@ -252,6 +283,9 @@ func _refresh_copy() -> void:
 	if _language_option.item_count >= 2:
 		_language_option.set_item_text(0, tr("UI_LANGUAGE_ZH"))
 		_language_option.set_item_text(1, tr("UI_LANGUAGE_EN"))
+		var locale_index: int = _settings.get_locale_index()
+		_language_option.select(locale_index)
+		_language_option.text = _language_option.get_item_text(locale_index)
 	_refresh_profile_summary()
 
 
@@ -403,6 +437,11 @@ func _create_game_controller(scenario_id: StringName) -> void:
 		&"application_exit_requested",
 		_on_exit_pressed
 	)
+	if _game_controller.has_signal(&"presentation_audio_cue_requested"):
+		_game_controller.connect(
+			&"presentation_audio_cue_requested",
+			_audio_director.play_cue
+		)
 	_game_host.add_child(_game_controller)
 
 
@@ -507,6 +546,20 @@ func _on_master_volume_changed(value: float) -> void:
 		_apply_settings(true)
 
 
+func _on_ambient_volume_changed(value: float) -> void:
+	if _settings.set_ambient_volume(value):
+		_apply_settings(true)
+
+
+func _on_effects_volume_changed(value: float) -> void:
+	if _settings.set_effects_volume(value):
+		_apply_settings(true)
+
+
+func _play_ui_confirm() -> void:
+	_audio_director.play_cue(&"ui_confirm")
+
+
 func _on_resolution_selected(index: int) -> void:
 	if _settings.select_resolution(index):
 		_apply_settings(true)
@@ -602,12 +655,7 @@ func _apply_settings(persist: bool) -> void:
 		else:
 			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 			DisplayServer.window_set_size(_settings.get_windowed_resolution())
-	var bus_index: int = AudioServer.get_bus_index(&"Master")
-	if bus_index >= 0:
-		var volume: float = _settings.get_master_volume()
-		AudioServer.set_bus_mute(bus_index, volume <= 0.0001)
-		if volume > 0.0001:
-			AudioServer.set_bus_volume_db(bus_index, linear_to_db(volume))
+	_audio_director.apply_settings(_settings)
 	if _game_controller != null:
 		_game_controller.call(&"apply_external_settings", _settings)
 	if persist:

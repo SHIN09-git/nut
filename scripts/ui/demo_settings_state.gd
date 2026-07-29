@@ -32,6 +32,8 @@ var _fullscreen_requested: bool = false
 var _ui_scale_index: int = 0
 var _reduced_motion: bool = false
 var _master_volume: float = 0.8
+var _ambient_volume: float = 0.42
+var _effects_volume: float = 0.72
 var _key_bindings: Dictionary[StringName, int] = {
 	ACTION_HELP: DEFAULT_HELP_KEY,
 	ACTION_JOURNAL: DEFAULT_JOURNAL_KEY,
@@ -46,7 +48,9 @@ func _init(
 	initial_ui_scale: float = 1.0,
 	initial_reduced_motion: bool = false,
 	initial_master_volume: float = 0.8,
-	initial_key_bindings: Dictionary = {}
+	initial_key_bindings: Dictionary = {},
+	initial_ambient_volume: float = 0.42,
+	initial_effects_volume: float = 0.72
 ) -> void:
 	_locale_index = _find_locale_index(initial_locale)
 	_resolution_index = _find_resolution_index(initial_window_size)
@@ -54,6 +58,8 @@ func _init(
 	_ui_scale_index = _find_ui_scale_index(initial_ui_scale)
 	_reduced_motion = initial_reduced_motion
 	_master_volume = clampf(initial_master_volume, 0.0, 1.0)
+	_ambient_volume = clampf(initial_ambient_volume, 0.0, 1.0)
+	_effects_volume = clampf(initial_effects_volume, 0.0, 1.0)
 	if not initial_key_bindings.is_empty():
 		_replace_key_bindings(initial_key_bindings)
 
@@ -128,6 +134,28 @@ func set_master_volume(value: float) -> bool:
 
 func get_master_volume() -> float:
 	return _master_volume
+
+
+func set_ambient_volume(value: float) -> bool:
+	if is_nan(value) or is_inf(value):
+		return false
+	_ambient_volume = clampf(value, 0.0, 1.0)
+	return true
+
+
+func get_ambient_volume() -> float:
+	return _ambient_volume
+
+
+func set_effects_volume(value: float) -> bool:
+	if is_nan(value) or is_inf(value):
+		return false
+	_effects_volume = clampf(value, 0.0, 1.0)
+	return true
+
+
+func get_effects_volume() -> float:
+	return _effects_volume
 
 
 func get_key_binding(action_id: StringName) -> int:
@@ -216,13 +244,16 @@ func to_dictionary() -> Dictionary:
 		"ui_scale_index": _ui_scale_index,
 		"reduced_motion": _reduced_motion,
 		"master_volume": _master_volume,
+		"ambient_volume": _ambient_volume,
+		"effects_volume": _effects_volume,
 		"key_bindings": key_bindings_to_dictionary(),
 	}
 
 
 static func from_dictionary(
 	value: Dictionary,
-	require_key_bindings: bool = false
+	require_key_bindings: bool = false,
+	require_split_audio: bool = false
 ) -> DemoSettingsState:
 	var required_keys: Array[String] = [
 		"resolution_index",
@@ -232,13 +263,21 @@ static func from_dictionary(
 		"reduced_motion",
 		"master_volume",
 	]
+	var has_key_bindings: bool = value.has("key_bindings")
+	var has_ambient_volume: bool = value.has("ambient_volume")
+	var has_effects_volume: bool = value.has("effects_volume")
+	if has_ambient_volume != has_effects_volume:
+		return null
+	var has_split_audio: bool = has_ambient_volume and has_effects_volume
 	var expected_size: int = (
-		required_keys.size() + 1
-		if value.has("key_bindings") else required_keys.size()
+		required_keys.size()
+		+ (1 if has_key_bindings else 0)
+		+ (2 if has_split_audio else 0)
 	)
 	if (
 		value.size() != expected_size
-		or (require_key_bindings and not value.has("key_bindings"))
+		or (require_key_bindings and not has_key_bindings)
+		or (require_split_audio and not has_split_audio)
 	):
 		return null
 	for key: String in required_keys:
@@ -259,8 +298,35 @@ static func from_dictionary(
 	var volume: float = float(value["master_volume"])
 	if is_nan(volume) or is_inf(volume) or volume < 0.0 or volume > 1.0:
 		return null
+	var ambient_volume: float = 0.42
+	var effects_volume: float = 0.72
+	if has_split_audio:
+		if (
+			(
+				typeof(value["ambient_volume"]) != TYPE_INT
+				and typeof(value["ambient_volume"]) != TYPE_FLOAT
+			)
+			or (
+				typeof(value["effects_volume"]) != TYPE_INT
+				and typeof(value["effects_volume"]) != TYPE_FLOAT
+			)
+		):
+			return null
+		ambient_volume = float(value["ambient_volume"])
+		effects_volume = float(value["effects_volume"])
+		if (
+			is_nan(ambient_volume)
+			or is_inf(ambient_volume)
+			or ambient_volume < 0.0
+			or ambient_volume > 1.0
+			or is_nan(effects_volume)
+			or is_inf(effects_volume)
+			or effects_volume < 0.0
+			or effects_volume > 1.0
+		):
+			return null
 	var bindings: Dictionary = {}
-	if value.has("key_bindings"):
+	if has_key_bindings:
 		if typeof(value["key_bindings"]) != TYPE_DICTIONARY:
 			return null
 		bindings = value["key_bindings"]
@@ -271,7 +337,9 @@ static func from_dictionary(
 		1.0,
 		bool(value["reduced_motion"]),
 		volume,
-		bindings
+		bindings,
+		ambient_volume,
+		effects_volume
 	)
 	if (
 		not state.select_resolution(int(value["resolution_index"]))

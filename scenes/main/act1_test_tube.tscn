@@ -161,13 +161,13 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.93, 0.84, 0.62, 1)
 theme_override_font_sizes/font_size = 24
-text = "玻璃蚁国 · 试管建群"
+text = "Colony Under Glass · Test-tube Founding"
 
 [node name="ChapterLabel" type="Label" parent="Main/Header/HeaderMargin/HeaderRow/TitleBlock"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.64, 0.76, 0.69, 1)
-text = "第 1 章 · 孤后建群"
+text = "Chapter 1 · The Founding Queen"
 
 [node name="Spacer" type="Control" parent="Main/Header/HeaderMargin/HeaderRow"]
 layout_mode = 2
@@ -178,7 +178,7 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(116, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.68, 0.86, 0.72, 1)
-text = "观察中 · 1×"
+text = "Observing · 1×"
 horizontal_alignment = 1
 vertical_alignment = 1
 
@@ -192,7 +192,7 @@ text = "?"
 unique_name_in_owner = true
 custom_minimum_size = Vector2(66, 42)
 layout_mode = 2
-text = "暂停"
+text = "Pause"
 
 [node name="Speed1xButton" type="Button" parent="Main/Header/HeaderMargin/HeaderRow"]
 unique_name_in_owner = true
@@ -265,7 +265,7 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.91, 0.80, 0.56, 1)
 theme_override_font_sizes/font_size = 18
-text = "本章目标"
+text = "Chapter goals"
 
 [node name="ObjectiveCard" type="PanelContainer" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent"]
 layout_mode = 2
@@ -275,7 +275,7 @@ theme_override_styles/panel = SubResource("Style_card")
 unique_name_in_owner = true
 custom_minimum_size = Vector2(306, 0)
 layout_mode = 2
-text = "○ 安装遮光套\n○ 观察蚁后护理\n○ 记录首枚蛹"
+text = "○ Install light cover\n○ Observe queen care\n○ Record the first pupa"
 autowrap_mode = 2
 
 [node name="EvidenceHeading" type="Label" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent"]
@@ -283,7 +283,7 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.65, 0.77, 0.69, 1)
 theme_override_font_sizes/font_size = 17
-text = "已记录线索"
+text = "Recorded evidence"
 
 [node name="EvidenceCard" type="PanelContainer" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent"]
 layout_mode = 2
@@ -295,7 +295,7 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(306, 0)
 layout_mode = 2
 size_flags_vertical = 3
-text = "• 继续观察画面中的变化"
+text = "• Keep observing visible changes"
 autowrap_mode = 2
 
 [node name="GuidanceLabel" type="Label" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent"]
@@ -303,7 +303,7 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(330, 52)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.82, 0.74, 0.55, 1)
-text = "先为试管安装遮光套，观察蚁后如何回应。"
+text = "Install the light cover and observe the queen's response."
 autowrap_mode = 2
 vertical_alignment = 1
 
@@ -311,7 +311,7 @@ vertical_alignment = 1
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 42)
 layout_mode = 2
-text = "打开观察手册"
+text = "Open observation journal"
 
 [node name="InspectPanel" type="PanelContainer" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent"]
 unique_name_in_owner = true
@@ -323,7 +323,7 @@ theme_override_styles/panel = SubResource("Style_card")
 unique_name_in_owner = true
 custom_minimum_size = Vector2(306, 0)
 layout_mode = 2
-text = "放大观察"
+text = "Inspect"
 autowrap_mode = 2
 
 [node name="ToolBar" type="PanelContainer" parent="Main"]
@@ -350,42 +350,42 @@ theme_override_constants/separation = 10
 custom_minimum_size = Vector2(90, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.63, 0.72, 0.67, 1)
-text = "设施与工具"
+text = "Facilities & tools"
 vertical_alignment = 1
 
 [node name="CoverButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(170, 48)
 layout_mode = 2
-text = "安装遮光套"
+text = "Install light cover"
 
 [node name="MagnifierButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(155, 48)
 layout_mode = 2
 toggle_mode = true
-text = "放大镜观察"
+text = "Inspect with magnifier"
 
 [node name="SugarButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRow"]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(180, 48)
 layout_mode = 2
-text = "在喂食口滴糖水"
+text = "Place sugar water at the feeding port"
 
 [node name="ProteinButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRow"]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(150, 48)
 layout_mode = 2
-text = "补充蛋白"
+text = "Refill protein"
 
 [node name="CleanWasteButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRow"]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(170, 48)
 layout_mode = 2
-text = "清理垃圾托盘"
+text = "Clean waste tray"
 
 [node name="ToolSpacer" type="Control" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRow"]
 layout_mode = 2
@@ -396,7 +396,7 @@ custom_minimum_size = Vector2(230, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.45, 0.54, 0.50, 1)
 theme_override_font_sizes/font_size = 12
-text = "原型节奏；并非真实物种护理建议"
+text = "Prototype pacing; not real species-care advice"
 horizontal_alignment = 2
 vertical_alignment = 1
 autowrap_mode = 2
@@ -410,7 +410,7 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(150, 42)
 layout_mode = 2
 toggle_mode = true
-text = "模块布局 [L]"
+text = "Module layout [L]"
 
 [node name="FacilityTypeOption" type="OptionButton" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
 unique_name_in_owner = true
@@ -423,21 +423,21 @@ unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(142, 42)
 layout_mode = 2
-text = "开始放置 [P]"
+text = "Start placement [P]"
 
 [node name="RotateFacilityButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(112, 42)
 layout_mode = 2
 disabled = true
-text = "旋转 [R]"
+text = "Rotate [R]"
 
 [node name="RemoveFacilityButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(112, 42)
 layout_mode = 2
 disabled = true
-text = "拆除 [Del]"
+text = "Remove [Del]"
 
 [node name="ToggleGateButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
 unique_name_in_owner = true
@@ -445,7 +445,7 @@ visible = false
 custom_minimum_size = Vector2(112, 42)
 layout_mode = 2
 disabled = true
-text = "切换闸门"
+text = "Toggle gate"
 
 [node name="LayoutSpacer" type="Control" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
 layout_mode = 2
@@ -461,7 +461,7 @@ text = "−"
 unique_name_in_owner = true
 custom_minimum_size = Vector2(92, 42)
 layout_mode = 2
-text = "重置视图"
+text = "Reset view"
 
 [node name="ZoomInButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
 unique_name_in_owner = true
@@ -528,7 +528,7 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.94, 0.84, 0.61, 1)
 theme_override_font_sizes/font_size = 28
-text = "第一幕 · 试管中的新群落"
+text = "Act I · A New Colony in Glass"
 horizontal_alignment = 1
 
 [node name="PreparationBody" type="Label" parent="PreparationGate/Center/Panel/Margin/Content"]
@@ -536,7 +536,7 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(556, 0)
 layout_mode = 2
 size_flags_vertical = 3
-text = "你不会直接命令蚂蚁。布置设施，观察群落怎样回应，再把证据写入手册。"
+text = "Change the habitat, observe the response, and record evidence."
 horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 2
@@ -545,7 +545,7 @@ autowrap_mode = 2
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 52)
 layout_mode = 2
-text = "开始观察"
+text = "Start observation"
 
 [node name="JournalPanel" type="Control" parent="."]
 unique_name_in_owner = true
@@ -596,13 +596,13 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.94, 0.84, 0.61, 1)
 theme_override_font_sizes/font_size = 24
-text = "观察手册"
+text = "Observation journal"
 
 [node name="JournalChapterLabel" type="Label" parent="JournalPanel/Center/Panel/Margin/Content"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 19
-text = "第 1 章"
+text = "Chapter 1"
 
 [node name="JournalChapterArt" type="Control" parent="JournalPanel/Center/Panel/Margin/Content"]
 unique_name_in_owner = true
@@ -614,7 +614,7 @@ script = ExtResource("3_chapter_art")
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.65, 0.78, 0.70, 1)
-text = "收集证据中"
+text = "Collecting evidence"
 
 [node name="Scroll" type="ScrollContainer" parent="JournalPanel/Center/Panel/Margin/Content"]
 layout_mode = 2
@@ -631,14 +631,14 @@ theme_override_constants/separation = 10
 unique_name_in_owner = true
 custom_minimum_size = Vector2(690, 0)
 layout_mode = 2
-text = "目标"
+text = "Goals"
 autowrap_mode = 2
 
 [node name="JournalEvidenceLabel" type="Label" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(690, 0)
 layout_mode = 2
-text = "证据"
+text = "Evidence"
 autowrap_mode = 2
 
 [node name="JournalHintLabel" type="Label" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent"]
@@ -646,7 +646,7 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(690, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.84, 0.75, 0.55, 1)
-text = "提示"
+text = "Hint"
 autowrap_mode = 2
 
 [node name="InferenceButton1" type="Button" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent"]
@@ -654,7 +654,7 @@ unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(690, 50)
 layout_mode = 2
-text = "推论一"
+text = "Inference one"
 autowrap_mode = 2
 
 [node name="InferenceButton2" type="Button" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent"]
@@ -662,7 +662,7 @@ unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(690, 50)
 layout_mode = 2
-text = "推论二"
+text = "Inference two"
 autowrap_mode = 2
 
 [node name="InferenceButton3" type="Button" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent"]
@@ -670,14 +670,14 @@ unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(690, 50)
 layout_mode = 2
-text = "推论三"
+text = "Inference three"
 autowrap_mode = 2
 
 [node name="JournalCloseButton" type="Button" parent="JournalPanel/Center/Panel/Margin/Content"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
-text = "返回观察"
+text = "Return to observation"
 
 [node name="CompletionPanel" type="Control" parent="."]
 unique_name_in_owner = true
@@ -726,7 +726,7 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.94, 0.84, 0.61, 1)
 theme_override_font_sizes/font_size = 27
-text = "第一幕完成"
+text = "Act I complete"
 horizontal_alignment = 1
 
 [node name="CompletionBody" type="Label" parent="CompletionPanel/Center/Panel/Margin/Content"]
@@ -734,7 +734,7 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(534, 0)
 layout_mode = 2
 size_flags_vertical = 3
-text = "群落拥有第一只工蚁，并完成了第一次可见的护理与营养交换。"
+text = "The final observation report is ready."
 horizontal_alignment = 1
 vertical_alignment = 1
 autowrap_mode = 2
@@ -743,13 +743,13 @@ autowrap_mode = 2
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
-text = "继续自由观察"
+text = "Continue free observation"
 
 [node name="CompletionReturnTitleButton" type="Button" parent="CompletionPanel/Center/Panel/Margin/Content"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
-text = "保存档案并返回标题"
+text = "Save profile and return to title"
 
 [node name="HelpPanel" type="Control" parent="."]
 unique_name_in_owner = true
@@ -800,7 +800,7 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.94, 0.84, 0.61, 1)
 theme_override_font_sizes/font_size = 27
-text = "操作与辅助功能"
+text = "Controls & accessibility"
 
 [node name="HelpScroll" type="ScrollContainer" parent="HelpPanel/Center/Panel/Margin/Content"]
 custom_minimum_size = Vector2(0, 390)
@@ -812,14 +812,14 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.75, 0.83, 0.77, 1)
 theme_override_font_sizes/font_size = 16
-text = "键盘操作"
+text = "Keyboard controls"
 autowrap_mode = 2
 
 [node name="HelpCloseButton" type="Button" parent="HelpPanel/Center/Panel/Margin/Content"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 42)
 layout_mode = 2
-text = "关闭"
+text = "Close"
 
 [node name="PauseMenu" type="Control" parent="."]
 unique_name_in_owner = true
@@ -871,44 +871,44 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.94, 0.84, 0.61, 1)
 theme_override_font_sizes/font_size = 26
-text = "观察已暂停"
+text = "Observation paused"
 horizontal_alignment = 1
 
 [node name="ResumeButton" type="Button" parent="PauseMenu/Center/Panel/Margin/Content"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
-text = "继续观察"
+text = "Resume observation"
 
 [node name="SaveGameButton" type="Button" parent="PauseMenu/Center/Panel/Margin/Content"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
-text = "保存游戏"
+text = "Save game"
 
 [node name="ReturnToTitleButton" type="Button" parent="PauseMenu/Center/Panel/Margin/Content"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
-text = "保存并返回标题"
+text = "Save & return to title"
 
 [node name="RestartButton" type="Button" parent="PauseMenu/Center/Panel/Margin/Content"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
-text = "重新开始本章"
+text = "Restart current chapter"
 
 [node name="ExitButton" type="Button" parent="PauseMenu/Center/Panel/Margin/Content"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
-text = "退出"
+text = "Exit"
 
 [node name="SaveStatus" type="Label" parent="PauseMenu/Center/Panel/Margin/Content"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-text = "已保存"
+text = "Saved"
 horizontal_alignment = 1
 
 [node name="DebugPanel" type="PanelContainer" parent="."]

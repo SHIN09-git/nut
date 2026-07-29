@@ -5,6 +5,7 @@ signal application_exit_requested
 signal save_profile_requested
 signal return_to_title_requested
 signal settings_changed(settings: DemoSettingsState)
+signal presentation_audio_cue_requested(cue_id: StringName)
 
 const SPECIES_A_DATA: SpeciesData = preload(
 	"res://data/species/species_a.tres"
@@ -317,6 +318,17 @@ func _on_tick_requested(tick_index: int, _tick_seconds: float) -> void:
 
 
 func _apply_snapshot() -> void:
+	var previous_chapter: int = -1
+	var previous_report_available: bool = false
+	if (
+		_latest_snapshot != null
+		and _latest_snapshot.campaign != null
+		and _latest_snapshot.act1 != null
+	):
+		previous_chapter = _latest_snapshot.campaign.chapter
+		previous_report_available = (
+			_latest_snapshot.act1.final_report_available
+		)
 	_latest_snapshot = _colony_simulation.create_game_snapshot()
 	if (
 		_latest_snapshot == null
@@ -333,6 +345,17 @@ func _apply_snapshot() -> void:
 	_update_controls()
 	_update_inspector()
 	_update_debug()
+	if (
+		previous_chapter >= 0
+		and not previous_report_available
+		and _latest_snapshot.act1.final_report_available
+	):
+		presentation_audio_cue_requested.emit(&"report_reveal")
+	elif (
+		previous_chapter >= 0
+		and previous_chapter != _latest_snapshot.campaign.chapter
+	):
+		presentation_audio_cue_requested.emit(&"chapter_complete")
 
 
 func _enter_preparation_gate() -> void:
@@ -355,24 +378,28 @@ func _on_start_pressed() -> void:
 	_habitat_view.set_visuals_paused(false)
 	_cover_button.grab_focus()
 	_update_controls()
+	presentation_audio_cue_requested.emit(&"ui_confirm")
 
 
 func _on_cover_pressed() -> void:
 	if _colony_simulation.submit_apply_light_cover_action():
 		_apply_snapshot()
 		_guidance_label.text = tr("ACT1_FEEDBACK_COVER_PENDING")
+		presentation_audio_cue_requested.emit(&"glass_tap")
 
 
 func _on_sugar_pressed() -> void:
 	if _colony_simulation.submit_place_sugar_action():
 		_apply_snapshot()
 		_guidance_label.text = tr("ACT1_FEEDBACK_SUGAR_PENDING")
+		presentation_audio_cue_requested.emit(&"ui_confirm")
 
 
 func _on_protein_pressed() -> void:
 	if _colony_simulation.submit_place_protein_action():
 		_apply_snapshot()
 		_guidance_label.text = tr("R10_FEEDBACK_PROTEIN_PENDING")
+		presentation_audio_cue_requested.emit(&"ui_confirm")
 
 
 func _on_clean_waste_pressed() -> void:
@@ -388,6 +415,7 @@ func _on_clean_waste_pressed() -> void:
 	if _colony_simulation.submit_clean_waste_tray_action(facility_id):
 		_apply_snapshot()
 		_guidance_label.text = tr("R9_CLEAN_WASTE_PENDING")
+		presentation_audio_cue_requested.emit(&"facility_place")
 
 
 func _on_layout_pressed() -> void:
@@ -436,6 +464,7 @@ func _on_toggle_gate_pressed() -> void:
 		):
 			_apply_snapshot()
 			_guidance_label.text = tr("R10_FEEDBACK_GATE_PENDING")
+			presentation_audio_cue_requested.emit(&"gate_toggle")
 			return
 
 
@@ -452,6 +481,11 @@ func _on_facility_placement_requested(
 		_apply_snapshot()
 		_guidance_label.text = tr("R7_LAYOUT_ACTION_PENDING")
 		_show_action_feedback("R13_ACTION_QUEUED", false)
+		presentation_audio_cue_requested.emit(
+			&"water_drop"
+			if type_id == CampaignState.FACILITY_HYDRATION_MODULE
+			else &"facility_place"
+		)
 	else:
 		_show_action_feedback("R13_ACTION_UNAVAILABLE", true)
 
@@ -467,6 +501,7 @@ func _on_facility_rotation_requested(
 		_apply_snapshot()
 		_guidance_label.text = tr("R7_LAYOUT_ACTION_PENDING")
 		_show_action_feedback("R13_ACTION_QUEUED", false)
+		presentation_audio_cue_requested.emit(&"facility_place")
 	else:
 		_show_action_feedback("R13_ACTION_UNAVAILABLE", true)
 
@@ -476,6 +511,7 @@ func _on_facility_removal_requested(facility_id: int) -> void:
 		_apply_snapshot()
 		_guidance_label.text = tr("R7_LAYOUT_ACTION_PENDING")
 		_show_action_feedback("R13_ACTION_QUEUED", false)
+		presentation_audio_cue_requested.emit(&"facility_place")
 	else:
 		_show_action_feedback("R13_ACTION_UNAVAILABLE", true)
 
@@ -503,6 +539,7 @@ func _open_journal() -> void:
 	_simulation_clock.set_paused(true)
 	_habitat_view.set_visuals_paused(true)
 	_update_journal()
+	presentation_audio_cue_requested.emit(&"journal_open")
 	var focus_target: Control = _journal_close_button
 	for button: Button in _inference_buttons:
 		if button.visible and not button.disabled:
@@ -538,6 +575,7 @@ func _on_inference_pressed(index: int) -> void:
 		_journal_status_label.text = tr(
 			"CAMPAIGN_INFERENCE_SUBMITTED"
 		)
+		presentation_audio_cue_requested.emit(&"ui_confirm")
 
 
 func _open_pause_menu() -> void:

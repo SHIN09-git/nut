@@ -4,10 +4,12 @@ extends RefCounted
 const TRANSLATION_CSV_PATH: String = "res://localization/v0_2.csv"
 const PLAYER_COPY_SOURCE_PATHS: PackedStringArray = [
 	"res://scripts/core/combined_observation_controller.gd",
+	"res://scripts/core/act1_test_tube_controller.gd",
 	"res://scripts/app/game_shell_controller.gd",
 	"res://scripts/view/worker_observation_panel.gd",
 	"res://scripts/view/combined_habitat_view.gd",
 	"res://scenes/main/combined_observation.tscn",
+	"res://scenes/main/act1_test_tube.tscn",
 	"res://scenes/app/game_shell.tscn",
 	"res://scenes/habitat/combined_habitat.tscn",
 ]
@@ -73,6 +75,37 @@ func _test_translation_table_is_complete_and_unique() -> void:
 			not row[2].is_empty(),
 			"English value for %s is not empty" % key
 		)
+		_expect_true(
+			not row[1].contains("�") and not row[2].contains("�"),
+			"translation values for %s contain no replacement characters"
+			% key
+		)
+		_expect_true(
+			not row[1].to_upper().contains("TODO")
+				and not row[2].to_upper().contains("TODO")
+				and not row[1].to_upper().contains("TBD")
+				and not row[2].to_upper().contains("TBD"),
+			"translation values for %s contain no editorial placeholders"
+			% key
+		)
+		_expect_string(
+			_format_signature(row[1]),
+			_format_signature(row[2]),
+			"both locales preserve the same format arguments for %s" % key
+		)
+		if key != "CAMPAIGN_LIST_SEPARATOR":
+			_expect_true(
+				row[1] == row[1].strip_edges()
+					and row[2] == row[2].strip_edges(),
+				"translation values for %s have clean outer whitespace"
+				% key
+			)
+		if key != "UI_LANGUAGE_ZH":
+			_expect_true(
+				not _contains_cjk_unified_ideograph(row[2]),
+				"English value for %s contains no untranslated CJK copy"
+				% key
+			)
 		seen_keys[key] = true
 	_expect_true(
 		row_count >= 100,
@@ -95,8 +128,14 @@ func _test_both_locales_are_registered_and_resolve_keys() -> void:
 	)
 	TranslationServer.set_locale("zh_CN")
 	var chinese_title: String = TranslationServer.translate("UI_TITLE")
+	var chinese_audio_label: String = TranslationServer.translate(
+		"R15_AMBIENT_VOLUME"
+	)
 	TranslationServer.set_locale("en")
 	var english_title: String = TranslationServer.translate("UI_TITLE")
+	var english_audio_label: String = TranslationServer.translate(
+		"R15_AMBIENT_VOLUME"
+	)
 	_expect_true(
 		chinese_title != "UI_TITLE",
 		"Simplified Chinese resolves the title key"
@@ -108,6 +147,15 @@ func _test_both_locales_are_registered_and_resolve_keys() -> void:
 	_expect_true(
 		chinese_title != english_title,
 		"the two locales expose distinct player copy"
+	)
+	_expect_true(
+		chinese_audio_label != "R15_AMBIENT_VOLUME"
+			and english_audio_label != "R15_AMBIENT_VOLUME",
+		"R15 audio controls resolve in both locales"
+	)
+	_expect_true(
+		chinese_audio_label != english_audio_label,
+		"R15 audio control copy is distinct across locales"
 	)
 	TranslationServer.set_locale(previous_locale)
 
@@ -136,9 +184,31 @@ func _contains_cjk_unified_ideograph(text: String) -> bool:
 	return false
 
 
+func _format_signature(text: String) -> String:
+	return "s=%d;d=%d;escaped=%d" % [
+		text.count("%s"),
+		text.count("%d"),
+		text.count("%%"),
+	]
+
+
 func _expect_true(actual: bool, message: String) -> void:
 	_assertion_count += 1
 	if actual:
 		return
 	_failure_count += 1
 	printerr("  %s - expected true, got false" % message)
+
+
+func _expect_string(
+	actual: String,
+	expected: String,
+	message: String
+) -> void:
+	_assertion_count += 1
+	if actual == expected:
+		return
+	_failure_count += 1
+	printerr(
+		"  %s - expected %s, got %s" % [message, expected, actual]
+	)

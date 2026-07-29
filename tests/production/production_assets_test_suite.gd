@@ -105,21 +105,21 @@ func _test_asset_ledger() -> void:
 		_expect_string(
 			String(columns[13]),
 			"approved_production",
-			"tracked R14 asset is approved for production"
+			"tracked production asset is approved for production"
 		)
 		_expect_string(
 			String(columns[7]),
 			"yes",
-			"tracked R14 asset allows commercial game use"
+			"tracked production asset allows commercial game use"
 		)
 		_expect_string(
 			String(columns[10]),
 			"yes",
-			"tracked R14 asset allows build redistribution"
+			"tracked production asset allows build redistribution"
 		)
 	_expect_true(
-		asset_count >= 9,
-		"R14 ledger covers the complete initial production package"
+		asset_count >= 18,
+		"ledger covers the complete R14 visual and R15 audio packages"
 	)
 	_expect_true(
 		not content.contains("example_placeholder"),

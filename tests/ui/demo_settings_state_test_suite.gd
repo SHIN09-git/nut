@@ -160,6 +160,37 @@ func _test_accessibility_and_volume_settings() -> void:
 		not state.set_master_volume(NAN),
 		"NaN master volume is rejected"
 	)
+	_expect_true(
+		state.set_ambient_volume(0.2),
+		"finite ambient volume is accepted"
+	)
+	_expect_float(
+		state.get_ambient_volume(),
+		0.2,
+		"ambient volume is stored independently"
+	)
+	_expect_true(
+		state.set_effects_volume(0.65),
+		"finite effects volume is accepted"
+	)
+	_expect_float(
+		state.get_effects_volume(),
+		0.65,
+		"effects volume is stored independently"
+	)
+	_expect_true(
+		state.set_effects_volume(-1.0),
+		"finite effects volume is clamped"
+	)
+	_expect_float(
+		state.get_effects_volume(),
+		0.0,
+		"effects volume clamps to zero"
+	)
+	_expect_true(
+		not state.set_ambient_volume(INF),
+		"infinite ambient volume is rejected"
+	)
 
 
 func _test_rebindable_shortcuts() -> void:
@@ -218,8 +249,11 @@ func _test_dictionary_round_trip_and_validation() -> void:
 		state.set_key_binding(DemoSettingsState.ACTION_HELP, KEY_H),
 		"round-trip fixture accepts a custom Help key"
 	)
+	state.set_ambient_volume(0.3)
+	state.set_effects_volume(0.6)
 	var restored: DemoSettingsState = DemoSettingsState.from_dictionary(
 		state.to_dictionary(),
+		true,
 		true
 	)
 	_expect_true(restored != null, "valid settings dictionary restores")
@@ -240,6 +274,16 @@ func _test_dictionary_round_trip_and_validation() -> void:
 			"reduced motion restores"
 		)
 		_expect_float(restored.get_master_volume(), 0.45, "volume restores")
+		_expect_float(
+			restored.get_ambient_volume(),
+			0.3,
+			"ambient volume restores"
+		)
+		_expect_float(
+			restored.get_effects_volume(),
+			0.6,
+			"effects volume restores"
+		)
 		_expect_int(
 			restored.get_key_binding(DemoSettingsState.ACTION_HELP),
 			KEY_H,
@@ -258,6 +302,18 @@ func _test_dictionary_round_trip_and_validation() -> void:
 		"NaN persisted volume is rejected"
 	)
 	invalid = state.to_dictionary()
+	invalid["ambient_volume"] = INF
+	_expect_true(
+		DemoSettingsState.from_dictionary(invalid) == null,
+		"infinite persisted ambient volume is rejected"
+	)
+	invalid = state.to_dictionary()
+	invalid.erase("effects_volume")
+	_expect_true(
+		DemoSettingsState.from_dictionary(invalid) == null,
+		"split audio fields must appear together"
+	)
+	invalid = state.to_dictionary()
 	var duplicate_bindings: Dictionary = invalid["key_bindings"]
 	duplicate_bindings["layout"] = duplicate_bindings["journal"]
 	_expect_true(
@@ -273,6 +329,17 @@ func _test_dictionary_round_trip_and_validation() -> void:
 	_expect_true(
 		DemoSettingsState.from_dictionary(legacy, true) == null,
 		"current settings require the shortcut bundle"
+	)
+	var pre_audio: Dictionary = state.to_dictionary()
+	pre_audio.erase("ambient_volume")
+	pre_audio.erase("effects_volume")
+	_expect_true(
+		DemoSettingsState.from_dictionary(pre_audio, true) != null,
+		"pre-audio settings receive safe split-volume defaults"
+	)
+	_expect_true(
+		DemoSettingsState.from_dictionary(pre_audio, true, true) == null,
+		"current settings require split audio values"
 	)
 
 

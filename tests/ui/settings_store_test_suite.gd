@@ -13,6 +13,7 @@ func run() -> void:
 	_test_missing_file_uses_defaults(store)
 	_test_settings_round_trip_is_independent(store)
 	_test_legacy_settings_migrate_with_default_bindings(store)
+	_test_v2_settings_migrate_with_split_audio_defaults(store)
 	_test_corrupt_file_uses_safe_defaults(store)
 	_test_unsafe_path_is_rejected()
 	store.delete_for_tests()
@@ -59,6 +60,14 @@ func _test_settings_round_trip_is_independent(store: SettingsStore) -> void:
 	state.set_reduced_motion(true)
 	_expect_true(state.set_master_volume(0.35), "master volume is accepted")
 	_expect_true(
+		state.set_ambient_volume(0.25),
+		"ambient volume is accepted"
+	)
+	_expect_true(
+		state.set_effects_volume(0.65),
+		"effects volume is accepted"
+	)
+	_expect_true(
 		state.set_key_binding(DemoSettingsState.ACTION_HELP, KEY_H),
 		"custom Help shortcut is accepted"
 	)
@@ -69,6 +78,8 @@ func _test_settings_round_trip_is_independent(store: SettingsStore) -> void:
 	state.select_ui_scale(0)
 	state.set_reduced_motion(false)
 	state.set_master_volume(1.0)
+	state.set_ambient_volume(1.0)
+	state.set_effects_volume(1.0)
 	var load_result: Dictionary = store.load_or_default()
 	_expect_true(load_result.get("ok", false), "saved settings load")
 	_expect_true(
@@ -100,6 +111,16 @@ func _test_settings_round_trip_is_independent(store: SettingsStore) -> void:
 		0.35,
 		"master volume survives round trip"
 	)
+	_expect_float(
+		restored.get_ambient_volume(),
+		0.25,
+		"ambient volume survives round trip"
+	)
+	_expect_float(
+		restored.get_effects_volume(),
+		0.65,
+		"effects volume survives round trip"
+	)
 	_expect_int(
 		restored.get_key_binding(DemoSettingsState.ACTION_HELP),
 		KEY_H,
@@ -119,6 +140,8 @@ func _test_legacy_settings_migrate_with_default_bindings(
 		0.6
 	).to_dictionary()
 	legacy_settings.erase("key_bindings")
+	legacy_settings.erase("ambient_volume")
+	legacy_settings.erase("effects_volume")
 	var legacy_payload: Dictionary = {
 		"format_version": SettingsStore.LEGACY_FORMAT_VERSION,
 		"settings": legacy_settings,
@@ -148,6 +171,64 @@ func _test_legacy_settings_migrate_with_default_bindings(
 		restored.get_key_binding(DemoSettingsState.ACTION_JOURNAL),
 		KEY_J,
 		"legacy settings receive the default Journal shortcut"
+	)
+	_expect_float(
+		restored.get_ambient_volume(),
+		0.42,
+		"legacy settings receive the default ambient volume"
+	)
+	_expect_float(
+		restored.get_effects_volume(),
+		0.72,
+		"legacy settings receive the default effects volume"
+	)
+
+
+func _test_v2_settings_migrate_with_split_audio_defaults(
+	store: SettingsStore
+) -> void:
+	var v2_state: DemoSettingsState = DemoSettingsState.new()
+	_expect_true(
+		v2_state.set_key_binding(DemoSettingsState.ACTION_HELP, KEY_H),
+		"v2 fixture accepts a custom shortcut"
+	)
+	var v2_settings: Dictionary = v2_state.to_dictionary()
+	v2_settings.erase("ambient_volume")
+	v2_settings.erase("effects_volume")
+	var payload: Dictionary = {
+		"format_version": 2,
+		"settings": v2_settings,
+	}
+	var absolute_path: String = ProjectSettings.globalize_path(
+		TEST_SETTINGS_PATH
+	)
+	var file: FileAccess = FileAccess.open(absolute_path, FileAccess.WRITE)
+	_expect_true(file != null, "v2 settings fixture can be opened")
+	if file == null:
+		return
+	file.store_string(CanonicalSaveJson.encode(payload))
+	file.close()
+	var result: Dictionary = store.load_or_default()
+	_expect_true(result.get("ok", false), "v2 settings still load")
+	_expect_true(
+		result.get("migrated", false),
+		"v2 settings are explicitly marked migrated"
+	)
+	var restored: DemoSettingsState = result["settings"]
+	_expect_int(
+		restored.get_key_binding(DemoSettingsState.ACTION_HELP),
+		KEY_H,
+		"v2 custom shortcut survives migration"
+	)
+	_expect_float(
+		restored.get_ambient_volume(),
+		0.42,
+		"v2 settings receive the default ambient volume"
+	)
+	_expect_float(
+		restored.get_effects_volume(),
+		0.72,
+		"v2 settings receive the default effects volume"
 	)
 
 
