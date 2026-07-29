@@ -191,6 +191,23 @@ func assign_facility_zone(
 	return true
 
 
+func assign_facility_secondary_zone(
+	facility_id: int,
+	zone_id: StringName
+) -> bool:
+	var facility: FacilityState = get_facility(facility_id)
+	if (
+		facility == null
+		or zone_id.is_empty()
+		or not facility.secondary_zone_id.is_empty()
+		or facility.zone_id == zone_id
+	):
+		return false
+	facility.secondary_zone_id = zone_id
+	_mark_changed()
+	return true
+
+
 func find_host_zone_id(
 	catalog: FacilityCatalogConfig,
 	type_id: StringName,
@@ -223,19 +240,27 @@ func find_host_zone_id(
 				!= FacilityData.PlacementLayer.BASE
 		):
 			continue
-		var overlaps: bool = false
+		var candidate_zone_id: StringName = &""
 		for cell: Vector2i in existing_type.get_occupied_cells(
 			existing.slot,
 			existing.orientation
 		):
 			if occupied.has(cell):
-				overlaps = true
-				break
-		if not overlaps:
+				candidate_zone_id = _facility_zone_id_for_global_cell(
+					existing,
+					existing_type,
+					cell
+				)
+				if candidate_zone_id.is_empty():
+					return &""
+				if (
+					not host_zone_id.is_empty()
+					and host_zone_id != candidate_zone_id
+				):
+					return &""
+				host_zone_id = candidate_zone_id
+		if candidate_zone_id.is_empty():
 			continue
-		if not host_zone_id.is_empty() and host_zone_id != existing.zone_id:
-			return &""
-		host_zone_id = existing.zone_id
 	return host_zone_id
 
 
@@ -255,58 +280,104 @@ func rebuild_derived_connections(catalog: FacilityCatalogConfig) -> bool:
 	for connection_id: int in removed_ids:
 		connections.erase(connection_id)
 
-	var adjacency: Dictionary[int, Array] = _build_facility_adjacency(catalog)
 	var created_edges: Dictionary[String, bool] = {}
+	for facility: FacilityState in get_facilities_in_stable_order():
+		if (
+			not facility.available
+			or facility.zone_id.is_empty()
+			or facility.secondary_zone_id.is_empty()
+		):
+			continue
+		_add_derived_connection(
+			catalog,
+			facility.zone_id,
+			facility.secondary_zone_id,
+			[],
+			previous_by_edge,
+			created_edges,
+			facility.facility_id
+		)
+	var adjacency: Dictionary[int, Array] = (
+		_build_facility_port_adjacency(catalog)
+	)
 	for source: FacilityState in get_facilities_in_stable_order():
 		if not source.available or source.zone_id.is_empty():
 			continue
-		var queue: Array[int] = []
-		var paths: Dictionary[int, Array] = {}
-		var visited: Dictionary[int, bool] = {source.facility_id: true}
-		for neighbor_value: Variant in adjacency.get(source.facility_id, []):
-			var neighbor_id: int = int(neighbor_value)
-			queue.append(neighbor_id)
-			paths[neighbor_id] = []
-		var queue_index: int = 0
-		while queue_index < queue.size():
-			var current_id: int = queue[queue_index]
-			queue_index += 1
-			if visited.has(current_id):
+		for starting_value: Variant in adjacency.get(
+			source.facility_id,
+			[]
+		):
+			var starting: Dictionary = starting_value
+			var source_zone_id: StringName = StringName(
+				starting.get("source_zone_id", "")
+			)
+			if source_zone_id.is_empty():
 				continue
-			visited[current_id] = true
-			var current: FacilityState = get_facility(current_id)
-			if current == null or not current.available:
-				continue
-			var connector_path: Array = paths.get(current_id, []).duplicate()
-			if not current.zone_id.is_empty():
-				if (
-					current.facility_id != source.facility_id
-					and String(source.zone_id) < String(current.zone_id)
-					and (
-						not _is_initial_facility(catalog, source.facility_id)
-						or not _is_initial_facility(
-							catalog,
-							current.facility_id
-						)
-					)
-				):
-					_add_derived_connection(
-						catalog,
-						source,
-						current,
-						connector_path,
-						previous_by_edge,
-						created_edges
-					)
-				continue
-			connector_path.append(current.facility_id)
-			for next_value: Variant in adjacency.get(current_id, []):
-				var next_id: int = int(next_value)
-				if visited.has(next_id):
+			var queue: Array[Dictionary] = [{
+				"facility_id": int(starting["neighbor_id"]),
+				"zone_id": String(starting.get("neighbor_zone_id", "")),
+				"path": [],
+			}]
+			var visited: Dictionary[int, bool] = {
+				source.facility_id: true
+			}
+			var queue_index: int = 0
+			while queue_index < queue.size():
+				var entry: Dictionary = queue[queue_index]
+				queue_index += 1
+				var current_id: int = int(entry["facility_id"])
+				if visited.has(current_id):
 					continue
-				if not paths.has(next_id):
-					paths[next_id] = connector_path.duplicate()
-				queue.append(next_id)
+				visited[current_id] = true
+				var current: FacilityState = get_facility(current_id)
+				if current == null or not current.available:
+					continue
+				var current_zone_id: StringName = StringName(
+					entry.get("zone_id", "")
+				)
+				var connector_path: Array = entry["path"].duplicate()
+				if not current_zone_id.is_empty():
+					if (
+						current.facility_id != source.facility_id
+						and String(source_zone_id)
+							< String(current_zone_id)
+						and (
+							not _is_initial_facility(
+								catalog,
+								source.facility_id
+							)
+							or not _is_initial_facility(
+								catalog,
+								current.facility_id
+							)
+						)
+					):
+						_add_derived_connection(
+							catalog,
+							source_zone_id,
+							current_zone_id,
+							connector_path,
+							previous_by_edge,
+							created_edges,
+							maxi(
+								source.facility_id,
+								current.facility_id
+							)
+						)
+					continue
+				connector_path.append(current.facility_id)
+				for next_value: Variant in adjacency.get(current_id, []):
+					var next_edge: Dictionary = next_value
+					var next_id: int = int(next_edge["neighbor_id"])
+					if visited.has(next_id):
+						continue
+					queue.append({
+						"facility_id": next_id,
+						"zone_id": String(
+							next_edge.get("neighbor_zone_id", "")
+						),
+						"path": connector_path.duplicate(),
+					})
 	_mark_changed()
 	return true
 
@@ -452,7 +523,19 @@ func has_valid_state(
 				not facility.zone_id.is_empty()
 				and not valid_zone_ids.has(facility.zone_id)
 			)
+			or (
+				not facility.secondary_zone_id.is_empty()
+				and not valid_zone_ids.has(facility.secondary_zone_id)
+			)
+			or (
+				not facility.secondary_zone_id.is_empty()
+				and facility.secondary_zone_id == facility.zone_id
+			)
 			or type_config == null
+			or (
+				type_config.effect_config.provides_secondary_zone()
+				!= not facility.secondary_zone_id.is_empty()
+			)
 			or facility.player_removable
 				and not type_config.player_removable
 		):
@@ -675,7 +758,7 @@ func _has_valid_facility_geometry(
 	return true
 
 
-func _build_facility_adjacency(
+func _build_facility_port_adjacency(
 	catalog: FacilityCatalogConfig
 ) -> Dictionary[int, Array]:
 	var result: Dictionary[int, Array] = {}
@@ -688,31 +771,45 @@ func _build_facility_adjacency(
 			continue
 		for second_index: int in range(first_index + 1, stable.size()):
 			var second: FacilityState = stable[second_index]
-			if (
-				not second.available
-				or not _facilities_have_matching_ports(
-					catalog,
-					first,
-					second
-				)
-			):
+			if not second.available:
 				continue
-			result[first.facility_id].append(second.facility_id)
-			result[second.facility_id].append(first.facility_id)
+			for edge: Dictionary in _matching_port_edges(
+				catalog,
+				first,
+				second
+			):
+				result[first.facility_id].append({
+					"neighbor_id": second.facility_id,
+					"source_zone_id": edge["first_zone_id"],
+					"neighbor_zone_id": edge["second_zone_id"],
+				})
+				result[second.facility_id].append({
+					"neighbor_id": first.facility_id,
+					"source_zone_id": edge["second_zone_id"],
+					"neighbor_zone_id": edge["first_zone_id"],
+				})
 	for facility_id: int in result:
-		result[facility_id].sort()
+		result[facility_id].sort_custom(
+			func(first: Dictionary, second: Dictionary) -> bool:
+				if first["neighbor_id"] != second["neighbor_id"]:
+					return first["neighbor_id"] < second["neighbor_id"]
+				return String(first["neighbor_zone_id"]) < (
+					String(second["neighbor_zone_id"])
+				)
+		)
 	return result
 
 
-func _facilities_have_matching_ports(
+func _matching_port_edges(
 	catalog: FacilityCatalogConfig,
 	first: FacilityState,
 	second: FacilityState
-) -> bool:
+) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
 	var first_type: FacilityConfig = catalog.get_type(first.type_id)
 	var second_type: FacilityConfig = catalog.get_type(second.type_id)
 	if first_type == null or second_type == null:
-		return false
+		return result
 	for first_port: FacilityPortConfig in first_type.ports:
 		var first_cell: Vector2i = (
 			first.slot
@@ -742,19 +839,31 @@ func _facilities_have_matching_ports(
 				)
 			)
 			if adjacent_cell == second_cell:
-				return true
-	return false
+				result.append({
+					"first_zone_id": _facility_zone_id_for_port(
+						first,
+						first_type,
+						first_port
+					),
+					"second_zone_id": _facility_zone_id_for_port(
+						second,
+						second_type,
+						second_port
+					),
+				})
+	return result
 
 
 func _add_derived_connection(
 	catalog: FacilityCatalogConfig,
-	first: FacilityState,
-	second: FacilityState,
+	first_zone_id: StringName,
+	second_zone_id: StringName,
 	connector_path: Array,
 	previous_by_edge: Dictionary[String, HabitatConnectionState],
-	created_edges: Dictionary[String, bool]
+	created_edges: Dictionary[String, bool],
+	fallback_owner_facility_id: int
 ) -> void:
-	var edge_key: String = _edge_key(first.zone_id, second.zone_id)
+	var edge_key: String = _edge_key(first_zone_id, second_zone_id)
 	if created_edges.has(edge_key) or _has_legacy_edge(edge_key):
 		return
 	created_edges[edge_key] = true
@@ -782,7 +891,7 @@ func _add_derived_connection(
 		if not gate_ids.is_empty()
 		else connector_ids[0]
 		if not connector_ids.is_empty()
-		else maxi(first.facility_id, second.facility_id)
+		else fallback_owner_facility_id
 	)
 	var gated: bool = not gate_ids.is_empty()
 	var previous: HabitatConnectionState = previous_by_edge.get(edge_key)
@@ -792,12 +901,12 @@ func _add_derived_connection(
 	if previous == null:
 		_next_connection_id += 1
 	var low: StringName = (
-		first.zone_id
-		if String(first.zone_id) < String(second.zone_id)
-		else second.zone_id
+		first_zone_id
+		if String(first_zone_id) < String(second_zone_id)
+		else second_zone_id
 	)
 	var high: StringName = (
-		second.zone_id if low == first.zone_id else first.zone_id
+		second_zone_id if low == first_zone_id else first_zone_id
 	)
 	connections[connection_id] = HabitatConnectionState.new(
 		connection_id,
@@ -807,6 +916,41 @@ func _add_derived_connection(
 		previous.open if previous != null and gated else true,
 		owner_facility_id
 	)
+
+
+func _facility_zone_id_for_port(
+	facility: FacilityState,
+	type_config: FacilityConfig,
+	port: FacilityPortConfig
+) -> StringName:
+	if (
+		type_config.effect_config.provides_secondary_zone()
+		and type_config.is_secondary_chamber_cell(port.local_cell)
+	):
+		return facility.secondary_zone_id
+	return facility.zone_id
+
+
+func _facility_zone_id_for_global_cell(
+	facility: FacilityState,
+	type_config: FacilityConfig,
+	global_cell: Vector2i
+) -> StringName:
+	var oriented_local: Vector2i = global_cell - facility.slot
+	for y: int in type_config.footprint.y:
+		for x: int in type_config.footprint.x:
+			var local_cell: Vector2i = Vector2i(x, y)
+			if (
+				type_config.rotated_cell(
+					local_cell,
+					facility.orientation
+				) != oriented_local
+			):
+				continue
+			if type_config.is_secondary_chamber_cell(local_cell):
+				return facility.secondary_zone_id
+			return facility.zone_id
+	return &""
 
 
 func _has_legacy_edge(edge_key: String) -> bool:

@@ -8,6 +8,7 @@ enum Chapter {
 	ACT1_FIRST_WORKERS,
 	ACT1_FORAGING_EXPANSION,
 	ACT1_ENVIRONMENT_MANAGEMENT,
+	ACT1_MODULAR_MIGRATION,
 }
 
 enum Status {
@@ -42,6 +43,11 @@ const EVIDENCE_HYDRATION_RESPONSE: StringName = &"hydration_response"
 const EVIDENCE_POLLUTION_AVOIDANCE: StringName = &"pollution_avoidance"
 const EVIDENCE_PARTIAL_MIGRATION: StringName = &"partial_migration"
 const EVIDENCE_ENVIRONMENT_STABLE: StringName = &"environment_stable"
+const EVIDENCE_DUAL_NEST_CONNECTED: StringName = &"dual_nest_connected"
+const EVIDENCE_DUAL_NEST_SCOUTED: StringName = &"dual_nest_scouted"
+const EVIDENCE_CORE_BROOD_MIGRATED: StringName = &"core_brood_migrated"
+const EVIDENCE_QUEEN_MIGRATED: StringName = &"queen_migrated"
+const EVIDENCE_FUNCTIONAL_ZONING: StringName = &"functional_zoning"
 
 const INFERENCE_FIRST_WORKER: StringName = &"brood_develops_into_workers"
 const INFERENCE_FIRST_WORKER_RANDOM: StringName = &"worker_change_is_random"
@@ -91,6 +97,15 @@ const INFERENCE_ENVIRONMENT_MAXIMUM: StringName = (
 const INFERENCE_GRADIENT_DIRECTED: StringName = (
 	&"player_directs_each_migration"
 )
+const INFERENCE_MIGRATION_CONDITIONS: StringName = (
+	&"connection_and_gradients_enable_migration"
+)
+const INFERENCE_MIGRATION_DIRECTED: StringName = (
+	&"player_orders_the_colony_to_migrate"
+)
+const INFERENCE_MIGRATION_SIZE: StringName = (
+	&"the_largest_nest_always_wins"
+)
 
 const FACILITY_TEST_TUBE_NEST: StringName = &"test_tube_nest"
 const FACILITY_LIGHT_COVER: StringName = &"light_cover"
@@ -103,6 +118,7 @@ const FACILITY_WASTE_TRAY: StringName = &"waste_tray"
 const FACILITY_SPARE_TEST_TUBE: StringName = &"spare_test_tube"
 const FACILITY_HYDRATION_MODULE: StringName = &"hydration_module"
 const FACILITY_CONNECTOR_FAMILY: StringName = &"connector_family"
+const FACILITY_DUAL_CHAMBER_NEST: StringName = &"dual_chamber_nest"
 
 var chapter: Chapter = Chapter.FOUNDING_OBSERVATION
 var status: Status = Status.ACTIVE

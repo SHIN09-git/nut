@@ -8,6 +8,7 @@ enum Kind {
 	WASTE_TRAY,
 	CONNECTOR,
 	LIGHT_COVER,
+	DUAL_CHAMBER_ZONE,
 }
 
 var kind: Kind
@@ -15,6 +16,10 @@ var initial_humidity: float = 0.5
 var initial_light_exposure: float = 0.5
 var initial_pollution: float = 0.0
 var pollution_per_tick: float = 0.0
+var secondary_initial_humidity: float = 0.5
+var secondary_initial_light_exposure: float = 0.5
+var secondary_initial_pollution: float = 0.0
+var secondary_pollution_per_tick: float = 0.0
 var target_humidity: float = 0.5
 var humidity_per_tick: float = 0.0
 var accepts_sugar: bool = false
@@ -39,6 +44,27 @@ static func from_data(data: FacilityEffectData) -> FacilityEffectConfig:
 		config.initial_light_exposure = zone_data.initial_light_exposure
 		config.initial_pollution = zone_data.initial_pollution
 		config.pollution_per_tick = zone_data.pollution_per_tick
+	elif data is DualChamberFacilityEffectData:
+		var dual_data: DualChamberFacilityEffectData = data
+		config.kind = Kind.DUAL_CHAMBER_ZONE
+		config.initial_humidity = dual_data.brood_initial_humidity
+		config.initial_light_exposure = (
+			dual_data.brood_initial_light_exposure
+		)
+		config.initial_pollution = dual_data.brood_initial_pollution
+		config.pollution_per_tick = dual_data.brood_pollution_per_tick
+		config.secondary_initial_humidity = (
+			dual_data.utility_initial_humidity
+		)
+		config.secondary_initial_light_exposure = (
+			dual_data.utility_initial_light_exposure
+		)
+		config.secondary_initial_pollution = (
+			dual_data.utility_initial_pollution
+		)
+		config.secondary_pollution_per_tick = (
+			dual_data.utility_pollution_per_tick
+		)
 	elif data is HydrationFacilityEffectData:
 		var hydration_data: HydrationFacilityEffectData = data
 		config.kind = Kind.HYDRATION
@@ -74,7 +100,11 @@ static func from_data(data: FacilityEffectData) -> FacilityEffectConfig:
 
 
 func provides_zone() -> bool:
-	return kind == Kind.HABITAT_ZONE
+	return kind in [Kind.HABITAT_ZONE, Kind.DUAL_CHAMBER_ZONE]
+
+
+func provides_secondary_zone() -> bool:
+	return kind == Kind.DUAL_CHAMBER_ZONE
 
 
 func requires_host_zone() -> bool:

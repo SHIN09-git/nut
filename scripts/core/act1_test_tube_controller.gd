@@ -732,6 +732,7 @@ func _update_facility_palette(layout: HabitatLayoutSnapshot) -> void:
 			&"connector_elbow",
 			&"connector_gate",
 			CampaignState.FACILITY_HYDRATION_MODULE,
+			CampaignState.FACILITY_DUAL_CHAMBER_NEST,
 		]
 		for type_id: StringName in ordered_ids:
 			var supply: FacilitySupplySnapshot = layout.get_supply(type_id)
@@ -796,6 +797,8 @@ func _facility_display_name(type_id: StringName) -> String:
 			return tr("R10_FACILITY_GATE")
 		CampaignState.FACILITY_HYDRATION_MODULE:
 			return tr("R10_FACILITY_HYDRATION")
+		CampaignState.FACILITY_DUAL_CHAMBER_NEST:
+			return tr("R11_FACILITY_DUAL_CHAMBER")
 	return String(type_id)
 
 
@@ -949,8 +952,10 @@ func _chapter_name(chapter: int) -> String:
 			return tr("ACT1_CHAPTER_FIRST_WORKERS")
 		CampaignState.Chapter.ACT1_FORAGING_EXPANSION:
 			return tr("R10_CHAPTER_FORAGING")
-		_:
+		CampaignState.Chapter.ACT1_ENVIRONMENT_MANAGEMENT:
 			return tr("R10_CHAPTER_ENVIRONMENT")
+		_:
+			return tr("R11_CHAPTER_MIGRATION")
 
 
 func _objective_text(campaign: CampaignSnapshot) -> String:
@@ -1001,18 +1006,39 @@ func _objective_text(campaign: CampaignSnapshot) -> String:
 				CampaignState.EVIDENCE_SMALL_COLONY_STABLE
 			)),
 		]
-	return tr("R10_OBJECTIVES_ENVIRONMENT") % [
+	if (
+		campaign.chapter
+		== CampaignState.Chapter.ACT1_ENVIRONMENT_MANAGEMENT
+	):
+		return tr("R10_OBJECTIVES_ENVIRONMENT") % [
+			_check(campaign.has_evidence(
+				CampaignState.EVIDENCE_HYDRATION_RESPONSE
+			)),
+			_check(campaign.has_evidence(
+				CampaignState.EVIDENCE_POLLUTION_AVOIDANCE
+			)),
+			_check(campaign.has_evidence(
+				CampaignState.EVIDENCE_PARTIAL_MIGRATION
+			)),
+			_check(campaign.has_evidence(
+				CampaignState.EVIDENCE_ENVIRONMENT_STABLE
+			)),
+		]
+	return tr("R11_OBJECTIVES_MIGRATION") % [
 		_check(campaign.has_evidence(
-			CampaignState.EVIDENCE_HYDRATION_RESPONSE
+			CampaignState.EVIDENCE_DUAL_NEST_CONNECTED
 		)),
 		_check(campaign.has_evidence(
-			CampaignState.EVIDENCE_POLLUTION_AVOIDANCE
+			CampaignState.EVIDENCE_DUAL_NEST_SCOUTED
 		)),
 		_check(campaign.has_evidence(
-			CampaignState.EVIDENCE_PARTIAL_MIGRATION
+			CampaignState.EVIDENCE_CORE_BROOD_MIGRATED
 		)),
 		_check(campaign.has_evidence(
-			CampaignState.EVIDENCE_ENVIRONMENT_STABLE
+			CampaignState.EVIDENCE_QUEEN_MIGRATED
+		)),
+		_check(campaign.has_evidence(
+			CampaignState.EVIDENCE_FUNCTIONAL_ZONING
 		)),
 	]
 
@@ -1056,6 +1082,16 @@ func _evidence_name(evidence_id: StringName) -> String:
 			return tr("R10_EVIDENCE_MIGRATION")
 		CampaignState.EVIDENCE_ENVIRONMENT_STABLE:
 			return tr("R10_EVIDENCE_STABLE")
+		CampaignState.EVIDENCE_DUAL_NEST_CONNECTED:
+			return tr("R11_EVIDENCE_CONNECTED")
+		CampaignState.EVIDENCE_DUAL_NEST_SCOUTED:
+			return tr("R11_EVIDENCE_SCOUTED")
+		CampaignState.EVIDENCE_CORE_BROOD_MIGRATED:
+			return tr("R11_EVIDENCE_BROOD")
+		CampaignState.EVIDENCE_QUEEN_MIGRATED:
+			return tr("R11_EVIDENCE_QUEEN")
+		CampaignState.EVIDENCE_FUNCTIONAL_ZONING:
+			return tr("R11_EVIDENCE_ZONING")
 	return tr("CAMPAIGN_EVIDENCE_UNKNOWN")
 
 
@@ -1077,6 +1113,11 @@ func _guidance_text(campaign: CampaignSnapshot) -> String:
 		== CampaignState.Chapter.ACT1_ENVIRONMENT_MANAGEMENT
 	):
 		return tr("R10_GUIDANCE_ENVIRONMENT")
+	if (
+		campaign.chapter
+		== CampaignState.Chapter.ACT1_MODULAR_MIGRATION
+	):
+		return tr("R11_GUIDANCE_MIGRATION")
 	if _latest_snapshot.nutrition.sugar_action_available:
 		return tr("ACT1_GUIDANCE_PLACE_SUGAR")
 	return tr("ACT1_GUIDANCE_WATCH_WORKER")
@@ -1132,6 +1173,12 @@ func _inference_text(inference_id: StringName) -> String:
 			return tr("R10_INFERENCE_ENVIRONMENT_MAX")
 		CampaignState.INFERENCE_GRADIENT_DIRECTED:
 			return tr("R10_INFERENCE_ENVIRONMENT_DIRECTED")
+		CampaignState.INFERENCE_MIGRATION_CONDITIONS:
+			return tr("R11_INFERENCE_MIGRATION")
+		CampaignState.INFERENCE_MIGRATION_DIRECTED:
+			return tr("R11_INFERENCE_DIRECTED")
+		CampaignState.INFERENCE_MIGRATION_SIZE:
+			return tr("R11_INFERENCE_SIZE")
 	return tr("CAMPAIGN_INFERENCE_UNKNOWN")
 
 

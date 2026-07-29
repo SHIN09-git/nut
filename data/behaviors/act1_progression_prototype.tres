@@ -9,3 +9,4 @@ scientifically_validated = false
 chapter_three_min_worker_count = 3
 pollution_avoidance_min_contrast = 0.08
 environment_stable_ticks = 30
+core_migration_stable_ticks = 40

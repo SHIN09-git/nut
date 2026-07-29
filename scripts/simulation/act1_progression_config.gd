@@ -4,6 +4,7 @@ extends RefCounted
 var chapter_three_min_worker_count: int
 var pollution_avoidance_min_contrast: float
 var environment_stable_ticks: int
+var core_migration_stable_ticks: int
 
 
 static func from_data(data: Act1ProgressionData) -> Act1ProgressionConfig:
@@ -17,4 +18,5 @@ static func from_data(data: Act1ProgressionData) -> Act1ProgressionConfig:
 		data.pollution_avoidance_min_contrast
 	)
 	config.environment_stable_ticks = data.environment_stable_ticks
+	config.core_migration_stable_ticks = data.core_migration_stable_ticks
 	return config

@@ -2,7 +2,68 @@ class_name SaveFixtureDowngrade
 extends RefCounted
 
 
+static func strip_r11_fields(envelope: Dictionary) -> void:
+	var habitat: Variant = envelope["frozen_config_bundle"].get("habitat")
+	if typeof(habitat) == TYPE_DICTIONARY:
+		var progression: Variant = habitat.get("act1_progression_config")
+		if typeof(progression) == TYPE_DICTIONARY:
+			progression.erase("core_migration_stable_ticks")
+		var catalog: Variant = habitat.get("facility_catalog_config")
+		if typeof(catalog) == TYPE_DICTIONARY:
+			var facility_types: Array = []
+			for type_data: Dictionary in catalog.get(
+				"facility_types",
+				[]
+			):
+				if (
+					String(type_data.get("type_id", ""))
+					!= "dual_chamber_nest"
+				):
+					facility_types.append(type_data)
+			catalog["facility_types"] = facility_types
+			var initial_supplies: Array = []
+			for supply: Dictionary in catalog.get("initial_supplies", []):
+				if (
+					String(supply.get("type_id", ""))
+					!= "dual_chamber_nest"
+				):
+					initial_supplies.append(supply)
+			catalog["initial_supplies"] = initial_supplies
+	var state: Dictionary = envelope["state_payload"]
+	var layout: Variant = state.get("layout")
+	if typeof(layout) == TYPE_DICTIONARY:
+		for facility: Dictionary in layout.get("facilities", []):
+			facility.erase("secondary_zone_id")
+		var supplies: Array = []
+		for supply: Dictionary in layout.get("supplies", []):
+			if (
+				String(supply.get("type_id", ""))
+				!= "dual_chamber_nest"
+			):
+				supplies.append(supply)
+		layout["supplies"] = supplies
+	var campaign: Variant = state.get("campaign")
+	if (
+		typeof(campaign) == TYPE_DICTIONARY
+		and int(campaign.get("chapter", -1))
+			== CampaignState.Chapter.ACT1_MODULAR_MIGRATION
+	):
+		campaign["chapter"] = (
+			CampaignState.Chapter.ACT1_ENVIRONMENT_MANAGEMENT
+		)
+		campaign["completed_chapter_count"] = 4
+		campaign["status"] = CampaignState.Status.COMPLETED
+		campaign["campaign_completed_tick"] = int(
+			state.get("simulation_tick", 0)
+		)
+		var unlocks: Array = (
+			campaign.get("unlocked_facility_type_ids", []) as Array
+		)
+		unlocks.erase("dual_chamber_nest")
+
+
 static func strip_r10_fields(envelope: Dictionary) -> void:
+	strip_r11_fields(envelope)
 	var habitat: Variant = envelope["frozen_config_bundle"].get("habitat")
 	if typeof(habitat) == TYPE_DICTIONARY:
 		habitat.erase("act1_progression_config")

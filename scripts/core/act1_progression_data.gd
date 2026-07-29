@@ -6,6 +6,7 @@ extends Resource
 @export_range(1, 20, 1) var chapter_three_min_worker_count: int = 3
 @export_range(0.0, 1.0, 0.01) var pollution_avoidance_min_contrast: float = 0.08
 @export_range(1, 10_000, 1) var environment_stable_ticks: int = 30
+@export_range(1, 10_000, 1) var core_migration_stable_ticks: int = 40
 
 
 func is_valid() -> bool:
@@ -17,4 +18,5 @@ func is_valid() -> bool:
 		and pollution_avoidance_min_contrast > 0.0
 		and pollution_avoidance_min_contrast <= 1.0
 		and environment_stable_ticks > 0
+		and core_migration_stable_ticks > 0
 	)

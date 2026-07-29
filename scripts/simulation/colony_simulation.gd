@@ -752,6 +752,13 @@ func create_game_snapshot() -> GameSnapshot:
 			)
 			act1_snapshot.environment_stable_required_ticks = (
 				_habitat_config.act1_progression_config
+					.core_migration_stable_ticks
+				if (
+					_state.campaign_state != null
+					and _state.campaign_state.chapter
+						== CampaignState.Chapter.ACT1_MODULAR_MIGRATION
+				)
+				else _habitat_config.act1_progression_config
 					.environment_stable_ticks
 			)
 	var layout_snapshot: HabitatLayoutSnapshot = _create_layout_snapshot()
@@ -1269,6 +1276,7 @@ func _is_rotate_facility_action_available(
 	return (
 		_has_layout_authority()
 		and not _has_pending_layout_command()
+		and _is_dual_chamber_rotation_safe(facility_id)
 		and _state.layout_state.can_rotate(
 			_habitat_config.facility_catalog_config,
 			facility_id,
@@ -1378,6 +1386,8 @@ func _apply_rotate_facility_command(
 ) -> void:
 	if not _has_layout_authority():
 		return
+	if not _is_dual_chamber_rotation_safe(command.argument_entity_id):
+		return
 	if _state.layout_state.rotate(
 		_habitat_config.facility_catalog_config,
 		command.argument_entity_id,
@@ -1400,17 +1410,18 @@ func _apply_remove_facility_command(
 	var type_config: FacilityConfig = (
 		_habitat_config.facility_catalog_config.get_type(facility.type_id)
 	)
-	var removed_zone: HabitatZoneState = (
-		_state.get_zone(facility.zone_id)
-		if type_config.effect_config.provides_zone()
-		else null
-	)
+	var removed_zones: Array[HabitatZoneState] = []
+	if type_config.effect_config.provides_zone():
+		for zone_id: StringName in _facility_zone_ids(facility):
+			var zone: HabitatZoneState = _state.get_zone(zone_id)
+			if zone != null:
+				removed_zones.append(zone)
 	if not _state.layout_state.remove(
 		command.argument_entity_id,
 		_habitat_config.facility_catalog_config
 	):
 		return
-	if removed_zone != null:
+	for removed_zone: HabitatZoneState in removed_zones:
 		_state.zones.erase(removed_zone)
 	_state.layout_state.rebuild_derived_connections(
 		_habitat_config.facility_catalog_config
@@ -1430,8 +1441,16 @@ func _finalize_placed_facility(facility_id: int) -> bool:
 		return false
 	var effect: FacilityEffectConfig = type_config.effect_config
 	if effect.provides_zone():
+		var zone_suffix: String = (
+			"_brood" if effect.provides_secondary_zone() else ""
+		)
 		var zone_id: StringName = StringName(
-			"%s_%03d" % [String(facility.type_id), facility.facility_id]
+			"%s_%03d%s"
+				% [
+					String(facility.type_id),
+					facility.facility_id,
+					zone_suffix,
+				]
 		)
 		if _state.get_zone(zone_id) != null:
 			return false
@@ -1447,6 +1466,32 @@ func _finalize_placed_facility(facility_id: int) -> bool:
 			false,
 			-1
 		))
+		if effect.provides_secondary_zone():
+			var secondary_zone_id: StringName = StringName(
+				"%s_%03d_utility"
+					% [
+						String(facility.type_id),
+						facility.facility_id,
+					]
+			)
+			if (
+				_state.get_zone(secondary_zone_id) != null
+				or not layout.assign_facility_secondary_zone(
+					facility_id,
+					secondary_zone_id
+				)
+			):
+				return false
+			_state.zones.append(HabitatZoneState.new(
+				secondary_zone_id,
+				effect.secondary_initial_humidity,
+				[],
+				true,
+				effect.secondary_initial_light_exposure,
+				effect.secondary_initial_pollution,
+				false,
+				-1
+			))
 	elif effect.requires_host_zone():
 		var host_zone_id: StringName = layout.find_host_zone_id(
 			catalog,
@@ -1506,6 +1551,9 @@ func _create_layout_snapshot() -> HabitatLayoutSnapshot:
 		if type_config == null:
 			continue
 		var zone: HabitatZoneState = _state.get_zone(facility.zone_id)
+		var secondary_zone: HabitatZoneState = _state.get_zone(
+			facility.secondary_zone_id
+		)
 		var waste_fill_ratio: float = 0.0
 		if (
 			type_config.effect_config.kind
@@ -1532,7 +1580,23 @@ func _create_layout_snapshot() -> HabitatLayoutSnapshot:
 			zone.humidity if zone != null else 0.0,
 			zone.light_exposure if zone != null else 0.0,
 			zone.pollution if zone != null else 0.0,
-			waste_fill_ratio
+			waste_fill_ratio,
+			facility.secondary_zone_id,
+			(
+				secondary_zone.humidity
+				if secondary_zone != null
+				else 0.0
+			),
+			(
+				secondary_zone.light_exposure
+				if secondary_zone != null
+				else 0.0
+			),
+			(
+				secondary_zone.pollution
+				if secondary_zone != null
+				else 0.0
+			)
 		))
 	for connection: HabitatConnectionState in (
 		_state.layout_state.get_connections_in_stable_order()
@@ -1674,10 +1738,16 @@ func _has_valid_layout_state(state: ColonyState) -> bool:
 		if type_config.effect_config.provides_zone():
 			if facility.zone_id.is_empty():
 				return false
-			if not configured_zone_ids.has(facility.zone_id):
-				if dynamic_zone_ids.has(facility.zone_id):
-					return false
-				dynamic_zone_ids[facility.zone_id] = true
+			for zone_id: StringName in _facility_zone_ids(facility):
+				if not configured_zone_ids.has(zone_id):
+					if dynamic_zone_ids.has(zone_id):
+						return false
+					dynamic_zone_ids[zone_id] = true
+			if (
+				type_config.effect_config.provides_secondary_zone()
+				!= not facility.secondary_zone_id.is_empty()
+			):
+				return false
 		elif (
 			type_config.effect_config.requires_host_zone()
 			and facility.zone_id.is_empty()
@@ -1708,6 +1778,7 @@ func _is_facility_referenced(facility_id: int) -> bool:
 		or type_config == null
 	):
 		return false
+	var zone_ids: Array[StringName] = _facility_zone_ids(facility)
 	for ant: AntModel in _state.ants:
 		if (
 			ant.waste_cleanup_task != null
@@ -1722,7 +1793,7 @@ func _is_facility_referenced(facility_id: int) -> bool:
 		for source: FoodSourceState in _state.food_sources:
 			if (
 				source.available
-				and source.zone_id == facility.zone_id
+				and zone_ids.has(source.zone_id)
 				and (
 					source.food_type
 						== FoodSourceState.FoodType.SUGAR_WATER
@@ -1736,49 +1807,53 @@ func _is_facility_referenced(facility_id: int) -> bool:
 		return false
 	if not type_config.effect_config.provides_zone():
 		return false
-	if _state.queen.zone_id == facility.zone_id:
+	if zone_ids.has(_state.queen.zone_id):
 		return true
 	for ant: AntModel in _state.ants:
-		if ant.zone_id == facility.zone_id:
+		if zone_ids.has(ant.zone_id):
 			return true
 		if (
 			ant.worker_task != null
 			and (
-				ant.worker_task.origin_zone_id == facility.zone_id
-				or ant.worker_task.target_zone_id == facility.zone_id
+				zone_ids.has(ant.worker_task.origin_zone_id)
+				or zone_ids.has(ant.worker_task.target_zone_id)
 			)
 		):
 			return true
 		if (
 			ant.foraging_task != null
 			and (
-				ant.foraging_task.origin_zone_id == facility.zone_id
-				or ant.foraging_task.target_zone_id == facility.zone_id
-				or ant.foraging_task.nest_zone_id == facility.zone_id
-				or ant.foraging_task.route_zone_ids.has(facility.zone_id)
+				zone_ids.has(ant.foraging_task.origin_zone_id)
+				or zone_ids.has(ant.foraging_task.target_zone_id)
+				or zone_ids.has(ant.foraging_task.nest_zone_id)
+				or _route_references_any_zone(
+					ant.foraging_task.route_zone_ids,
+					zone_ids
+				)
 			)
 		):
 			return true
 		if (
 			ant.feeding_task != null
 			and (
-				ant.feeding_task.origin_zone_id == facility.zone_id
-				or ant.feeding_task.target_zone_id == facility.zone_id
-				or ant.feeding_task.route_zone_ids.has(facility.zone_id)
+				zone_ids.has(ant.feeding_task.origin_zone_id)
+				or zone_ids.has(ant.feeding_task.target_zone_id)
+				or _route_references_any_zone(
+					ant.feeding_task.route_zone_ids,
+					zone_ids
+				)
 			)
 		):
 			return true
 		if (
 			ant.waste_cleanup_task != null
 			and (
-				ant.waste_cleanup_task.origin_zone_id
-					== facility.zone_id
-				or ant.waste_cleanup_task.source_zone_id
-					== facility.zone_id
-				or ant.waste_cleanup_task.target_zone_id
-					== facility.zone_id
-				or ant.waste_cleanup_task.route_zone_ids.has(
-					facility.zone_id
+				zone_ids.has(ant.waste_cleanup_task.origin_zone_id)
+				or zone_ids.has(ant.waste_cleanup_task.source_zone_id)
+				or zone_ids.has(ant.waste_cleanup_task.target_zone_id)
+				or _route_references_any_zone(
+					ant.waste_cleanup_task.route_zone_ids,
+					zone_ids
 				)
 			)
 		):
@@ -1786,28 +1861,82 @@ func _is_facility_referenced(facility_id: int) -> bool:
 		if (
 			ant.scout_task != null
 			and (
-				ant.scout_task.origin_zone_id == facility.zone_id
-				or ant.scout_task.target_zone_id == facility.zone_id
-				or ant.scout_task.route_zone_ids.has(facility.zone_id)
+				zone_ids.has(ant.scout_task.origin_zone_id)
+				or zone_ids.has(ant.scout_task.target_zone_id)
+				or _route_references_any_zone(
+					ant.scout_task.route_zone_ids,
+					zone_ids
+				)
 			)
 		):
 			return true
 		if (
 			ant.migration_task != null
 			and (
-				ant.migration_task.origin_zone_id == facility.zone_id
-				or ant.migration_task.member_origin_zone_id
-					== facility.zone_id
-				or ant.migration_task.target_zone_id
-					== facility.zone_id
-				or ant.migration_task.route_zone_ids.has(
-					facility.zone_id
+				zone_ids.has(ant.migration_task.origin_zone_id)
+				or zone_ids.has(
+					ant.migration_task.member_origin_zone_id
+				)
+				or zone_ids.has(ant.migration_task.target_zone_id)
+				or _route_references_any_zone(
+					ant.migration_task.route_zone_ids,
+					zone_ids
 				)
 			)
 		):
 			return true
 	for source: FoodSourceState in _state.food_sources:
-		if source.available and source.zone_id == facility.zone_id:
+		if source.available and zone_ids.has(source.zone_id):
+			return true
+	return false
+
+
+func _is_dual_chamber_rotation_safe(facility_id: int) -> bool:
+	var facility: FacilityState = _state.layout_state.get_facility(
+		facility_id
+	)
+	if facility == null:
+		return false
+	var type_config: FacilityConfig = (
+		_habitat_config.facility_catalog_config.get_type(facility.type_id)
+	)
+	if (
+		type_config == null
+		or type_config.effect_config == null
+		or not type_config.effect_config.provides_secondary_zone()
+	):
+		return true
+	if _is_facility_referenced(facility_id):
+		return false
+	var zone_ids: Array[StringName] = _facility_zone_ids(facility)
+	for hosted: FacilityState in (
+		_state.layout_state.get_facilities_in_stable_order()
+	):
+		if (
+			hosted.facility_id != facility_id
+			and zone_ids.has(hosted.zone_id)
+		):
+			return false
+	return true
+
+
+func _facility_zone_ids(facility: FacilityState) -> Array[StringName]:
+	var result: Array[StringName] = []
+	if facility == null:
+		return result
+	if not facility.zone_id.is_empty():
+		result.append(facility.zone_id)
+	if not facility.secondary_zone_id.is_empty():
+		result.append(facility.secondary_zone_id)
+	return result
+
+
+func _route_references_any_zone(
+	route_zone_ids: Array[StringName],
+	zone_ids: Array[StringName]
+) -> bool:
+	for zone_id: StringName in route_zone_ids:
+		if zone_ids.has(zone_id):
 			return true
 	return false
 

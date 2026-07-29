@@ -2,7 +2,7 @@ class_name SaveGameService
 extends RefCounted
 
 const CURRENT_FORMAT_VERSION: int = 1
-const CURRENT_GAME_VERSION: String = "0.10.0-dev"
+const CURRENT_GAME_VERSION: String = "0.11.0-dev"
 const CURRENT_CONTENT_MANIFEST_ID: String = (
 	"colony-under-glass.r2-base.1"
 )
@@ -269,6 +269,8 @@ func _verify_and_migrate_envelope(envelope: Dictionary) -> Dictionary:
 	match String(current["state_schema_id"]):
 		SimulationStateCodec.CURRENT_SCHEMA_ID:
 			pass
+		SimulationStateCodec.R10_SCHEMA_ID:
+			migrated = true
 		SimulationStateCodec.R9_SCHEMA_ID:
 			migrated = true
 		SimulationStateCodec.R8_SCHEMA_ID:
@@ -401,6 +403,12 @@ func _verify_and_migrate_envelope(envelope: Dictionary) -> Dictionary:
 			return _failure("Unsupported state schema")
 	if String(current["state_schema_id"]) == SimulationStateCodec.R9_SCHEMA_ID:
 		var migration_result: Dictionary = _migrate_v7_to_v8(current)
+		if not migration_result.get("ok", false):
+			return migration_result
+		current = migration_result["envelope"]
+		migrated = true
+	if String(current["state_schema_id"]) == SimulationStateCodec.R10_SCHEMA_ID:
+		var migration_result: Dictionary = _migrate_v8_to_v9(current)
 		if not migration_result.get("ok", false):
 			return migration_result
 		current = migration_result["envelope"]
@@ -1244,7 +1252,7 @@ func _migrate_v7_to_v8(previous: Dictionary) -> Dictionary:
 
 	var migrated: Dictionary = previous.duplicate(true)
 	migrated["game_version"] = CURRENT_GAME_VERSION
-	migrated["state_schema_id"] = SimulationStateCodec.CURRENT_SCHEMA_ID
+	migrated["state_schema_id"] = SimulationStateCodec.R10_SCHEMA_ID
 	migrated["frozen_config_bundle"] = frozen_bundle
 	migrated["frozen_config_hash"] = CanonicalSaveJson.sha256(
 		frozen_bundle
@@ -1263,6 +1271,193 @@ func _r10_act1_progression_payload() -> Dictionary:
 		"chapter_three_min_worker_count": 3,
 		"pollution_avoidance_min_contrast": 0.08,
 		"environment_stable_ticks": 30,
+	}
+
+
+func _migrate_v8_to_v9(previous: Dictionary) -> Dictionary:
+	if (
+		typeof(previous.get("frozen_config_bundle")) != TYPE_DICTIONARY
+		or typeof(previous.get("state_payload")) != TYPE_DICTIONARY
+	):
+		return _failure("R10 save payload is invalid")
+	var frozen_bundle: Dictionary = (
+		previous["frozen_config_bundle"] as Dictionary
+	).duplicate(true)
+	var habitat_value: Variant = frozen_bundle.get("habitat")
+	var is_act1: bool = false
+	if habitat_value != null:
+		if typeof(habitat_value) != TYPE_DICTIONARY:
+			return _failure("R10 habitat configuration is invalid")
+		var habitat: Dictionary = (
+			habitat_value as Dictionary
+		).duplicate(true)
+		is_act1 = (
+			String(habitat.get("scenario_id", ""))
+			== "act1_test_tube"
+		)
+		if is_act1:
+			var progression_value: Variant = habitat.get(
+				"act1_progression_config"
+			)
+			if typeof(progression_value) != TYPE_DICTIONARY:
+				return _failure("R10 Act 1 progression data is invalid")
+			var progression: Dictionary = (
+				progression_value as Dictionary
+			).duplicate(true)
+			if progression.has("core_migration_stable_ticks"):
+				return _failure(
+					"R10 progression unexpectedly contains R11 data"
+				)
+			progression["core_migration_stable_ticks"] = 40
+			habitat["act1_progression_config"] = progression
+
+			var catalog_value: Variant = habitat.get(
+				"facility_catalog_config"
+			)
+			if typeof(catalog_value) != TYPE_DICTIONARY:
+				return _failure("R10 Act 1 facility catalog is invalid")
+			var catalog: Dictionary = (
+				catalog_value as Dictionary
+			).duplicate(true)
+			var facility_types: Array = (
+				catalog.get("facility_types", []) as Array
+			).duplicate(true)
+			for type_value: Variant in facility_types:
+				if (
+					typeof(type_value) == TYPE_DICTIONARY
+					and String(type_value.get("type_id", ""))
+						== "dual_chamber_nest"
+				):
+					return _failure(
+						"R10 catalog unexpectedly contains R11 facility"
+					)
+			facility_types.append(_r11_dual_chamber_type_payload())
+			catalog["facility_types"] = facility_types
+			var initial_supplies: Array = (
+				catalog.get("initial_supplies", []) as Array
+			).duplicate(true)
+			initial_supplies.append({
+				"type_id": "dual_chamber_nest",
+				"available_count": 1,
+			})
+			catalog["initial_supplies"] = initial_supplies
+			habitat["facility_catalog_config"] = catalog
+		frozen_bundle["habitat"] = habitat
+
+	var state_payload: Dictionary = (
+		previous["state_payload"] as Dictionary
+	).duplicate(true)
+	var layout_value: Variant = state_payload.get("layout")
+	if layout_value != null:
+		if typeof(layout_value) != TYPE_DICTIONARY:
+			return _failure("R10 layout state is invalid")
+		var layout: Dictionary = (
+			layout_value as Dictionary
+		).duplicate(true)
+		var facilities: Array = (
+			layout.get("facilities", []) as Array
+		).duplicate(true)
+		for index: int in facilities.size():
+			if typeof(facilities[index]) != TYPE_DICTIONARY:
+				return _failure("R10 facility state is invalid")
+			var facility: Dictionary = (
+				facilities[index] as Dictionary
+			).duplicate(true)
+			if facility.has("secondary_zone_id"):
+				return _failure(
+					"R10 facility state unexpectedly contains R11 data"
+				)
+			facility["secondary_zone_id"] = ""
+			facilities[index] = facility
+		layout["facilities"] = facilities
+		if is_act1:
+			var supplies: Array = (
+				layout.get("supplies", []) as Array
+			).duplicate(true)
+			supplies.append({
+				"type_id": "dual_chamber_nest",
+				"remaining_count": 1,
+			})
+			layout["supplies"] = supplies
+		state_payload["layout"] = layout
+
+	if is_act1:
+		var campaign_value: Variant = state_payload.get("campaign")
+		if typeof(campaign_value) != TYPE_DICTIONARY:
+			return _failure("R10 Act 1 campaign state is invalid")
+		var campaign: Dictionary = (
+			campaign_value as Dictionary
+		).duplicate(true)
+		if (
+			int(campaign.get("completed_chapter_count", -1)) == 4
+			and int(campaign.get("status", -1))
+				== CampaignState.Status.COMPLETED
+		):
+			campaign["chapter"] = (
+				CampaignState.Chapter.ACT1_MODULAR_MIGRATION
+			)
+			campaign["status"] = CampaignState.Status.ACTIVE
+			campaign["chapter_entered_tick"] = int(
+				state_payload.get("simulation_tick", 0)
+			)
+			campaign["campaign_completed_tick"] = -1
+			var unlocks: Array = (
+				campaign.get("unlocked_facility_type_ids", []) as Array
+			).duplicate()
+			if not unlocks.has("dual_chamber_nest"):
+				unlocks.append("dual_chamber_nest")
+			unlocks.sort()
+			campaign["unlocked_facility_type_ids"] = unlocks
+		state_payload["campaign"] = campaign
+
+	var migrated: Dictionary = previous.duplicate(true)
+	migrated["game_version"] = CURRENT_GAME_VERSION
+	migrated["state_schema_id"] = SimulationStateCodec.CURRENT_SCHEMA_ID
+	migrated["frozen_config_bundle"] = frozen_bundle
+	migrated["frozen_config_hash"] = CanonicalSaveJson.sha256(
+		frozen_bundle
+	)
+	if String(migrated["frozen_config_hash"]).is_empty():
+		return _failure("R11 frozen configuration hash could not be created")
+	migrated["state_payload"] = state_payload
+	migrated = seal_envelope(migrated)
+	if migrated.is_empty():
+		return _failure("R10 save migration could not be sealed")
+	return {"ok": true, "error": "", "envelope": migrated}
+
+
+func _r11_dual_chamber_type_payload() -> Dictionary:
+	return {
+		"type_id": "dual_chamber_nest",
+		"unlock_type_id": "dual_chamber_nest",
+		"footprint": [2, 2],
+		"allowed_orientations": [0, 1, 2, 3],
+		"ports": [
+			{
+				"local_cell": [0, 0],
+				"direction": FacilityPortData.Direction.WEST,
+				"connection_kind": "habitat",
+			},
+			{
+				"local_cell": [1, 0],
+				"direction": FacilityPortData.Direction.EAST,
+				"connection_kind": "habitat",
+			},
+		],
+		"placement_layer": FacilityData.PlacementLayer.BASE,
+		"requires_connection": true,
+		"player_removable": true,
+		"effect_config": {
+			"kind": FacilityEffectConfig.Kind.DUAL_CHAMBER_ZONE,
+			"brood_initial_humidity": 0.50,
+			"brood_initial_light_exposure": 0.20,
+			"brood_initial_pollution": 0.0,
+			"brood_pollution_per_tick": 0.00001,
+			"utility_initial_humidity": 0.42,
+			"utility_initial_light_exposure": 0.36,
+			"utility_initial_pollution": 0.0,
+			"utility_pollution_per_tick": 0.00001,
+		},
 	}
 
 

@@ -16,6 +16,7 @@ var _scene_root: Node
 func run(scene_root: Node) -> void:
 	_scene_root = scene_root
 	_test_real_controls_complete_both_chapters()
+	_test_chapter_five_real_layout_and_migration_path()
 	_test_pause_and_f3_boundaries()
 	_test_colony_work_projection()
 	_test_waste_tray_clean_button_boundary()
@@ -633,6 +634,381 @@ func _test_layout_controls_after_chapter_two(
 	)
 
 
+func _test_chapter_five_real_layout_and_migration_path() -> void:
+	var controller: Act1TestTubeController = _create_controller(
+		Vector2(1280, 720)
+	)
+	(controller.get_node("%StartObservationButton") as Button).pressed.emit()
+	_prepare_chapter_five_controller(controller)
+	var layout_button: Button = controller.get_node("%LayoutButton") as Button
+	layout_button.button_pressed = true
+	layout_button.pressed.emit()
+	var view: Act1TestTubeView = controller.get_node(
+		"%Act1TestTubeView"
+	) as Act1TestTubeView
+	_expect_true(view.is_layout_mode(), "Chapter 5 opens the real layout view")
+
+	var gate_option: FacilityPlacementOptionSnapshot = _find_exact_option(
+		controller.get_latest_snapshot(),
+		&"connector_gate",
+		Vector2i(5, 3),
+		0
+	)
+	_expect_true(gate_option != null, "Chapter 5 exposes the bridge gate slot")
+	if gate_option == null:
+		_destroy_controller(controller)
+		return
+	var gate_id: int = _place_facility_through_ui(controller, gate_option)
+	_expect_true(gate_id >= 0, "real UI places the bridge gate")
+	if gate_id < 0:
+		_destroy_controller(controller)
+		return
+
+	var dual_option: FacilityPlacementOptionSnapshot = _find_exact_option(
+		controller.get_latest_snapshot(),
+		CampaignState.FACILITY_DUAL_CHAMBER_NEST,
+		Vector2i(6, 3),
+		0
+	)
+	_expect_true(
+		dual_option != null,
+		"connected gate exposes the dual-chamber nest slot"
+	)
+	if dual_option == null:
+		_destroy_controller(controller)
+		return
+	var dual_id: int = _place_facility_through_ui(controller, dual_option)
+	_expect_true(dual_id >= 0, "real UI places one dual-chamber nest")
+	if dual_id < 0:
+		_destroy_controller(controller)
+		return
+	var dual: FacilitySnapshot = (
+		controller.get_latest_snapshot().layout.get_facility(dual_id)
+	)
+	_expect_true(
+		dual != null
+			and not dual.zone_id.is_empty()
+			and not dual.secondary_zone_id.is_empty(),
+		"real placement publishes two authoritative rooms"
+	)
+	if dual == null:
+		_destroy_controller(controller)
+		return
+
+	var hydration_option: FacilityPlacementOptionSnapshot = (
+		_find_option_for_zone(
+			controller,
+			CampaignState.FACILITY_HYDRATION_MODULE,
+			dual.zone_id
+		)
+	)
+	_expect_true(
+		hydration_option != null,
+		"layout offers hydration on the brood chamber"
+	)
+	if hydration_option == null:
+		_destroy_controller(controller)
+		return
+	var hydration_id: int = _place_facility_through_ui(
+		controller,
+		hydration_option
+	)
+	_expect_true(hydration_id >= 0, "real UI hydrates the brood chamber")
+	if hydration_id < 0:
+		_destroy_controller(controller)
+		return
+	var hydration: FacilitySnapshot = (
+		controller.get_latest_snapshot().layout.get_facility(hydration_id)
+	)
+	_expect_true(
+		hydration != null
+			and hydration.zone_id == dual.zone_id
+			and hydration.zone_id != dual.secondary_zone_id,
+		"hydration click resolves to one chamber only"
+	)
+
+	_expect_true(
+		_advance_authority_until(
+			controller,
+			func(simulation: ColonySimulation) -> bool:
+				var state: ColonyState = simulation._state
+				if state.queen.zone_id != dual.zone_id:
+					return false
+				for ant: AntModel in state.ants:
+					if (
+						ant.life_stage != AntModel.LifeStage.WORKER
+						and ant.zone_id != dual.zone_id
+					):
+						return false
+				return (
+					state.colony_work_state.completed_migration_count > 0
+				),
+			1_500
+		),
+		"real layout path leads to autonomous brood-then-queen migration"
+	)
+	_expect_true(
+		controller._colony_simulation.has_valid_habitat_ownership(),
+		"real UI migration preserves single ownership"
+	)
+
+	var waste_option: FacilityPlacementOptionSnapshot = _find_option_for_zone(
+		controller,
+		CampaignState.FACILITY_WASTE_TRAY,
+		&"micro_feeding_port"
+	)
+	_expect_true(
+		waste_option != null,
+		"layout offers a waste path on the feeding-port zone"
+	)
+	if waste_option == null:
+		_destroy_controller(controller)
+		return
+	var waste_id: int = _place_facility_through_ui(
+		controller,
+		waste_option
+	)
+	_expect_true(waste_id >= 0, "real UI installs the waste path")
+	if waste_id < 0:
+		_destroy_controller(controller)
+		return
+
+	_expect_true(
+		_advance_authority_until(
+			controller,
+			func(simulation: ColonySimulation) -> bool:
+				var campaign_state: CampaignState = (
+					simulation._state.campaign_state
+				)
+				return (
+					campaign_state.chapter
+					== CampaignState.Chapter.ACT1_MODULAR_MIGRATION
+					and campaign_state.status
+						== CampaignState.Status.AWAITING_INFERENCE
+				),
+			250
+		),
+		"real player path collects the five migration observations"
+	)
+	var campaign: CampaignSnapshot = controller.get_latest_snapshot().campaign
+	for evidence_id: StringName in [
+		CampaignState.EVIDENCE_DUAL_NEST_CONNECTED,
+		CampaignState.EVIDENCE_DUAL_NEST_SCOUTED,
+		CampaignState.EVIDENCE_CORE_BROOD_MIGRATED,
+		CampaignState.EVIDENCE_QUEEN_MIGRATED,
+		CampaignState.EVIDENCE_FUNCTIONAL_ZONING,
+	]:
+		_expect_true(
+			campaign.has_evidence(evidence_id),
+			"real Chapter 5 path records evidence %s" % evidence_id
+		)
+
+	(controller.get_node("%JournalButton") as Button).pressed.emit()
+	var inference_button: Button = _find_inference_button(
+		controller,
+		CampaignState.INFERENCE_MIGRATION_CONDITIONS
+	)
+	_expect_true(
+		inference_button != null and not inference_button.disabled,
+		"journal exposes the evidence-backed migration inference"
+	)
+	if inference_button != null:
+		inference_button.pressed.emit()
+		(
+			controller.get_node("%JournalCloseButton") as Button
+		).pressed.emit()
+		controller._process(SimulationClock.FIXED_STEP_SECONDS)
+	_expect_true(
+		controller.get_latest_snapshot().campaign.completed,
+		"real Chapter 5 inference completes the implemented Act 1 arc"
+	)
+	_destroy_controller(controller)
+
+
+func _prepare_chapter_five_controller(
+	controller: Act1TestTubeController
+) -> void:
+	var simulation: ColonySimulation = controller._colony_simulation
+	var state: ColonyState = simulation._state
+	var campaign: CampaignState = state.campaign_state
+	campaign.chapter = CampaignState.Chapter.ACT1_MODULAR_MIGRATION
+	campaign.status = CampaignState.Status.ACTIVE
+	campaign.chapter_entered_tick = state.simulation_tick
+	campaign.completed_chapter_count = 4
+	campaign.campaign_completed_tick = -1
+	for evidence_id: StringName in [
+		CampaignState.EVIDENCE_QUEEN_CARE,
+		CampaignState.EVIDENCE_FIRST_PUPA,
+		CampaignState.EVIDENCE_FIRST_WORKER,
+		CampaignState.EVIDENCE_FIRST_WORKER_CARE,
+		CampaignState.EVIDENCE_FIRST_NUTRIENT_EXCHANGE,
+	]:
+		campaign.collect_evidence(evidence_id)
+	for inference_id: StringName in [
+		CampaignState.INFERENCE_QUEEN_CARE,
+		CampaignState.INFERENCE_WORKER_NUTRITION,
+		CampaignState.INFERENCE_FORAGING_ROLES,
+		CampaignState.INFERENCE_ENVIRONMENT_GRADIENT,
+	]:
+		campaign.confirm_inference(inference_id)
+	for facility_id: StringName in [
+		CampaignState.FACILITY_MICRO_FEEDING_PORT,
+		CampaignState.FACILITY_SMALL_FORAGING_BOX,
+		CampaignState.FACILITY_SUGAR_STATION,
+		CampaignState.FACILITY_PROTEIN_DISH,
+		CampaignState.FACILITY_WASTE_TRAY,
+		CampaignState.FACILITY_SPARE_TEST_TUBE,
+		CampaignState.FACILITY_HYDRATION_MODULE,
+		CampaignState.FACILITY_CONNECTOR_FAMILY,
+		CampaignState.FACILITY_DUAL_CHAMBER_NEST,
+	]:
+		campaign.unlock_facility(facility_id)
+	var care: FoundingCareData = ACT1_SCENARIO_DATA.founding_care_data
+	for card_id: StringName in [
+		care.queen_care_observation_card_id,
+		care.pupa_observation_card_id,
+		care.first_worker_observation_card_id,
+		care.worker_care_observation_card_id,
+		ACT1_SCENARIO_DATA.foraging_observation_card_id,
+	]:
+		state.unlocked_observation_card_ids[card_id] = true
+
+	state.ants[0].configure_nutrition_worker(
+		&"test_tube_nest",
+		state.simulation_tick
+	)
+	for ant_index: int in range(1, state.ants.size()):
+		state.ants[ant_index].configure_brood(
+			&"test_tube_nest",
+			state.simulation_tick
+		)
+	var source: HabitatZoneState = state.get_zone(&"test_tube_nest")
+	source.set_humidity(0.30)
+	source.set_light_exposure(0.88)
+	source.set_pollution(0.0)
+	var activity_ticks: int = (
+		simulation._habitat_config.nutrition_config
+			.sugar_activity_ticks_per_portion
+	)
+	state.nutrition_state.sugar_activity_ticks_remaining = (
+		activity_ticks - 1
+	)
+	state.nutrition_state.sugar_reserve_portions = 20
+	state.nutrition_state.total_sugar_portions_supplied = 20
+	controller._apply_snapshot()
+
+
+func _place_facility_through_ui(
+	controller: Act1TestTubeController,
+	option: FacilityPlacementOptionSnapshot
+) -> int:
+	var palette: OptionButton = controller.get_node(
+		"%FacilityTypeOption"
+	) as OptionButton
+	var palette_index: int = -1
+	for index: int in palette.item_count:
+		if StringName(palette.get_item_metadata(index)) == option.type_id:
+			palette_index = index
+			break
+	_expect_true(
+		palette_index >= 0,
+		"facility palette exposes %s" % option.type_id
+	)
+	if palette_index < 0:
+		return -1
+	palette.select(palette_index)
+	palette.item_selected.emit(palette_index)
+	(controller.get_node("%PlaceBoxButton") as Button).pressed.emit()
+	var view: Act1TestTubeView = controller.get_node(
+		"%Act1TestTubeView"
+	) as Act1TestTubeView
+	var layout_view: FacilityLayoutView = view.get_layout_view()
+	_expect_true(
+		layout_view.is_placing(),
+		"place button enters placement mode for %s" % option.type_id
+	)
+	if not layout_view.is_placing():
+		return -1
+	for unused_rotation: int in 4:
+		if layout_view.get_placement_orientation() == option.orientation:
+			break
+		_send_key(controller, KEY_R)
+	_expect_int(
+		layout_view.get_placement_orientation(),
+		option.orientation,
+		"placement preview reaches the requested orientation"
+	)
+	var prior_ids: Array[int] = []
+	for facility: FacilitySnapshot in (
+		controller.get_latest_snapshot().layout.facilities
+	):
+		prior_ids.append(facility.facility_id)
+	var click: InputEventMouseButton = InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	click.position = layout_view._slot_rect(
+		option.slot,
+		Vector2i.ONE
+	).get_center()
+	layout_view._gui_input(click)
+	_expect_true(
+		controller.get_latest_snapshot().layout.action_pending,
+		"mouse click queues %s" % option.type_id
+	)
+	if not controller.get_latest_snapshot().layout.action_pending:
+		return -1
+	controller._process(SimulationClock.FIXED_STEP_SECONDS)
+	for facility: FacilitySnapshot in (
+		controller.get_latest_snapshot().layout.facilities
+	):
+		if (
+			facility.type_id == option.type_id
+			and not prior_ids.has(facility.facility_id)
+		):
+			return facility.facility_id
+	return -1
+
+
+func _find_exact_option(
+	snapshot: GameSnapshot,
+	type_id: StringName,
+	slot: Vector2i,
+	orientation: int
+) -> FacilityPlacementOptionSnapshot:
+	for option: FacilityPlacementOptionSnapshot in (
+		snapshot.layout.placement_options
+	):
+		if (
+			option.type_id == type_id
+			and option.slot == slot
+			and option.orientation == orientation
+		):
+			return option
+	return null
+
+
+func _find_option_for_zone(
+	controller: Act1TestTubeController,
+	type_id: StringName,
+	zone_id: StringName
+) -> FacilityPlacementOptionSnapshot:
+	var simulation: ColonySimulation = controller._colony_simulation
+	for option: FacilityPlacementOptionSnapshot in (
+		controller.get_latest_snapshot().layout.placement_options
+	):
+		if (
+			option.type_id == type_id
+			and simulation._state.layout_state.find_host_zone_id(
+				simulation._habitat_config.facility_catalog_config,
+				type_id,
+				option.slot,
+				option.orientation
+			) == zone_id
+		):
+			return option
+	return null
+
+
 func _send_key(controller: Act1TestTubeController, keycode: Key) -> void:
 	var event: InputEventKey = InputEventKey.new()
 	event.keycode = keycode
@@ -667,6 +1043,40 @@ func _process_until(
 		if predicate.call(controller.get_latest_snapshot()):
 			return true
 	return false
+
+
+func _advance_authority_until(
+	controller: Act1TestTubeController,
+	predicate: Callable,
+	maximum_ticks: int
+) -> bool:
+	var simulation: ColonySimulation = controller._colony_simulation
+	if predicate.call(simulation):
+		_synchronize_controller_after_direct_advance(controller)
+		controller._apply_snapshot()
+		return true
+	for unused_tick: int in maximum_ticks:
+		if not simulation.advance_tick(simulation._state.simulation_tick + 1):
+			_synchronize_controller_after_direct_advance(controller)
+			controller._apply_snapshot()
+			return false
+		if predicate.call(simulation):
+			_synchronize_controller_after_direct_advance(controller)
+			controller._apply_snapshot()
+			return true
+	_synchronize_controller_after_direct_advance(controller)
+	controller._apply_snapshot()
+	return false
+
+
+func _synchronize_controller_after_direct_advance(
+	controller: Act1TestTubeController
+) -> void:
+	controller._simulation_clock.restore_save_boundary(
+		controller._colony_simulation._state.simulation_tick,
+		controller._simulation_clock.get_speed_multiplier(),
+		controller._simulation_clock.is_paused()
+	)
 
 
 func _create_controller(

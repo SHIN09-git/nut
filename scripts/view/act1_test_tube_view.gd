@@ -624,6 +624,18 @@ func _get_zone_position(zone_id: StringName, entity_id: int) -> Vector2:
 		ratio = 0.68
 	elif zone_id == &"micro_feeding_port":
 		ratio = 0.88
+	elif String(zone_id).begins_with("dual_chamber_nest_"):
+		var utility: bool = String(zone_id).ends_with("_utility")
+		return Vector2(
+			lerpf(
+				tube.position.x,
+				tube.end.x,
+				0.84 if utility else 0.70
+			),
+			tube.position.y
+				+ tube.size.y * 0.38
+				+ float(posmod(entity_id, 3) - 1) * 8.0
+		)
 	elif zone_id != &"test_tube_nest":
 		var stable_slot: int = posmod(String(zone_id).hash(), 4)
 		ratio = 0.76 + float(stable_slot % 2) * 0.13

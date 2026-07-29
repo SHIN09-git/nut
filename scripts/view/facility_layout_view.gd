@@ -494,7 +494,13 @@ func _draw_facility(facility: FacilitySnapshot) -> void:
 		fill = fill.lightened(
 			clampf(facility.zone_light_exposure, 0.0, 1.0) * 0.08
 		)
-	draw_rect(rect, fill, true)
+	if (
+		facility.effect_kind
+		== FacilityEffectConfig.Kind.DUAL_CHAMBER_ZONE
+	):
+		_draw_dual_chamber_fill(facility, rect, fill)
+	else:
+		draw_rect(rect, fill, true)
 	draw_rect(
 		rect,
 		SELECTED_COLOR if selected else FACILITY_EDGE,
@@ -515,6 +521,21 @@ func _draw_facility(facility: FacilitySnapshot) -> void:
 			draw_circle(center, maxf(5.0, 10.0 * _camera_zoom), FACILITY_EDGE)
 		&"small_foraging_box":
 			draw_rect(rect.grow(-10.0 * _camera_zoom), FACILITY_EDGE, false, 3.0)
+		&"dual_chamber_nest":
+			if posmod(facility.orientation, 2) == 0:
+				draw_line(
+					Vector2(center.x, rect.position.y),
+					Vector2(center.x, rect.end.y),
+					FACILITY_EDGE,
+					3.0
+				)
+			else:
+				draw_line(
+					Vector2(rect.position.x, center.y),
+					Vector2(rect.end.x, center.y),
+					FACILITY_EDGE,
+					3.0
+				)
 		&"connector_gate":
 			draw_line(
 				Vector2(center.x, rect.position.y + 8.0),
@@ -709,4 +730,64 @@ func _facility_label(type_id: StringName) -> String:
 			return tr("R8_FACILITY_PROTEIN_DISH")
 		&"waste_tray":
 			return tr("R8_FACILITY_WASTE_TRAY")
+		&"dual_chamber_nest":
+			return tr("R11_FACILITY_DUAL_CHAMBER")
 	return tr("FACILITY_UNKNOWN")
+
+
+func _draw_dual_chamber_fill(
+	facility: FacilitySnapshot,
+	rect: Rect2,
+	fallback: Color
+) -> void:
+	var brood_color: Color = _environment_fill_color(
+		fallback,
+		facility.zone_humidity,
+		facility.zone_light_exposure,
+		facility.zone_pollution
+	)
+	var utility_color: Color = _environment_fill_color(
+		fallback,
+		facility.secondary_zone_humidity,
+		facility.secondary_zone_light_exposure,
+		facility.secondary_zone_pollution
+	)
+	var first: Rect2
+	var second: Rect2
+	if posmod(facility.orientation, 2) == 0:
+		first = Rect2(rect.position, Vector2(rect.size.x * 0.5, rect.size.y))
+		second = Rect2(
+			Vector2(rect.position.x + rect.size.x * 0.5, rect.position.y),
+			Vector2(rect.size.x * 0.5, rect.size.y)
+		)
+	else:
+		first = Rect2(rect.position, Vector2(rect.size.x, rect.size.y * 0.5))
+		second = Rect2(
+			Vector2(rect.position.x, rect.position.y + rect.size.y * 0.5),
+			Vector2(rect.size.x, rect.size.y * 0.5)
+		)
+	if facility.orientation in [2, 3]:
+		var swap: Rect2 = first
+		first = second
+		second = swap
+	draw_rect(first, brood_color, true)
+	draw_rect(second, utility_color, true)
+
+
+func _environment_fill_color(
+	base: Color,
+	humidity: float,
+	light_exposure: float,
+	pollution: float
+) -> Color:
+	var result: Color = base.lerp(
+		HUMIDITY_COLOR,
+		clampf(humidity, 0.0, 1.0) * 0.28
+	)
+	result = result.lerp(
+		POLLUTION_COLOR,
+		clampf(pollution, 0.0, 1.0) * 0.42
+	)
+	return result.lightened(
+		clampf(light_exposure, 0.0, 1.0) * 0.08
+	)

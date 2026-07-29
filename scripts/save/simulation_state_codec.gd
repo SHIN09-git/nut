@@ -1,7 +1,8 @@
 class_name SimulationStateCodec
 extends RefCounted
 
-const CURRENT_SCHEMA_ID: String = "r10.authority.v8"
+const CURRENT_SCHEMA_ID: String = "r11.authority.v9"
+const R10_SCHEMA_ID: String = "r10.authority.v8"
 const R9_SCHEMA_ID: String = "r9.authority.v7"
 const R8_SCHEMA_ID: String = "r8.authority.v6"
 const R7_SCHEMA_ID: String = "r7.authority.v5"
@@ -495,6 +496,8 @@ static func _encode_act1_progression_config(
 		"pollution_avoidance_min_contrast":
 			config.pollution_avoidance_min_contrast,
 		"environment_stable_ticks": config.environment_stable_ticks,
+		"core_migration_stable_ticks":
+			config.core_migration_stable_ticks,
 	}
 
 
@@ -528,6 +531,27 @@ static func _encode_facility_effect_config(
 			)
 			result["initial_pollution"] = config.initial_pollution
 			result["pollution_per_tick"] = config.pollution_per_tick
+		FacilityEffectConfig.Kind.DUAL_CHAMBER_ZONE:
+			result["brood_initial_humidity"] = config.initial_humidity
+			result["brood_initial_light_exposure"] = (
+				config.initial_light_exposure
+			)
+			result["brood_initial_pollution"] = config.initial_pollution
+			result["brood_pollution_per_tick"] = (
+				config.pollution_per_tick
+			)
+			result["utility_initial_humidity"] = (
+				config.secondary_initial_humidity
+			)
+			result["utility_initial_light_exposure"] = (
+				config.secondary_initial_light_exposure
+			)
+			result["utility_initial_pollution"] = (
+				config.secondary_initial_pollution
+			)
+			result["utility_pollution_per_tick"] = (
+				config.secondary_pollution_per_tick
+			)
 		FacilityEffectConfig.Kind.HYDRATION:
 			result["target_humidity"] = config.target_humidity
 			result["humidity_per_tick"] = config.humidity_per_tick
@@ -752,6 +776,7 @@ static func _encode_layout_state(layout: HabitatLayoutState) -> Variant:
 			"slot": [facility.slot.x, facility.slot.y],
 			"orientation": facility.orientation,
 			"zone_id": String(facility.zone_id),
+			"secondary_zone_id": String(facility.secondary_zone_id),
 			"available": facility.available,
 			"player_removable": facility.player_removable,
 			"waste_stored": facility.waste_stored,
@@ -1224,6 +1249,7 @@ static func _decode_act1_progression_data(value: Variant) -> Dictionary:
 		"chapter_three_min_worker_count",
 		"pollution_avoidance_min_contrast",
 		"environment_stable_ticks",
+		"core_migration_stable_ticks",
 	]
 	if not _is_dictionary_with_keys(value, keys):
 		return _failure("Act 1 progression configuration is invalid")
@@ -1233,6 +1259,7 @@ static func _decode_act1_progression_data(value: Variant) -> Dictionary:
 			value["pollution_avoidance_min_contrast"]
 		)
 		or not _is_integral_number(value["environment_stable_ticks"])
+		or not _is_integral_number(value["core_migration_stable_ticks"])
 	):
 		return _failure("Act 1 progression configuration is malformed")
 	var data := Act1ProgressionData.new()
@@ -1246,6 +1273,9 @@ static func _decode_act1_progression_data(value: Variant) -> Dictionary:
 	)
 	data.environment_stable_ticks = int(
 		value["environment_stable_ticks"]
+	)
+	data.core_migration_stable_ticks = int(
+		value["core_migration_stable_ticks"]
 	)
 	if not data.is_valid():
 		return _failure("Act 1 progression configuration is not valid")
@@ -1613,6 +1643,51 @@ static func _decode_facility_effect_data(value: Variant) -> Dictionary:
 				value["pollution_per_tick"]
 			)
 			data = zone_data
+		FacilityEffectConfig.Kind.DUAL_CHAMBER_ZONE:
+			var dual_keys: Array[String] = [
+				"kind",
+				"brood_initial_humidity",
+				"brood_initial_light_exposure",
+				"brood_initial_pollution",
+				"brood_pollution_per_tick",
+				"utility_initial_humidity",
+				"utility_initial_light_exposure",
+				"utility_initial_pollution",
+				"utility_pollution_per_tick",
+			]
+			if not _is_dictionary_with_keys(value, dual_keys):
+				return _failure("Dual-chamber facility effect is invalid")
+			for key: String in dual_keys.slice(1):
+				if not _is_finite_number(value[key]):
+					return _failure(
+						"Dual-chamber facility effect is non-finite"
+					)
+			var dual_data := DualChamberFacilityEffectData.new()
+			dual_data.brood_initial_humidity = float(
+				value["brood_initial_humidity"]
+			)
+			dual_data.brood_initial_light_exposure = float(
+				value["brood_initial_light_exposure"]
+			)
+			dual_data.brood_initial_pollution = float(
+				value["brood_initial_pollution"]
+			)
+			dual_data.brood_pollution_per_tick = float(
+				value["brood_pollution_per_tick"]
+			)
+			dual_data.utility_initial_humidity = float(
+				value["utility_initial_humidity"]
+			)
+			dual_data.utility_initial_light_exposure = float(
+				value["utility_initial_light_exposure"]
+			)
+			dual_data.utility_initial_pollution = float(
+				value["utility_initial_pollution"]
+			)
+			dual_data.utility_pollution_per_tick = float(
+				value["utility_pollution_per_tick"]
+			)
+			data = dual_data
 		FacilityEffectConfig.Kind.HYDRATION:
 			if not _is_dictionary_with_keys(value, [
 				"kind",
@@ -2735,6 +2810,7 @@ static func _decode_facility_state(value: Variant) -> Dictionary:
 			"slot",
 			"orientation",
 			"zone_id",
+			"secondary_zone_id",
 			"available",
 			"player_removable",
 			"waste_stored",
@@ -2748,6 +2824,7 @@ static func _decode_facility_state(value: Variant) -> Dictionary:
 		or typeof(value["type_id"]) != TYPE_STRING
 		or not _is_integral_number(value["orientation"])
 		or typeof(value["zone_id"]) != TYPE_STRING
+		or typeof(value["secondary_zone_id"]) != TYPE_STRING
 		or typeof(value["available"]) != TYPE_BOOL
 		or typeof(value["player_removable"]) != TYPE_BOOL
 		or not _is_finite_number(value["waste_stored"])
@@ -2765,7 +2842,8 @@ static func _decode_facility_state(value: Variant) -> Dictionary:
 			StringName(value["zone_id"]),
 			bool(value["available"]),
 			bool(value["player_removable"]),
-			float(value["waste_stored"])
+			float(value["waste_stored"]),
+			StringName(value["secondary_zone_id"])
 		),
 	}
 

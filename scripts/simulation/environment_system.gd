@@ -39,6 +39,19 @@ func advance(state: ColonyState) -> void:
 					zone.set_pollution(
 						zone.pollution + effect.pollution_per_tick
 					)
+			FacilityEffectConfig.Kind.DUAL_CHAMBER_ZONE:
+				if zone != null:
+					zone.set_pollution(
+						zone.pollution + effect.pollution_per_tick
+					)
+				var secondary_zone: HabitatZoneState = state.get_zone(
+					facility.secondary_zone_id
+				)
+				if secondary_zone != null:
+					secondary_zone.set_pollution(
+						secondary_zone.pollution
+							+ effect.secondary_pollution_per_tick
+					)
 			FacilityEffectConfig.Kind.HYDRATION:
 				if zone != null:
 					zone.set_humidity(_approach(

@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="FacilityCatalogData" load_steps=42 format=3]
+[gd_resource type="Resource" script_class="FacilityCatalogData" load_steps=48 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/facility_catalog_data.gd" id="1_catalog"]
 [ext_resource type="Script" path="res://scripts/core/facility_data.gd" id="2_facility"]
@@ -11,6 +11,7 @@
 [ext_resource type="Script" path="res://scripts/core/light_cover_facility_effect_data.gd" id="9_cover_effect"]
 [ext_resource type="Script" path="res://scripts/core/hydration_facility_effect_data.gd" id="10_hydration_effect"]
 [ext_resource type="Script" path="res://scripts/core/waste_tray_facility_effect_data.gd" id="11_waste_effect"]
+[ext_resource type="Script" path="res://scripts/core/dual_chamber_facility_effect_data.gd" id="12_dual_effect"]
 
 [sub_resource type="Resource" id="Effect_test_tube"]
 script = ExtResource("6_zone_effect")
@@ -279,6 +280,42 @@ requires_connection = false
 player_removable = true
 effect_data = SubResource("Effect_waste_tray")
 
+[sub_resource type="Resource" id="Effect_dual_chamber"]
+script = ExtResource("12_dual_effect")
+brood_initial_humidity = 0.5
+brood_initial_light_exposure = 0.2
+brood_initial_pollution = 0.0
+brood_pollution_per_tick = 0.00001
+utility_initial_humidity = 0.42
+utility_initial_light_exposure = 0.36
+utility_initial_pollution = 0.0
+utility_pollution_per_tick = 0.00001
+
+[sub_resource type="Resource" id="Port_dual_chamber_west"]
+script = ExtResource("3_port")
+local_cell = Vector2i(0, 0)
+direction = 3
+connection_kind = &"habitat"
+
+[sub_resource type="Resource" id="Port_dual_chamber_east"]
+script = ExtResource("3_port")
+local_cell = Vector2i(1, 0)
+direction = 1
+connection_kind = &"habitat"
+
+[sub_resource type="Resource" id="Facility_dual_chamber"]
+script = ExtResource("2_facility")
+type_id = &"dual_chamber_nest"
+unlock_type_id = &"dual_chamber_nest"
+data_status = &"prototype_pacing_fixture"
+footprint = Vector2i(2, 2)
+allowed_orientations = Array[int]([0, 1, 2, 3])
+ports = Array[ExtResource("3_port")]([SubResource("Port_dual_chamber_west"), SubResource("Port_dual_chamber_east")])
+placement_layer = 0
+requires_connection = true
+player_removable = true
+effect_data = SubResource("Effect_dual_chamber")
+
 [sub_resource type="Resource" id="Initial_test_tube"]
 script = ExtResource("4_initial")
 facility_id = 1
@@ -349,11 +386,16 @@ script = ExtResource("5_supply")
 type_id = &"waste_tray"
 available_count = 2
 
+[sub_resource type="Resource" id="Supply_dual_chamber"]
+script = ExtResource("5_supply")
+type_id = &"dual_chamber_nest"
+available_count = 1
+
 [resource]
 script = ExtResource("1_catalog")
 data_status = &"prototype_pacing_fixture"
 scientifically_validated = false
 grid_size = Vector2i(12, 8)
-facility_types = Array[ExtResource("2_facility")]([SubResource("Facility_test_tube"), SubResource("Facility_feeding"), SubResource("Facility_box"), SubResource("Facility_tube"), SubResource("Facility_elbow"), SubResource("Facility_gate"), SubResource("Facility_cover"), SubResource("Facility_hydration"), SubResource("Facility_sugar_station"), SubResource("Facility_protein_dish"), SubResource("Facility_waste_tray")])
+facility_types = Array[ExtResource("2_facility")]([SubResource("Facility_test_tube"), SubResource("Facility_feeding"), SubResource("Facility_box"), SubResource("Facility_tube"), SubResource("Facility_elbow"), SubResource("Facility_gate"), SubResource("Facility_cover"), SubResource("Facility_hydration"), SubResource("Facility_sugar_station"), SubResource("Facility_protein_dish"), SubResource("Facility_waste_tray"), SubResource("Facility_dual_chamber")])
 initial_facilities = Array[ExtResource("4_initial")]([SubResource("Initial_test_tube"), SubResource("Initial_feeding")])
-initial_supplies = Array[ExtResource("5_supply")]([SubResource("Supply_box"), SubResource("Supply_test_tube"), SubResource("Supply_tube"), SubResource("Supply_elbow"), SubResource("Supply_gate"), SubResource("Supply_cover"), SubResource("Supply_hydration"), SubResource("Supply_sugar_station"), SubResource("Supply_protein_dish"), SubResource("Supply_waste_tray")])
+initial_supplies = Array[ExtResource("5_supply")]([SubResource("Supply_box"), SubResource("Supply_test_tube"), SubResource("Supply_tube"), SubResource("Supply_elbow"), SubResource("Supply_gate"), SubResource("Supply_cover"), SubResource("Supply_hydration"), SubResource("Supply_sugar_station"), SubResource("Supply_protein_dish"), SubResource("Supply_waste_tray"), SubResource("Supply_dual_chamber")])

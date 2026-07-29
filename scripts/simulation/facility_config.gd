@@ -31,6 +31,11 @@ static func from_data(data: FacilityData) -> FacilityConfig:
 	config.effect_config = FacilityEffectConfig.from_data(data.effect_data)
 	if config.effect_config == null:
 		return null
+	if (
+		config.effect_config.provides_secondary_zone()
+		and config.footprint != Vector2i(2, 2)
+	):
+		return null
 	return config
 
 
@@ -50,3 +55,36 @@ func get_occupied_cells(
 		for x: int in size.x:
 			result.append(origin + Vector2i(x, y))
 	return result
+
+
+func rotated_cell(
+	local_cell: Vector2i,
+	orientation: int
+) -> Vector2i:
+	match posmod(orientation, 4):
+		0:
+			return local_cell
+		1:
+			return Vector2i(
+				footprint.y - 1 - local_cell.y,
+				local_cell.x
+			)
+		2:
+			return Vector2i(
+				footprint.x - 1 - local_cell.x,
+				footprint.y - 1 - local_cell.y
+			)
+		3:
+			return Vector2i(
+				local_cell.y,
+				footprint.x - 1 - local_cell.x
+			)
+	return local_cell
+
+
+func is_secondary_chamber_cell(local_cell: Vector2i) -> bool:
+	return (
+		effect_config != null
+		and effect_config.provides_secondary_zone()
+		and local_cell.x >= footprint.x / 2
+	)
