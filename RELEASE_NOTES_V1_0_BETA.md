@@ -24,8 +24,13 @@ release, or `v1.0.0` tag.
 
 - One local profile with explicit save, backup recovery, continue, and
   confirmed deletion.
+- The profile summary records focused active observation time, the current
+  chapter, the first conclusion, and simulation time. Pause and in-game
+  reading time count; the title, preparation gate, and unfocused time do not.
 - Versioned migration from every repository save fixture from
-  `r2.authority.v1` through the current `r12.authority.v10` format.
+  `r2.authority.v1` through the current `r12.authority.v10` state schema and
+  `SaveEnvelope` v2. Older v1 envelopes migrate without inventing historical
+  playtime.
 - 1280×720 and 1920×1080 windowed modes, fullscreen, 100%/125%/150% UI scale,
   and reduced motion.
 - Keyboard navigation, remappable Help/Journal/Layout shortcuts, explicit
@@ -53,6 +58,8 @@ release, or `v1.0.0` tag.
   but the required final external full-profile sample has not been supplied.
   Completion rate, median duration, comprehension, and first-contact usability
   therefore remain `INCOMPLETE`, not passed.
+- R17 playtime evidence makes future full-profile timing auditable; it does
+  not substitute for the missing external player sample.
 - The build is unsigned, so Windows may show a reputation warning.
 - Temperature, multiple species, combat, free excavation, multiplayer, cloud
   saves, Steam integration, achievements, and offline progression are not part
@@ -61,7 +68,8 @@ release, or `v1.0.0` tag.
 ## Verification
 
 Technical regression, long-run, maximum-scale, migration, clean-environment,
-window, and package-hash evidence is recorded in
-`docs/validation/v1_r16_beta_candidate_001.md` when the candidate is frozen.
-External playtest gaps remain listed separately and are never replaced by
-automated evidence.
+window, playtime, and package-hash evidence is recorded in
+`docs/validation/v1_r16_beta_candidate_001.md`,
+`docs/validation/v1_r17_playtime_evidence_001.md`, and the R17 Windows
+candidate record when that candidate is frozen. External playtest gaps remain
+listed separately and are never replaced by automated evidence.
