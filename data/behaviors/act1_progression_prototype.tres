@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="Act1ProgressionData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/act1_progression_data.gd" id="1_progression"]
+
+[resource]
+script = ExtResource("1_progression")
+data_status = &"prototype_pacing_fixture"
+scientifically_validated = false
+chapter_three_min_worker_count = 3
+pollution_avoidance_min_contrast = 0.08
+environment_stable_ticks = 30

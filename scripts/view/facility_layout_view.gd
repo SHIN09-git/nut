@@ -436,6 +436,13 @@ func _draw() -> void:
 	for facility: FacilitySnapshot in _snapshot.facilities:
 		if facility.available:
 			_draw_facility(facility)
+	for facility: FacilitySnapshot in _snapshot.facilities:
+		if (
+			facility.available
+			and facility.placement_layer
+				!= FacilityData.PlacementLayer.OVERLAY
+		):
+			_draw_facility_label(facility)
 	if is_placing():
 		_draw_placement_preview()
 	_draw_hud()
@@ -463,13 +470,18 @@ func _draw_grid() -> void:
 
 func _draw_facility(facility: FacilitySnapshot) -> void:
 	var rect: Rect2 = _slot_rect(facility.slot, facility.footprint)
-	var inset: float = 4.0 * _camera_zoom
+	var is_overlay: bool = (
+		facility.placement_layer == FacilityData.PlacementLayer.OVERLAY
+	)
+	var inset: float = (10.0 if is_overlay else 4.0) * _camera_zoom
 	rect = rect.grow(-inset)
 	_facility_hit_rects[facility.facility_id] = rect
 	var selected: bool = facility.facility_id == _selected_facility_id
 	var fill: Color = (
 		FACILITY_COLOR if facility.player_removable else FIXED_FACILITY_COLOR
 	)
+	if is_overlay:
+		fill.a = 0.72
 	if facility.effect_kind == FacilityEffectConfig.Kind.HABITAT_ZONE:
 		fill = fill.lerp(
 			HUMIDITY_COLOR,
@@ -510,6 +522,16 @@ func _draw_facility(facility: FacilitySnapshot) -> void:
 				SELECTED_COLOR,
 				5.0
 			)
+		&"connector_elbow":
+			draw_polyline(
+				PackedVector2Array([
+					Vector2(rect.position.x + 8.0, center.y),
+					center,
+					Vector2(center.x, rect.position.y + 8.0),
+				]),
+				FACILITY_EDGE,
+				5.0
+			)
 		&"hydration_module":
 			draw_circle(
 				center,
@@ -545,6 +567,11 @@ func _draw_facility(facility: FacilitySnapshot) -> void:
 				FACILITY_EDGE,
 				5.0
 			)
+
+
+func _draw_facility_label(facility: FacilitySnapshot) -> void:
+	var rect: Rect2 = _slot_rect(facility.slot, facility.footprint)
+	rect = rect.grow(-4.0 * _camera_zoom)
 	var font: Font = ThemeDB.fallback_font
 	var label: String = _facility_label(facility.type_id)
 	draw_string(
@@ -554,7 +581,7 @@ func _draw_facility(facility: FacilitySnapshot) -> void:
 		HORIZONTAL_ALIGNMENT_LEFT,
 		maxf(20.0, rect.size.x - 16.0),
 		clampi(int(12.0 * _camera_zoom), 10, 18),
-			TEXT_COLOR
+		TEXT_COLOR
 	)
 
 
@@ -668,6 +695,8 @@ func _facility_label(type_id: StringName) -> String:
 			return tr("FACILITY_SMALL_FORAGING_BOX")
 		&"connector_tube":
 			return tr("R7_FACILITY_CONNECTOR_TUBE")
+		&"connector_elbow":
+			return tr("R10_FACILITY_ELBOW")
 		&"connector_gate":
 			return tr("R7_FACILITY_CONNECTOR_GATE")
 		&"light_cover":

@@ -36,6 +36,7 @@ enum ScenarioKind {
 @export var facility_catalog_data: FacilityCatalogData
 @export var environment_data: EnvironmentData
 @export var colony_work_data: ColonyWorkData
+@export var act1_progression_data: Act1ProgressionData
 
 
 func is_valid() -> bool:
@@ -257,6 +258,8 @@ func is_valid() -> bool:
 				and environment_data.is_valid()
 				and colony_work_data != null
 				and colony_work_data.is_valid()
+				and act1_progression_data != null
+				and act1_progression_data.is_valid()
 				and foraging_observation_card_id
 					!= founding_care_data
 						.first_worker_observation_card_id

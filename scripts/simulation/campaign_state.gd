@@ -6,6 +6,8 @@ enum Chapter {
 	ENVIRONMENTAL_CARE,
 	ACT1_FOUNDING,
 	ACT1_FIRST_WORKERS,
+	ACT1_FORAGING_EXPANSION,
+	ACT1_ENVIRONMENT_MANAGEMENT,
 }
 
 enum Status {
@@ -27,6 +29,19 @@ const EVIDENCE_FIRST_WORKER_CARE: StringName = (
 const EVIDENCE_FIRST_NUTRIENT_EXCHANGE: StringName = (
 	&"first_nutrient_exchange"
 )
+const EVIDENCE_FORAGING_ZONE_SCOUTED: StringName = (
+	&"foraging_zone_scouted"
+)
+const EVIDENCE_FORAGING_SUGAR_CYCLE: StringName = (
+	&"foraging_sugar_cycle"
+)
+const EVIDENCE_PROTEIN_CARE: StringName = &"protein_brood_care"
+const EVIDENCE_WASTE_TRAY_CLEANED: StringName = &"waste_tray_cleaned"
+const EVIDENCE_SMALL_COLONY_STABLE: StringName = &"small_colony_stable"
+const EVIDENCE_HYDRATION_RESPONSE: StringName = &"hydration_response"
+const EVIDENCE_POLLUTION_AVOIDANCE: StringName = &"pollution_avoidance"
+const EVIDENCE_PARTIAL_MIGRATION: StringName = &"partial_migration"
+const EVIDENCE_ENVIRONMENT_STABLE: StringName = &"environment_stable"
 
 const INFERENCE_FIRST_WORKER: StringName = &"brood_develops_into_workers"
 const INFERENCE_FIRST_WORKER_RANDOM: StringName = &"worker_change_is_random"
@@ -58,12 +73,36 @@ const INFERENCE_WORKER_NUTRITION_RANDOM: StringName = (
 const INFERENCE_WORKER_NUTRITION_DIRECTED: StringName = (
 	&"player_directs_each_feeding"
 )
+const INFERENCE_FORAGING_ROLES: StringName = (
+	&"food_and_waste_need_distinct_facilities"
+)
+const INFERENCE_FORAGING_RANDOM: StringName = (
+	&"foraging_roles_are_random"
+)
+const INFERENCE_FORAGING_DIRECTED: StringName = (
+	&"player_directs_each_foraging_task"
+)
+const INFERENCE_ENVIRONMENT_GRADIENT: StringName = (
+	&"workers_compare_environment_gradients"
+)
+const INFERENCE_ENVIRONMENT_MAXIMUM: StringName = (
+	&"every_environment_value_should_be_maximum"
+)
+const INFERENCE_GRADIENT_DIRECTED: StringName = (
+	&"player_directs_each_migration"
+)
 
 const FACILITY_TEST_TUBE_NEST: StringName = &"test_tube_nest"
 const FACILITY_LIGHT_COVER: StringName = &"light_cover"
 const FACILITY_MICRO_FEEDING_PORT: StringName = &"micro_feeding_port"
 const FACILITY_SMALL_FORAGING_BOX: StringName = &"small_foraging_box"
 const FACILITY_MAGNIFIER: StringName = &"magnifier"
+const FACILITY_SUGAR_STATION: StringName = &"sugar_station"
+const FACILITY_PROTEIN_DISH: StringName = &"protein_dish"
+const FACILITY_WASTE_TRAY: StringName = &"waste_tray"
+const FACILITY_SPARE_TEST_TUBE: StringName = &"spare_test_tube"
+const FACILITY_HYDRATION_MODULE: StringName = &"hydration_module"
+const FACILITY_CONNECTOR_FAMILY: StringName = &"connector_family"
 
 var chapter: Chapter = Chapter.FOUNDING_OBSERVATION
 var status: Status = Status.ACTIVE

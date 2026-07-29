@@ -176,7 +176,8 @@ func _init(
 		_campaign_director.update_after_systems(_state)
 	elif _habitat_config.is_act1_test_tube():
 		_act1_campaign_director = Act1CampaignDirector.new(
-			_habitat_config
+			_habitat_config,
+			_brood_care_config
 		)
 		if not _act1_campaign_director.is_ready():
 			_configuration_error = (
@@ -745,6 +746,14 @@ func create_game_snapshot() -> GameSnapshot:
 				PendingCommandType.APPLY_LIGHT_COVER_ACTION
 			)
 		)
+		if act1_snapshot != null and _state.act1_state != null:
+			act1_snapshot.environment_stable_ticks = (
+				_state.act1_state.environment_stable_ticks
+			)
+			act1_snapshot.environment_stable_required_ticks = (
+				_habitat_config.act1_progression_config
+					.environment_stable_ticks
+			)
 	var layout_snapshot: HabitatLayoutSnapshot = _create_layout_snapshot()
 	var colony_snapshot: ColonySnapshot = create_snapshot()
 	return GameSnapshot.new(
@@ -1145,9 +1154,16 @@ func _is_place_sugar_action_available() -> bool:
 func _is_place_protein_action_available() -> bool:
 	if (
 		not _supports_nutrition_growth()
-		or _habitat_config.is_act1_test_tube()
 		or _foraging_system == null
 		or _has_pending_command(PendingCommandType.PLACE_PROTEIN_ACTION)
+		or (
+			_habitat_config.is_act1_test_tube()
+			and (
+				_act1_campaign_director == null
+				or not _act1_campaign_director
+					.is_protein_action_active(_state)
+			)
+		)
 		or _foraging_system.has_available_source_type(
 			_state,
 			FoodSourceState.FoodType.PROTEIN
@@ -1807,6 +1823,12 @@ func _find_food_station_zone_id(
 		or _habitat_config.facility_catalog_config == null
 	):
 		return preferred_zone_id
+	var dedicated_type_id: StringName = (
+		CampaignState.FACILITY_SUGAR_STATION
+		if food_type == FoodSourceState.FoodType.SUGAR_WATER
+		else CampaignState.FACILITY_PROTEIN_DISH
+	)
+	var preferred: StringName = &""
 	var fallback: StringName = &""
 	for facility: FacilityState in (
 		_state.layout_state.get_facilities_in_stable_order()
@@ -1834,11 +1856,13 @@ func _find_food_station_zone_id(
 		)
 		if not accepts:
 			continue
+		if facility.type_id == dedicated_type_id:
+			return facility.zone_id
 		if facility.zone_id == preferred_zone_id:
-			return preferred_zone_id
+			preferred = preferred_zone_id
 		if fallback.is_empty():
 			fallback = facility.zone_id
-	return fallback
+	return preferred if not preferred.is_empty() else fallback
 
 
 func _has_any_active_worker_task() -> bool:

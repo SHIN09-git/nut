@@ -1,7 +1,8 @@
 class_name SimulationStateCodec
 extends RefCounted
 
-const CURRENT_SCHEMA_ID: String = "r9.authority.v7"
+const CURRENT_SCHEMA_ID: String = "r10.authority.v8"
+const R9_SCHEMA_ID: String = "r9.authority.v7"
 const R8_SCHEMA_ID: String = "r8.authority.v6"
 const R7_SCHEMA_ID: String = "r7.authority.v5"
 const R6_SCHEMA_ID: String = "r6.authority.v4"
@@ -211,6 +212,9 @@ static func _encode_habitat(config: HabitatScenarioConfig) -> Dictionary:
 		),
 		"colony_work_config": _encode_colony_work_config(
 			config.colony_work_config
+		),
+		"act1_progression_config": _encode_act1_progression_config(
+			config.act1_progression_config
 		),
 	}
 
@@ -480,6 +484,20 @@ static func _encode_colony_work_config(
 	}
 
 
+static func _encode_act1_progression_config(
+	config: Act1ProgressionConfig
+) -> Variant:
+	if config == null:
+		return null
+	return {
+		"chapter_three_min_worker_count":
+			config.chapter_three_min_worker_count,
+		"pollution_avoidance_min_contrast":
+			config.pollution_avoidance_min_contrast,
+		"environment_stable_ticks": config.environment_stable_ticks,
+	}
+
+
 static func _encode_colony_work_state(
 	work: ColonyWorkState
 ) -> Dictionary:
@@ -572,6 +590,7 @@ static func _encode_act1_state(act1: Act1State) -> Dictionary:
 		"first_worker_emerged_tick": act1.first_worker_emerged_tick,
 		"first_worker_care_recorded":
 			act1.first_worker_care_recorded,
+		"environment_stable_ticks": act1.environment_stable_ticks,
 	}
 
 
@@ -933,6 +952,7 @@ static func _decode_habitat_data(value: Variant) -> Dictionary:
 		"facility_catalog_config",
 		"environment_config",
 		"colony_work_config",
+		"act1_progression_config",
 	]
 	if not _is_dictionary_with_keys(value, keys):
 		return _failure("Habitat configuration is invalid")
@@ -1049,6 +1069,14 @@ static func _decode_habitat_data(value: Variant) -> Dictionary:
 	if not work_result.get("ok", false):
 		return work_result
 	habitat.colony_work_data = work_result["colony_work_data"]
+	var progression_result: Dictionary = _decode_act1_progression_data(
+		value["act1_progression_config"]
+	)
+	if not progression_result.get("ok", false):
+		return progression_result
+	habitat.act1_progression_data = progression_result[
+		"act1_progression_data"
+	]
 	if not habitat.is_valid():
 		return _failure("Frozen habitat configuration is not valid")
 	return {"ok": true, "error": "", "habitat_data": habitat}
@@ -1182,6 +1210,49 @@ static func _decode_colony_work_data(value: Variant) -> Dictionary:
 		"ok": true,
 		"error": "",
 		"colony_work_data": data,
+	}
+
+
+static func _decode_act1_progression_data(value: Variant) -> Dictionary:
+	if value == null:
+		return {
+			"ok": true,
+			"error": "",
+			"act1_progression_data": null,
+		}
+	var keys: Array[String] = [
+		"chapter_three_min_worker_count",
+		"pollution_avoidance_min_contrast",
+		"environment_stable_ticks",
+	]
+	if not _is_dictionary_with_keys(value, keys):
+		return _failure("Act 1 progression configuration is invalid")
+	if (
+		not _is_integral_number(value["chapter_three_min_worker_count"])
+		or not _is_finite_number(
+			value["pollution_avoidance_min_contrast"]
+		)
+		or not _is_integral_number(value["environment_stable_ticks"])
+	):
+		return _failure("Act 1 progression configuration is malformed")
+	var data := Act1ProgressionData.new()
+	data.data_status = &"prototype_pacing_fixture"
+	data.scientifically_validated = false
+	data.chapter_three_min_worker_count = int(
+		value["chapter_three_min_worker_count"]
+	)
+	data.pollution_avoidance_min_contrast = float(
+		value["pollution_avoidance_min_contrast"]
+	)
+	data.environment_stable_ticks = int(
+		value["environment_stable_ticks"]
+	)
+	if not data.is_valid():
+		return _failure("Act 1 progression configuration is not valid")
+	return {
+		"ok": true,
+		"error": "",
+		"act1_progression_data": data,
 	}
 
 
@@ -1927,6 +1998,7 @@ static func _decode_act1_state(value: Variant) -> Dictionary:
 		"first_worker_entity_id",
 		"first_worker_emerged_tick",
 		"first_worker_care_recorded",
+		"environment_stable_ticks",
 	]
 	if not _is_dictionary_with_keys(value, keys):
 		return _failure("Act 1 state is invalid")
@@ -1939,6 +2011,7 @@ static func _decode_act1_state(value: Variant) -> Dictionary:
 		"pupa_stable_ticks",
 		"first_worker_entity_id",
 		"first_worker_emerged_tick",
+		"environment_stable_ticks",
 	]:
 		if not _is_integral_number(value[key]):
 			return _failure("Act 1 state contains a non-integer")
@@ -1967,6 +2040,9 @@ static func _decode_act1_state(value: Variant) -> Dictionary:
 	)
 	act1.first_worker_care_recorded = bool(
 		value["first_worker_care_recorded"]
+	)
+	act1.environment_stable_ticks = int(
+		value["environment_stable_ticks"]
 	)
 	return {"ok": true, "error": "", "act1": act1}
 

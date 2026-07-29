@@ -312,6 +312,13 @@ custom_minimum_size = Vector2(180, 48)
 layout_mode = 2
 text = "在喂食口滴糖水"
 
+[node name="ProteinButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRow"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(150, 48)
+layout_mode = 2
+text = "补充蛋白"
+
 [node name="CleanWasteButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRow"]
 unique_name_in_owner = true
 visible = false
@@ -344,12 +351,18 @@ layout_mode = 2
 toggle_mode = true
 text = "模块布局 [L]"
 
+[node name="FacilityTypeOption" type="OptionButton" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(174, 42)
+layout_mode = 2
+
 [node name="PlaceBoxButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
 unique_name_in_owner = true
 visible = false
-custom_minimum_size = Vector2(180, 42)
+custom_minimum_size = Vector2(142, 42)
 layout_mode = 2
-text = "放置觅食盒 [P]"
+text = "开始放置 [P]"
 
 [node name="RotateFacilityButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
 unique_name_in_owner = true
@@ -364,6 +377,14 @@ custom_minimum_size = Vector2(112, 42)
 layout_mode = 2
 disabled = true
 text = "拆除 [Del]"
+
+[node name="ToggleGateButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(112, 42)
+layout_mode = 2
+disabled = true
+text = "切换闸门"
 
 [node name="LayoutSpacer" type="Control" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
 layout_mode = 2

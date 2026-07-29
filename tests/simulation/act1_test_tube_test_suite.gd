@@ -292,16 +292,27 @@ func _test_two_chapter_authoritative_path() -> void:
 		simulation.advance_tick(completion_ready.simulation_tick + 1),
 		"final inference applies on the next Tick"
 	)
-	var completed: GameSnapshot = simulation.create_game_snapshot()
+	var expanded: GameSnapshot = simulation.create_game_snapshot()
 	_expect_true(
-		completed.campaign.completed,
-		"two authoritative chapters reach a clear completion"
+		not expanded.campaign.completed,
+		"two authoritative chapters continue into the foraging chapter"
+	)
+	_expect_int(
+		expanded.campaign.chapter,
+		CampaignState.Chapter.ACT1_FORAGING_EXPANSION,
+		"Chapter 2 conclusion enters the small-foraging chapter"
 	)
 	_expect_true(
-		completed.campaign.has_unlocked_facility(
+		expanded.campaign.has_unlocked_facility(
 			CampaignState.FACILITY_SMALL_FORAGING_BOX
 		),
-		"completion unlocks the next-act facility"
+		"Chapter 2 conclusion unlocks the foraging box"
+	)
+	_expect_true(
+		expanded.campaign.has_unlocked_facility(
+			CampaignState.FACILITY_PROTEIN_DISH
+		),
+		"Chapter 2 conclusion unlocks the protein toolset"
 	)
 
 

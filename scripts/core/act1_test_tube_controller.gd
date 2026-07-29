@@ -30,6 +30,9 @@ var _journal_open: bool = false
 var _magnifier_active: bool = false
 var _completion_dismissed: bool = false
 var _fatal_error: String = ""
+var _selected_facility_type_id: StringName = (
+	CampaignState.FACILITY_SMALL_FORAGING_BOX
+)
 
 @onready var _habitat_view: Act1TestTubeView = %Act1TestTubeView
 @onready var _title_label: Label = %Title
@@ -47,11 +50,14 @@ var _fatal_error: String = ""
 @onready var _cover_button: Button = %CoverButton
 @onready var _magnifier_button: Button = %MagnifierButton
 @onready var _sugar_button: Button = %SugarButton
+@onready var _protein_button: Button = %ProteinButton
 @onready var _clean_waste_button: Button = %CleanWasteButton
 @onready var _layout_button: Button = %LayoutButton
 @onready var _place_box_button: Button = %PlaceBoxButton
+@onready var _facility_type_option: OptionButton = %FacilityTypeOption
 @onready var _rotate_facility_button: Button = %RotateFacilityButton
 @onready var _remove_facility_button: Button = %RemoveFacilityButton
+@onready var _toggle_gate_button: Button = %ToggleGateButton
 @onready var _zoom_out_button: Button = %ZoomOutButton
 @onready var _reset_camera_button: Button = %ResetCameraButton
 @onready var _zoom_in_button: Button = %ZoomInButton
@@ -142,6 +148,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		_set_facility_layout_mode(not _habitat_view.is_layout_mode())
 		get_viewport().set_input_as_handled()
 	elif (
+		key_event.keycode == KEY_P
+		and _habitat_view.is_layout_mode()
+		and not _preparation_gate_active
+		and not _pause_menu_open
+		and not _journal_open
+	):
+		_on_place_box_pressed()
+		get_viewport().set_input_as_handled()
+	elif (
 		_habitat_view.is_layout_mode()
 		and not _preparation_gate_active
 		and not _pause_menu_open
@@ -181,15 +196,20 @@ func _connect_controls() -> void:
 	_cover_button.pressed.connect(_on_cover_pressed)
 	_magnifier_button.pressed.connect(_on_magnifier_pressed)
 	_sugar_button.pressed.connect(_on_sugar_pressed)
+	_protein_button.pressed.connect(_on_protein_pressed)
 	_clean_waste_button.pressed.connect(_on_clean_waste_pressed)
 	_layout_button.pressed.connect(_on_layout_pressed)
 	_place_box_button.pressed.connect(_on_place_box_pressed)
+	_facility_type_option.item_selected.connect(
+		_on_facility_type_selected
+	)
 	_rotate_facility_button.pressed.connect(
 		_habitat_view.request_rotate_selected_facility
 	)
 	_remove_facility_button.pressed.connect(
 		_habitat_view.request_remove_selected_facility
 	)
+	_toggle_gate_button.pressed.connect(_on_toggle_gate_pressed)
 	_zoom_out_button.pressed.connect(_habitat_view.zoom_layout_out)
 	_reset_camera_button.pressed.connect(
 		_habitat_view.reset_layout_camera
@@ -297,6 +317,12 @@ func _on_sugar_pressed() -> void:
 		_guidance_label.text = tr("ACT1_FEEDBACK_SUGAR_PENDING")
 
 
+func _on_protein_pressed() -> void:
+	if _colony_simulation.submit_place_protein_action():
+		_apply_snapshot()
+		_guidance_label.text = tr("R10_FEEDBACK_PROTEIN_PENDING")
+
+
 func _on_clean_waste_pressed() -> void:
 	if (
 		_latest_snapshot == null
@@ -326,10 +352,39 @@ func _set_facility_layout_mode(value: bool) -> void:
 
 func _on_place_box_pressed() -> void:
 	if _habitat_view.begin_facility_placement(
-		CampaignState.FACILITY_SMALL_FORAGING_BOX
+		_selected_facility_type_id
 	):
 		_layout_button.button_pressed = true
 		_update_controls()
+
+
+func _on_facility_type_selected(index: int) -> void:
+	if index < 0 or index >= _facility_type_option.item_count:
+		return
+	_selected_facility_type_id = StringName(
+		_facility_type_option.get_item_metadata(index)
+	)
+	_update_controls()
+
+
+func _on_toggle_gate_pressed() -> void:
+	if _latest_snapshot == null or _latest_snapshot.layout == null:
+		return
+	var selected_id: int = _habitat_view.get_selected_facility_id()
+	for connection: HabitatConnectionSnapshot in (
+		_latest_snapshot.layout.connections
+	):
+		if (
+			connection.owner_facility_id == selected_id
+			and connection.gated
+			and _colony_simulation.submit_set_gate_open_action(
+				connection.connection_id,
+				not connection.open
+			)
+		):
+			_apply_snapshot()
+			_guidance_label.text = tr("R10_FEEDBACK_GATE_PENDING")
+			return
 
 
 func _on_facility_placement_requested(
@@ -546,6 +601,14 @@ func _update_controls() -> void:
 	_sugar_button.disabled = (
 		blocked or not _latest_snapshot.nutrition.sugar_action_available
 	)
+	_protein_button.visible = (
+		_latest_snapshot.campaign.has_unlocked_facility(
+			CampaignState.FACILITY_PROTEIN_DISH
+		)
+	)
+	_protein_button.disabled = (
+		blocked or not _latest_snapshot.nutrition.protein_action_available
+	)
 	var work: ColonyWorkSnapshot = _latest_snapshot.work
 	_clean_waste_button.visible = (
 		work != null
@@ -570,25 +633,27 @@ func _update_controls() -> void:
 	_layout_button.visible = layout_available
 	_layout_button.disabled = blocked or not layout_available
 	_layout_button.button_pressed = _habitat_view.is_layout_mode()
-	var box_supply: FacilitySupplySnapshot = (
-		layout.get_supply(CampaignState.FACILITY_SMALL_FORAGING_BOX)
+	var layout_mode: bool = _habitat_view.is_layout_mode()
+	_update_facility_palette(layout if layout_available else null)
+	var selected_supply: FacilitySupplySnapshot = (
+		layout.get_supply(_selected_facility_type_id)
 		if layout_available
 		else null
 	)
 	_place_box_button.visible = (
-		box_supply != null and box_supply.unlocked
+		layout_mode and not _selected_facility_type_id.is_empty()
 	)
 	_place_box_button.disabled = (
 		blocked
 		or not layout_available
 		or not _habitat_view.is_layout_mode()
 		or layout.action_pending
-		or box_supply == null
-		or box_supply.remaining_count <= 0
+		or selected_supply == null
+		or selected_supply.remaining_count <= 0
 	)
-	if box_supply != null:
-		_place_box_button.text = tr("R7_LAYOUT_PLACE_BOX") % (
-			box_supply.remaining_count
+	if selected_supply != null:
+		_place_box_button.text = tr("R10_LAYOUT_PLACE_SELECTED") % (
+			selected_supply.remaining_count
 		)
 	var selected_facility: FacilitySnapshot = (
 		layout.get_facility(_habitat_view.get_selected_facility_id())
@@ -597,21 +662,40 @@ func _update_controls() -> void:
 	)
 	var can_edit_selected: bool = (
 		not blocked
-		and _habitat_view.is_layout_mode()
+		and layout_mode
 		and not layout.action_pending
 		and selected_facility != null
 		and selected_facility.player_removable
 	)
+	_rotate_facility_button.visible = layout_mode
+	_remove_facility_button.visible = layout_mode
 	_rotate_facility_button.disabled = not can_edit_selected
 	_remove_facility_button.disabled = not can_edit_selected
+	var selected_gate: HabitatConnectionSnapshot = (
+		_get_selected_gate_connection(layout, selected_facility.facility_id)
+		if selected_facility != null
+		else null
+	)
+	_toggle_gate_button.visible = layout_mode and selected_gate != null
+	_toggle_gate_button.disabled = (
+		blocked
+		or not layout_mode
+		or layout.action_pending
+		or selected_gate == null
+	)
+	if selected_gate != null:
+		_toggle_gate_button.text = (
+			tr("R10_GATE_CLOSE")
+			if selected_gate.open
+			else tr("R10_GATE_OPEN")
+		)
 	for camera_button: Button in [
 		_zoom_out_button,
 		_reset_camera_button,
 		_zoom_in_button,
 	]:
-		camera_button.disabled = (
-			blocked or not _habitat_view.is_layout_mode()
-		)
+		camera_button.visible = layout_mode
+		camera_button.disabled = blocked or not layout_mode
 	_magnifier_button.disabled = blocked
 	_magnifier_button.button_pressed = _magnifier_active
 	_journal_button.disabled = (
@@ -633,6 +717,98 @@ func _update_controls() -> void:
 		if _simulation_clock.is_paused()
 		else tr("ACT1_STATUS_RUNNING") % speed
 	)
+
+
+func _update_facility_palette(layout: HabitatLayoutSnapshot) -> void:
+	var available_ids: Array[StringName] = []
+	if layout != null:
+		var ordered_ids: Array[StringName] = [
+			CampaignState.FACILITY_SMALL_FORAGING_BOX,
+			CampaignState.FACILITY_SUGAR_STATION,
+			CampaignState.FACILITY_PROTEIN_DISH,
+			CampaignState.FACILITY_WASTE_TRAY,
+			CampaignState.FACILITY_TEST_TUBE_NEST,
+			&"connector_tube",
+			&"connector_elbow",
+			&"connector_gate",
+			CampaignState.FACILITY_HYDRATION_MODULE,
+		]
+		for type_id: StringName in ordered_ids:
+			var supply: FacilitySupplySnapshot = layout.get_supply(type_id)
+			if (
+				supply != null
+				and supply.unlocked
+				and supply.remaining_count > 0
+				and _has_placement_option(layout, type_id)
+			):
+				available_ids.append(type_id)
+	if (
+		not available_ids.has(_selected_facility_type_id)
+		and (layout == null or not layout.action_pending)
+	):
+		_selected_facility_type_id = (
+			available_ids[0] if not available_ids.is_empty() else &""
+		)
+	_facility_type_option.clear()
+	for type_id: StringName in available_ids:
+		var index: int = _facility_type_option.item_count
+		_facility_type_option.add_item(_facility_display_name(type_id))
+		_facility_type_option.set_item_metadata(index, String(type_id))
+		if type_id == _selected_facility_type_id:
+			_facility_type_option.select(index)
+	_facility_type_option.visible = (
+		_habitat_view.is_layout_mode() and not available_ids.is_empty()
+	)
+	_facility_type_option.disabled = (
+		not _habitat_view.is_layout_mode()
+		or layout == null
+		or layout.action_pending
+	)
+
+
+func _has_placement_option(
+	layout: HabitatLayoutSnapshot,
+	type_id: StringName
+) -> bool:
+	for option: FacilityPlacementOptionSnapshot in layout.placement_options:
+		if option.type_id == type_id:
+			return true
+	return false
+
+
+func _facility_display_name(type_id: StringName) -> String:
+	match type_id:
+		CampaignState.FACILITY_SMALL_FORAGING_BOX:
+			return tr("R10_FACILITY_FORAGING_BOX")
+		CampaignState.FACILITY_SUGAR_STATION:
+			return tr("R10_FACILITY_SUGAR_STATION")
+		CampaignState.FACILITY_PROTEIN_DISH:
+			return tr("R10_FACILITY_PROTEIN_DISH")
+		CampaignState.FACILITY_WASTE_TRAY:
+			return tr("R10_FACILITY_WASTE_TRAY")
+		CampaignState.FACILITY_TEST_TUBE_NEST:
+			return tr("R10_FACILITY_SPARE_TUBE")
+		&"connector_tube":
+			return tr("R10_FACILITY_CONNECTOR")
+		&"connector_elbow":
+			return tr("R10_FACILITY_ELBOW")
+		&"connector_gate":
+			return tr("R10_FACILITY_GATE")
+		CampaignState.FACILITY_HYDRATION_MODULE:
+			return tr("R10_FACILITY_HYDRATION")
+	return String(type_id)
+
+
+func _get_selected_gate_connection(
+	layout: HabitatLayoutSnapshot,
+	facility_id: int
+) -> HabitatConnectionSnapshot:
+	if layout == null or facility_id < 0:
+		return null
+	for connection: HabitatConnectionSnapshot in layout.connections:
+		if connection.owner_facility_id == facility_id and connection.gated:
+			return connection
+	return null
 
 
 func _update_inspector() -> void:
@@ -680,6 +856,11 @@ func _update_debug() -> void:
 			% [
 				_latest_snapshot.campaign.chapter,
 				_latest_snapshot.campaign.status,
+			],
+		"Environment stable %d/%d"
+			% [
+				_latest_snapshot.act1.environment_stable_ticks,
+				_latest_snapshot.act1.environment_stable_required_ticks,
 			],
 		"Cover %s · queen care %d (%d/%d) · target #%d"
 			% [
@@ -761,11 +942,15 @@ func _update_debug() -> void:
 
 
 func _chapter_name(chapter: int) -> String:
-	return (
-		tr("ACT1_CHAPTER_FOUNDING")
-		if chapter == CampaignState.Chapter.ACT1_FOUNDING
-		else tr("ACT1_CHAPTER_FIRST_WORKERS")
-	)
+	match chapter:
+		CampaignState.Chapter.ACT1_FOUNDING:
+			return tr("ACT1_CHAPTER_FOUNDING")
+		CampaignState.Chapter.ACT1_FIRST_WORKERS:
+			return tr("ACT1_CHAPTER_FIRST_WORKERS")
+		CampaignState.Chapter.ACT1_FORAGING_EXPANSION:
+			return tr("R10_CHAPTER_FORAGING")
+		_:
+			return tr("R10_CHAPTER_ENVIRONMENT")
 
 
 func _objective_text(campaign: CampaignSnapshot) -> String:
@@ -779,23 +964,56 @@ func _objective_text(campaign: CampaignSnapshot) -> String:
 				)
 			),
 		]
-	return tr("ACT1_OBJECTIVES_WORKERS") % [
-		_check(campaign.has_evidence(CampaignState.EVIDENCE_FIRST_WORKER)),
-		_check(
-			campaign.has_evidence(
-				CampaignState.EVIDENCE_FIRST_WORKER_CARE
-			)
-		),
-		_check(
-			campaign.has_evidence(
-				CampaignState.EVIDENCE_FIRST_NUTRIENT_EXCHANGE
-			)
-		),
-		_check(
-			campaign.has_confirmed_inference(
-				CampaignState.INFERENCE_WORKER_NUTRITION
-			)
-		),
+	if campaign.chapter == CampaignState.Chapter.ACT1_FIRST_WORKERS:
+		return tr("ACT1_OBJECTIVES_WORKERS") % [
+			_check(campaign.has_evidence(CampaignState.EVIDENCE_FIRST_WORKER)),
+			_check(
+				campaign.has_evidence(
+					CampaignState.EVIDENCE_FIRST_WORKER_CARE
+				)
+			),
+			_check(
+				campaign.has_evidence(
+					CampaignState.EVIDENCE_FIRST_NUTRIENT_EXCHANGE
+				)
+			),
+			_check(
+				campaign.has_confirmed_inference(
+					CampaignState.INFERENCE_WORKER_NUTRITION
+				)
+			),
+		]
+	if campaign.chapter == CampaignState.Chapter.ACT1_FORAGING_EXPANSION:
+		return tr("R10_OBJECTIVES_FORAGING") % [
+			_check(campaign.has_evidence(
+				CampaignState.EVIDENCE_FORAGING_ZONE_SCOUTED
+			)),
+			_check(campaign.has_evidence(
+				CampaignState.EVIDENCE_FORAGING_SUGAR_CYCLE
+			)),
+			_check(campaign.has_evidence(
+				CampaignState.EVIDENCE_PROTEIN_CARE
+			)),
+			_check(campaign.has_evidence(
+				CampaignState.EVIDENCE_WASTE_TRAY_CLEANED
+			)),
+			_check(campaign.has_evidence(
+				CampaignState.EVIDENCE_SMALL_COLONY_STABLE
+			)),
+		]
+	return tr("R10_OBJECTIVES_ENVIRONMENT") % [
+		_check(campaign.has_evidence(
+			CampaignState.EVIDENCE_HYDRATION_RESPONSE
+		)),
+		_check(campaign.has_evidence(
+			CampaignState.EVIDENCE_POLLUTION_AVOIDANCE
+		)),
+		_check(campaign.has_evidence(
+			CampaignState.EVIDENCE_PARTIAL_MIGRATION
+		)),
+		_check(campaign.has_evidence(
+			CampaignState.EVIDENCE_ENVIRONMENT_STABLE
+		)),
 	]
 
 
@@ -820,6 +1038,24 @@ func _evidence_name(evidence_id: StringName) -> String:
 			return tr("ACT1_EVIDENCE_WORKER_CARE")
 		CampaignState.EVIDENCE_FIRST_NUTRIENT_EXCHANGE:
 			return tr("ACT1_EVIDENCE_NUTRIENT")
+		CampaignState.EVIDENCE_FORAGING_ZONE_SCOUTED:
+			return tr("R10_EVIDENCE_SCOUT")
+		CampaignState.EVIDENCE_FORAGING_SUGAR_CYCLE:
+			return tr("R10_EVIDENCE_SUGAR")
+		CampaignState.EVIDENCE_PROTEIN_CARE:
+			return tr("R10_EVIDENCE_PROTEIN")
+		CampaignState.EVIDENCE_WASTE_TRAY_CLEANED:
+			return tr("R10_EVIDENCE_WASTE")
+		CampaignState.EVIDENCE_SMALL_COLONY_STABLE:
+			return tr("R10_EVIDENCE_SCALE")
+		CampaignState.EVIDENCE_HYDRATION_RESPONSE:
+			return tr("R10_EVIDENCE_HYDRATION")
+		CampaignState.EVIDENCE_POLLUTION_AVOIDANCE:
+			return tr("R10_EVIDENCE_POLLUTION")
+		CampaignState.EVIDENCE_PARTIAL_MIGRATION:
+			return tr("R10_EVIDENCE_MIGRATION")
+		CampaignState.EVIDENCE_ENVIRONMENT_STABLE:
+			return tr("R10_EVIDENCE_STABLE")
 	return tr("CAMPAIGN_EVIDENCE_UNKNOWN")
 
 
@@ -834,6 +1070,13 @@ func _guidance_text(campaign: CampaignSnapshot) -> String:
 		return tr("ACT1_GUIDANCE_WATCH_QUEEN")
 	if _latest_snapshot.act1.first_worker_emerged_tick < 0:
 		return tr("ACT1_GUIDANCE_WAIT_WORKER")
+	if campaign.chapter == CampaignState.Chapter.ACT1_FORAGING_EXPANSION:
+		return tr("R10_GUIDANCE_FORAGING")
+	if (
+		campaign.chapter
+		== CampaignState.Chapter.ACT1_ENVIRONMENT_MANAGEMENT
+	):
+		return tr("R10_GUIDANCE_ENVIRONMENT")
 	if _latest_snapshot.nutrition.sugar_action_available:
 		return tr("ACT1_GUIDANCE_PLACE_SUGAR")
 	return tr("ACT1_GUIDANCE_WATCH_WORKER")
@@ -877,6 +1120,18 @@ func _inference_text(inference_id: StringName) -> String:
 			return tr("ACT1_INFERENCE_WORKER_RANDOM")
 		CampaignState.INFERENCE_WORKER_NUTRITION_DIRECTED:
 			return tr("ACT1_INFERENCE_WORKER_DIRECTED")
+		CampaignState.INFERENCE_FORAGING_ROLES:
+			return tr("R10_INFERENCE_FORAGING")
+		CampaignState.INFERENCE_FORAGING_RANDOM:
+			return tr("R10_INFERENCE_FORAGING_RANDOM")
+		CampaignState.INFERENCE_FORAGING_DIRECTED:
+			return tr("R10_INFERENCE_FORAGING_DIRECTED")
+		CampaignState.INFERENCE_ENVIRONMENT_GRADIENT:
+			return tr("R10_INFERENCE_ENVIRONMENT")
+		CampaignState.INFERENCE_ENVIRONMENT_MAXIMUM:
+			return tr("R10_INFERENCE_ENVIRONMENT_MAX")
+		CampaignState.INFERENCE_GRADIENT_DIRECTED:
+			return tr("R10_INFERENCE_ENVIRONMENT_DIRECTED")
 	return tr("CAMPAIGN_INFERENCE_UNKNOWN")
 
 
@@ -932,10 +1187,12 @@ func _refresh_copy() -> void:
 	_cover_button.text = tr("ACT1_TOOL_COVER")
 	_magnifier_button.text = tr("ACT1_TOOL_MAGNIFIER")
 	_sugar_button.text = tr("ACT1_TOOL_SUGAR")
+	_protein_button.text = tr("R10_TOOL_PROTEIN")
 	_clean_waste_button.text = tr("R9_TOOL_CLEAN_WASTE")
 	_layout_button.text = tr("R7_LAYOUT_TOGGLE")
 	_rotate_facility_button.text = tr("R7_LAYOUT_ROTATE")
 	_remove_facility_button.text = tr("R7_LAYOUT_REMOVE")
+	_toggle_gate_button.text = tr("R10_GATE_TOGGLE")
 	_reset_camera_button.text = tr("R7_LAYOUT_RESET_CAMERA")
 	_journal_button.text = tr("CAMPAIGN_JOURNAL_OPEN")
 	_preparation_heading.text = tr("ACT1_PREPARATION_HEADING")

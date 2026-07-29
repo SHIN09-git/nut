@@ -36,6 +36,9 @@ const FacilityEnvironmentTestSuiteScript: Script = preload(
 const ColonyWorkTestSuiteScript: Script = preload(
 	"res://tests/simulation/colony_work_test_suite.gd"
 )
+const Act1EnvironmentChaptersTestSuiteScript: Script = preload(
+	"res://tests/simulation/act1_environment_chapters_test_suite.gd"
+)
 const ObservationEventTestSuiteScript: Script = preload(
 	"res://tests/simulation/observation_event_test_suite.gd"
 )
@@ -126,6 +129,7 @@ func _run_all_tests() -> void:
 	_run_facility_layout_test_suite()
 	_run_facility_environment_test_suite()
 	_run_colony_work_test_suite()
+	_run_act1_environment_chapters_test_suite()
 	_run_observation_event_test_suite()
 	_run_save_core_test_suite()
 	_run_profile_store_test_suite()
@@ -173,6 +177,7 @@ func _validate_suite_scripts() -> bool:
 		FacilityLayoutTestSuiteScript,
 		FacilityEnvironmentTestSuiteScript,
 		ColonyWorkTestSuiteScript,
+		Act1EnvironmentChaptersTestSuiteScript,
 		ObservationEventTestSuiteScript,
 		SaveCoreTestSuiteScript,
 		ProfileStoreTestSuiteScript,
@@ -280,6 +285,14 @@ func _run_facility_environment_test_suite() -> void:
 
 func _run_colony_work_test_suite() -> void:
 	var suite: ColonyWorkTestSuite = ColonyWorkTestSuiteScript.new()
+	suite.run()
+	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
+
+
+func _run_act1_environment_chapters_test_suite() -> void:
+	var suite: Act1EnvironmentChaptersTestSuite = (
+		Act1EnvironmentChaptersTestSuiteScript.new()
+	)
 	suite.run()
 	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
 

@@ -184,20 +184,19 @@ func _test_real_controls_complete_both_chapters() -> void:
 		close_journal.pressed.emit()
 		controller._process(SimulationClock.FIXED_STEP_SECONDS)
 	_expect_true(
-		controller.get_latest_snapshot().campaign.completed,
-		"real buttons complete the two-chapter Act 1 path"
+		not controller.get_latest_snapshot().campaign.completed,
+		"real buttons continue from Chapter 2 into Chapter 3"
 	)
-	_expect_true(
-		(controller.get_node("%CompletionPanel") as Control).visible,
-		"completion is clearly visible in the player scene"
+	_expect_int(
+		controller.get_latest_snapshot().campaign.chapter,
+		CampaignState.Chapter.ACT1_FORAGING_EXPANSION,
+		"real Chapter 2 conclusion opens the small-foraging chapter"
 	)
-	(controller.get_node("%ContinueFreeplayButton") as Button).pressed.emit()
-	controller._process(SimulationClock.FIXED_STEP_SECONDS)
 	_expect_true(
 		not (controller.get_node("%CompletionPanel") as Control).visible,
-		"continuing observation keeps the completed overlay dismissed"
+		"Act completion stays hidden while later chapters remain"
 	)
-	_test_layout_controls_after_act1_completion(controller)
+	_test_layout_controls_after_chapter_two(controller)
 	_destroy_controller(controller)
 
 
@@ -347,6 +346,14 @@ func _test_supported_viewport_layouts() -> void:
 				viewport_size,
 				ui_scale
 			)
+			(
+				controller.get_node("%StartObservationButton") as Button
+			).pressed.emit()
+			var layout_button: Button = (
+				controller.get_node("%LayoutButton") as Button
+			)
+			layout_button.button_pressed = true
+			layout_button.pressed.emit()
 			_settle_container_layout(controller)
 			var viewport_rect := Rect2(Vector2.ZERO, viewport_size)
 			for node_path: String in [
@@ -387,11 +394,14 @@ func _test_supported_viewport_layouts() -> void:
 			_destroy_controller(controller)
 
 
-func _test_layout_controls_after_act1_completion(
+func _test_layout_controls_after_chapter_two(
 	controller: Act1TestTubeController
 ) -> void:
 	var layout_button: Button = controller.get_node("%LayoutButton") as Button
 	var place_button: Button = controller.get_node("%PlaceBoxButton") as Button
+	var palette: OptionButton = controller.get_node(
+		"%FacilityTypeOption"
+	) as OptionButton
 	var view: Act1TestTubeView = controller.get_node(
 		"%Act1TestTubeView"
 	) as Act1TestTubeView
@@ -479,6 +489,22 @@ func _test_layout_controls_after_act1_completion(
 		"keyboard removal applies on the next Tick"
 	)
 
+	var box_index: int = -1
+	for index: int in palette.item_count:
+		if (
+			StringName(palette.get_item_metadata(index))
+			== CampaignState.FACILITY_SMALL_FORAGING_BOX
+		):
+			box_index = index
+			break
+	_expect_true(
+		box_index >= 0,
+		"restored box supply returns to the facility palette"
+	)
+	if box_index < 0:
+		return
+	palette.select(box_index)
+	palette.item_selected.emit(box_index)
 	_send_key(controller, KEY_P)
 	_expect_true(layout_view.is_placing(), "P starts keyboard placement")
 	_send_key(controller, KEY_ENTER)
@@ -491,6 +517,119 @@ func _test_layout_controls_after_act1_completion(
 		controller.get_latest_snapshot().layout.facilities.size(),
 		before_count + 1,
 		"keyboard placement completes through the same command boundary"
+	)
+	var box: FacilitySnapshot
+	for facility: FacilitySnapshot in (
+		controller.get_latest_snapshot().layout.facilities
+	):
+		if facility.type_id == CampaignState.FACILITY_SMALL_FORAGING_BOX:
+			box = facility
+			break
+	_expect_true(box != null, "keyboard path leaves one foraging box")
+	if box == null:
+		return
+	var protein_index: int = -1
+	for index: int in palette.item_count:
+		if (
+			StringName(palette.get_item_metadata(index))
+			== CampaignState.FACILITY_PROTEIN_DISH
+		):
+			protein_index = index
+			break
+	_expect_true(
+		protein_index >= 0,
+		"Chapter 3 facility palette exposes the protein dish"
+	)
+	if protein_index < 0:
+		return
+	palette.select(protein_index)
+	palette.item_selected.emit(protein_index)
+	place_button.pressed.emit()
+	_expect_true(
+		layout_view.is_placing(),
+		"selected protein dish enters placement mode"
+	)
+	var protein_option: FacilityPlacementOptionSnapshot
+	var box_rect := Rect2i(box.slot, box.footprint)
+	for candidate: FacilityPlacementOptionSnapshot in (
+		controller.get_latest_snapshot().layout.placement_options
+	):
+		if (
+			candidate.type_id == CampaignState.FACILITY_PROTEIN_DISH
+			and box_rect.has_point(candidate.slot)
+		):
+			protein_option = candidate
+			break
+	_expect_true(
+		protein_option != null,
+		"protein dish has a valid slot on the foraging box"
+	)
+	if protein_option == null:
+		return
+	click.position = layout_view._slot_rect(
+		protein_option.slot,
+		Vector2i.ONE
+	).get_center()
+	layout_view._gui_input(click)
+	_expect_true(
+		controller.get_latest_snapshot().layout.action_pending,
+		"protein-dish click queues a layout command"
+	)
+	controller._process(SimulationClock.FIXED_STEP_SECONDS)
+	var dish: FacilitySnapshot
+	for facility: FacilitySnapshot in (
+		controller.get_latest_snapshot().layout.facilities
+	):
+		if facility.type_id == CampaignState.FACILITY_PROTEIN_DISH:
+			dish = facility
+			break
+	_expect_true(
+		dish != null and dish.zone_id == box.zone_id,
+		"real palette path installs the dish in the foraging zone"
+	)
+	if dish == null:
+		return
+	var protein_button: Button = controller.get_node(
+		"%ProteinButton"
+	) as Button
+	_expect_true(
+		protein_button.visible and not protein_button.disabled,
+		"installed dish enables the high-level protein action"
+	)
+	var protein_before: int = (
+		controller.get_latest_snapshot().nutrition
+			.total_protein_portions_placed
+	)
+	protein_button.pressed.emit()
+	_expect_true(
+		controller.get_latest_snapshot().nutrition.protein_action_pending,
+		"protein button queues the player action"
+	)
+	_expect_int(
+		controller.get_latest_snapshot().nutrition
+			.total_protein_portions_placed,
+		protein_before,
+		"protein action does not mutate the submission Tick"
+	)
+	controller._process(SimulationClock.FIXED_STEP_SECONDS)
+	_expect_true(
+		controller.get_latest_snapshot().nutrition
+			.total_protein_portions_placed > protein_before,
+		"protein appears on the next fixed Tick"
+	)
+	var source_in_box: bool = false
+	for source: FoodSourceSnapshot in (
+		controller.get_latest_snapshot().colony.food_sources
+	):
+		if (
+			source.food_type == FoodSourceState.FoodType.PROTEIN
+			and source.zone_id == box.zone_id
+		):
+			source_in_box = true
+			break
+	_expect_true(
+		source_in_box,
+		"dedicated dish routes the real protein action to the foraging box"
 	)
 
 
