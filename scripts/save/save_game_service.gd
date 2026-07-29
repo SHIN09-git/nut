@@ -2,7 +2,7 @@ class_name SaveGameService
 extends RefCounted
 
 const CURRENT_FORMAT_VERSION: int = 1
-const CURRENT_GAME_VERSION: String = "0.12.0-dev"
+const CURRENT_GAME_VERSION: String = "1.0.0-beta"
 const CURRENT_CONTENT_MANIFEST_ID: String = (
 	"colony-under-glass.r2-base.1"
 )

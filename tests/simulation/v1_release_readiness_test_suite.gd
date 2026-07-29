@@ -143,6 +143,10 @@ func _test_state_indexes_follow_append_and_replacement() -> void:
 
 
 func _test_release_documents_and_notices() -> void:
+	_expect_true(
+		SaveGameService.CURRENT_GAME_VERSION == "1.0.0-beta",
+		"new save envelopes carry the beta candidate version"
+	)
 	for path: String in [
 		"res://CREDITS.md",
 		"res://PRIVACY.md",
