@@ -32,6 +32,7 @@ func run(scene_root: Node) -> void:
 	_test_settings_persist_outside_the_profile()
 	_test_game_settings_stay_synchronized_with_the_shell()
 	_test_shortcut_rebinding_reaches_the_running_game()
+	_test_credits_and_privacy_page()
 	_test_exit_uses_an_explicit_application_boundary()
 	_test_shell_pages_fit_supported_viewports()
 	_cleanup()
@@ -433,6 +434,38 @@ func _test_exit_uses_an_explicit_application_boundary() -> void:
 	_destroy_shell(shell)
 
 
+func _test_credits_and_privacy_page() -> void:
+	var shell: GameShellController = _create_shell(Vector2(1280, 720))
+	(shell.get_node("%CreditsButton") as Button).pressed.emit()
+	_expect_string(
+		String(shell.get_active_page_name()),
+		"CreditsPage",
+		"Credits button opens the release information page"
+	)
+	_expect_true(
+		not (
+			shell.get_node("%ProjectCreditsLabel") as RichTextLabel
+		).text.is_empty()
+			and not (
+				shell.get_node("%EngineCreditsLabel") as RichTextLabel
+			).text.is_empty()
+			and not (
+				shell.get_node("%PrivacyBodyLabel") as RichTextLabel
+			).text.is_empty()
+			and not (
+				shell.get_node("%NoticesLabel") as RichTextLabel
+			).text.is_empty(),
+		"release information exposes credits, privacy, and notices"
+	)
+	(shell.get_node("%CreditsBackButton") as Button).pressed.emit()
+	_expect_string(
+		String(shell.get_active_page_name()),
+		"TitlePage",
+		"Credits Back returns to the title page"
+	)
+	_destroy_shell(shell)
+
+
 func _test_shell_pages_fit_supported_viewports() -> void:
 	for viewport_size: Vector2 in [
 		Vector2(1280, 720),
@@ -445,13 +478,18 @@ func _test_shell_pages_fit_supported_viewports() -> void:
 			for button_name: String in [
 				"%ProfilesButton",
 				"%SettingsButton",
+				"%CreditsButton",
 			]:
 				(shell.get_node(button_name) as Button).pressed.emit()
 				_settle_container_layout(shell)
 				var page: Control = (
 					shell.get_node("%ProfilesPage")
 						if button_name == "%ProfilesButton"
-						else shell.get_node("%SettingsPage")
+						else (
+							shell.get_node("%SettingsPage")
+							if button_name == "%SettingsButton"
+							else shell.get_node("%CreditsPage")
+						)
 				) as Control
 				var rect: Rect2 = page.get_global_rect()
 				_expect_true(
@@ -472,9 +510,16 @@ func _test_shell_pages_fit_supported_viewports() -> void:
 						str(rect),
 					]
 				)
-				(
-					shell.get_node("%ProfileBackButton") as Button
-				).pressed.emit()
+				var back_button: Button = (
+					shell.get_node("%ProfileBackButton")
+					if button_name == "%ProfilesButton"
+					else (
+						shell.get_node("%SettingsBackButton")
+						if button_name == "%SettingsButton"
+						else shell.get_node("%CreditsBackButton")
+					)
+				) as Button
+				back_button.pressed.emit()
 			_destroy_shell(shell)
 
 

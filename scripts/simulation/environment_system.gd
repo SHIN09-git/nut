@@ -169,16 +169,11 @@ func _diffuse_pollution(state: ColonyState) -> void:
 		)
 		deltas[first.zone_id] = deltas.get(first.zone_id, 0.0) - transfer
 		deltas[second.zone_id] = deltas.get(second.zone_id, 0.0) + transfer
-	var zone_ids: Array[StringName] = []
-	zone_ids.assign(deltas.keys())
-	zone_ids.sort_custom(
-		func(first: StringName, second: StringName) -> bool:
-			return String(first) < String(second)
-	)
-	for zone_id: StringName in zone_ids:
-		var zone: HabitatZoneState = state.get_zone(zone_id)
-		if zone != null:
-			zone.set_pollution(zone.pollution + deltas[zone_id])
+	for zone: HabitatZoneState in state.zones:
+		if deltas.has(zone.zone_id):
+			zone.set_pollution(
+				zone.pollution + deltas[zone.zone_id]
+			)
 
 
 func _approach(current: float, target: float, amount: float) -> float:

@@ -228,6 +228,12 @@ custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
 text = "Settings"
 
+[node name="CreditsButton" type="Button" parent="ShellOverlay/Center/TitlePage/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 38)
+layout_mode = 2
+text = "Credits & Privacy"
+
 [node name="ShellExitButton" type="Button" parent="ShellOverlay/Center/TitlePage/Margin/Content"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 38)
@@ -533,6 +539,76 @@ layout_mode = 2
 text = "Reset Shortcuts"
 
 [node name="ControlsBackButton" type="Button" parent="ShellOverlay/Center/ControlsPage/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+text = "Back"
+
+[node name="CreditsPage" type="PanelContainer" parent="ShellOverlay/Center"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(700, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBox_panel")
+
+[node name="Margin" type="MarginContainer" parent="ShellOverlay/Center/CreditsPage"]
+layout_mode = 2
+theme_override_constants/margin_left = 40
+theme_override_constants/margin_top = 28
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 28
+
+[node name="Content" type="VBoxContainer" parent="ShellOverlay/Center/CreditsPage/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="CreditsHeading" type="Label" parent="ShellOverlay/Center/CreditsPage/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.84, 0.58, 1)
+theme_override_font_sizes/font_size = 30
+text = "Credits & Privacy"
+
+[node name="ProjectCreditsLabel" type="RichTextLabel" parent="ShellOverlay/Center/CreditsPage/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 58)
+layout_mode = 2
+theme_override_colors/default_color = Color(0.82, 0.84, 0.77, 1)
+text = "Project direction and production: SHIN09-git project. Development collaboration: OpenAI Codex."
+scroll_active = false
+
+[node name="EngineCreditsLabel" type="RichTextLabel" parent="ShellOverlay/Center/CreditsPage/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 58)
+layout_mode = 2
+theme_override_colors/default_color = Color(0.72, 0.77, 0.71, 1)
+text = "Built with Godot Engine 4.7.1, available under the MIT License."
+scroll_active = false
+
+[node name="PrivacyHeading" type="Label" parent="ShellOverlay/Center/CreditsPage/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.91, 0.76, 0.51, 1)
+theme_override_font_sizes/font_size = 22
+text = "Privacy"
+
+[node name="PrivacyBodyLabel" type="RichTextLabel" parent="ShellOverlay/Center/CreditsPage/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 104)
+layout_mode = 2
+theme_override_colors/default_color = Color(0.76, 0.79, 0.72, 1)
+text = "This offline game uses no accounts, telemetry, ads, or network services. Settings and one local profile are stored only on this device. Removing the portable game does not automatically delete local profile data."
+scroll_active = false
+
+[node name="NoticesLabel" type="RichTextLabel" parent="ShellOverlay/Center/CreditsPage/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_colors/default_color = Color(0.67, 0.72, 0.67, 1)
+text = "Full engine and third-party notices accompany the Windows build."
+scroll_active = false
+
+[node name="CreditsBackButton" type="Button" parent="ShellOverlay/Center/CreditsPage/Margin/Content"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 42)
 layout_mode = 2

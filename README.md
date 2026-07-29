@@ -6,6 +6,8 @@ R14 已为正式六章主流程接入原创生产视觉：暖玻璃观察台标�
 
 R15 增加项目自有的低干扰玻璃观察氛围和八个有限反馈音，分别覆盖界面、遮光、补水、设施、闸门、手册、章节与报告。主音量、环境氛围和操作反馈可以独立调整；音频只强化已有画面与文字，不承担唯一信息。简体中文与英文玩家文案已完成本轮逐条校对和格式占位检查。
 
+R16 正在冻结 Windows v1.0 Beta 候选：标题页现有双语“制作名单与隐私”入口；发行资料包含项目 Credits、离线隐私说明、Beta 发布说明，以及从精确 Godot 4.7.1 二进制导出的完整引擎／第三方许可。最大规模目标为 80 只工蚁、180 个幼体、48 项设施和 36 个逻辑区域；权威模拟保留全部实体，画面按稳定 ID 优先显示活动个体并将同时存在的蚂蚁视觉节点限制在 240 个。
+
 ## 当前功能
 
 - 新档案进入 `scenes/main/act1_test_tube.tscn`；场景始终使用同一个 0.1 秒固定 Tick 时钟和同一份权威群落状态。
@@ -34,7 +36,7 @@ R15 增加项目自有的低干扰玻璃观察氛围和八个有限反馈音，�
 - 启动与重开都先进入 Tick 0 准备门；门内固定 1×并冻结时钟、插值和视觉。点击“开始观察”只释放应用层时钟。
 - 普通视图不显示内部任务枚举、目标 ID、生命周期倒计时或调试入口；开发环境仍可按 F3 打开诊断层。
 - 支持暂停、1×、4×、16×；倍速只改变现实时间内处理的 Tick 数，不改变单 Tick 语义。`Esc` 或“菜单”打开暂停菜单。
-- 标题页提供新游戏、继续、档案、设置和退出；一个主档案支持显式保存、完整备份、损坏回退和确认删除。
+- 标题页提供新游戏、继续、档案、设置、制作名单与隐私和退出；一个主档案支持显式保存、完整备份、损坏回退和确认删除。
 - 设置独立保存到 `user://settings.json`，包括主音量、环境氛围音量、操作与反馈音量、分辨率、窗口模式、UI 缩放、简体中文／英文、减少动效，以及帮助、观察手册和模块布局三个可重映射快捷键。v1／v2 旧设置文件会安全迁移并获得默认分音量与 `F1`／`J`／`L`。
 - 存档 schema 为 `r12.authority.v10`。旧 R11／R10／R9／R8／R7／R6／R5／R4／R2 档案沿显式单向迁移链恢复；已完成 R11 五章的 Act 1 档案会恢复为第 6 章且不会伪造最终报告，旧组合观察档案仍路由到原 `CombinedObservationController`。
 - R5 的糖／蛋白守恒、糖短缺减速、育幼喂食和资源约束生命周期继续作为权威基础。第 3 章开放无参数蛋白补给动作；安装专用糖液台或蛋白盘后，高层动作优先路由到该设施所属区域。
@@ -143,6 +145,15 @@ R15 增加项目自有的低干扰玻璃观察氛围和八个有限反馈音，�
   --script 'res://tests/performance/act1_144k_soak.gd'
 ```
 
+独立 300,000 Tick 最大规模验证：
+
+```powershell
+& '.\Godot_v4.7.1-stable_win64_console.exe' `
+  --headless `
+  --path . `
+  --script 'res://tests/performance/act1_300k_max_scale_soak.gd'
+```
+
 脚本解析和默认主场景冒烟：
 
 ```powershell
@@ -159,23 +170,28 @@ New-Item -ItemType Directory -Force -Path '.\builds\windows'
 & '.\Godot_v4.7.1-stable_win64_console.exe' `
   --headless `
   --path . `
+  --script 'res://tools/release/generate_godot_notices.gd'
+& '.\Godot_v4.7.1-stable_win64_console.exe' `
+  --headless `
+  --path . `
   --export-release 'Windows Desktop' `
-  'builds/windows/ColonyUnderGlass_v0.2_demo.exe'
+  'builds/windows/ColonyUnderGlass_v1.0_beta.exe'
 ```
 
-`builds/` 已忽略，不进入版本控制。内部参考、测试和确定性音频生成器均从发行包排除；最终 WAV 资源会进入构建。
+`builds/` 已忽略，不进入版本控制。内部参考、测试和确定性音频生成器均从发行包排除；最终 WAV 资源会进入构建。便携发行目录还必须附带 `CREDITS.md`、`PRIVACY.md`、`RELEASE_NOTES_V1_0_BETA.md` 和 `docs/production/GODOT_COPYRIGHT.txt` 的读者副本；具体命名、哈希、干净 Windows 流程与显示矩阵见 `docs/release/V1_0_BETA_DISTRIBUTION_CHECKLIST.md`。
 
 ## 当前限制
 
 - 当前自动真实 UI 路径验证了前两章完整因果闭环、第 3 章设施／蛋白操作，以及第 5～6 章连接门、双室巢、补水、废物路径、自主迁巢、终章推论、报告和继续／返回路径；第 3～6 章的产品节奏仍未由外部玩家证明，不会通过无信息等待填充时长。
 - v0.2 计划要求的 7 名有效首次接触测试者数据尚未取得，外部理解度 Gate 保持 `INCOMPLETE`。用户于 2026-07-28 明确豁免它作为继续开发的前置条件；这不等于通过。
+- 最终美术、音频、文本与无障碍版本仍缺少 R16 要求的 10 个首次完整档案，因此 3～4 小时中位时长、完成率和最终理解度 Gate 同样保持 `INCOMPLETE`；本机自动化和窗口验证不能替代这些外部数据。
 - 正式 Act 1 已覆盖单后护理、第一工蚁、首次糖液、小型觅食区、蛋白育幼、废物清理、环境管理、完整核心迁巢和稳定群落总结，共六章并具有明确档案结局。
 - 温度没有区别于湿度的独立闭环证据，继续延期。
 - 工蚁名称和个人行动记录仍属于旧组合观察的会话注释；显示设置独立跨程序保存。
 - 物种与节奏参数均未经科学审校；本轮文本终校不构成物种级科学审校。
 - 正式原创视觉与音频已经登记；仍未加入 Steam、第三方插件或商店发布授权。
 
-v0.1 发布基线见 `docs/validation/v0.1_baseline_001.md`；M2 身份验证见 `docs/validation/worker_identity_001.md`；M3 糖水验证见 `docs/validation/sugar_foraging_001.md`；M4 连续体验验证见 `docs/validation/v0_2_combined_001.md`；R0-A／R0-B 与 M5 记录位于 `docs/validation/`；R1～R15 的技术验证分别见同目录的 `v1_r1_…` 至 `v1_r15_…` 记录。
+v0.1 发布基线见 `docs/validation/v0.1_baseline_001.md`；M2 身份验证见 `docs/validation/worker_identity_001.md`；M3 糖水验证见 `docs/validation/sugar_foraging_001.md`；M4 连续体验验证见 `docs/validation/v0_2_combined_001.md`；R0-A／R0-B 与 M5 记录位于 `docs/validation/`；R1～R15 的技术验证分别见同目录的 `v1_r1_…` 至 `v1_r15_…` 记录。R16 冻结后使用 `docs/validation/v1_r16_beta_candidate_001.md` 记录最终性能、Windows 包、显示矩阵与哈希。
 
 未来 3～4 小时完整独立游戏的章节、设施、音画、验证与发行路线见 `CODEX_V1_MASTER_PLAN.md`；当前存档 schema 见 `docs/architecture/SAVE_SCHEMA_R12.md`，R11／R10／R9／R8／R7／R6／R5／R4／R2 文档保留为历史基线。这些计划不表示未来能力已经实现；当前可运行事实仍以本 README、`GDD.md` 和 `ARCHITECTURE.md` 为准。
 

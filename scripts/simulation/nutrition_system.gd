@@ -456,15 +456,7 @@ func _has_colony_work_task(worker: AntModel) -> bool:
 
 
 func _get_workers_in_stable_order(state: ColonyState) -> Array[AntModel]:
-	var workers: Array[AntModel] = []
-	for ant: AntModel in state.ants:
-		if ant.life_stage == AntModel.LifeStage.WORKER:
-			workers.append(ant)
-	workers.sort_custom(
-		func(first: AntModel, second: AntModel) -> bool:
-			return first.entity_id < second.entity_id
-	)
-	return workers
+	return state.get_workers_in_stable_order()
 
 
 func _find_stable_path(

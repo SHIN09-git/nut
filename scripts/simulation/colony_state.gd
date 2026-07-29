@@ -25,6 +25,12 @@ var colony_work_state: ColonyWorkState
 var _next_entity_id: int = 1
 var _next_observation_event_id: int = 1
 var _observation_events: Array[ObservationEvent] = []
+var _ants_by_id: Dictionary[int, AntModel] = {}
+var _ant_indexed_count: int = -1
+var _zones_by_id: Dictionary[StringName, HabitatZoneState] = {}
+var _zone_indexed_count: int = -1
+var _workers_in_stable_order: Array[AntModel] = []
+var _worker_indexed_ant_count: int = -1
 
 
 func _init() -> void:
@@ -159,17 +165,60 @@ func initialize_habitat(
 
 
 func get_ant(entity_id: int) -> AntModel:
-	for ant: AntModel in ants:
-		if ant.entity_id == entity_id:
-			return ant
-	return null
+	_ensure_ant_index()
+	return _ants_by_id.get(entity_id)
 
 
 func get_zone(zone_id: StringName) -> HabitatZoneState:
+	_ensure_zone_index()
+	return _zones_by_id.get(zone_id)
+
+
+func _invalidate_lookup_indexes() -> void:
+	_ant_indexed_count = -1
+	_zone_indexed_count = -1
+	_worker_indexed_ant_count = -1
+
+
+func get_workers_in_stable_order() -> Array[AntModel]:
+	if _worker_indexed_ant_count != ants.size():
+		_workers_in_stable_order.clear()
+		for ant: AntModel in ants:
+			if (
+				ant != null
+				and ant.life_stage == AntModel.LifeStage.WORKER
+			):
+				_workers_in_stable_order.append(ant)
+		_workers_in_stable_order.sort_custom(
+			func(first: AntModel, second: AntModel) -> bool:
+				return first.entity_id < second.entity_id
+		)
+		_worker_indexed_ant_count = ants.size()
+	return _workers_in_stable_order
+
+
+func invalidate_worker_order() -> void:
+	_worker_indexed_ant_count = -1
+
+
+func _ensure_ant_index() -> void:
+	if _ant_indexed_count == ants.size():
+		return
+	_ants_by_id.clear()
+	for ant: AntModel in ants:
+		if ant != null:
+			_ants_by_id[ant.entity_id] = ant
+	_ant_indexed_count = ants.size()
+
+
+func _ensure_zone_index() -> void:
+	if _zone_indexed_count == zones.size():
+		return
+	_zones_by_id.clear()
 	for zone: HabitatZoneState in zones:
-		if zone.zone_id == zone_id:
-			return zone
-	return null
+		if zone != null:
+			_zones_by_id[zone.zone_id] = zone
+	_zone_indexed_count = zones.size()
 
 
 func get_connected_zone_ids(zone_id: StringName) -> Array[StringName]:
@@ -342,6 +391,7 @@ func record_observation_event(
 
 func copy_observation_events() -> Array[ObservationEvent]:
 	var copied_events: Array[ObservationEvent] = []
-	for event: ObservationEvent in _observation_events:
-		copied_events.append(event.copy_event())
+	copied_events.resize(_observation_events.size())
+	for index: int in _observation_events.size():
+		copied_events[index] = _observation_events[index].copy_event()
 	return copied_events

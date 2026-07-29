@@ -38,6 +38,8 @@ const GLASS_SHADOW: Color = Color(0.0, 0.0, 0.0, 0.44)
 const SUBSTRATE_LIGHT: Color = Color(0.55, 0.44, 0.27, 0.66)
 const CONDENSATION_COLOR: Color = Color(0.64, 0.90, 0.88, 0.50)
 const WORKER_SELECTION_RADIUS: float = 28.0
+const DENSE_COLONY_DETAIL_THRESHOLD: int = 160
+const MAX_VISIBLE_ANT_VIEWS: int = 240
 
 var _ant_views: Dictionary[int, AntView] = {}
 var _previous_snapshot: GameSnapshot
@@ -120,7 +122,13 @@ func apply_snapshot(snapshot: GameSnapshot) -> bool:
 		return false
 	_update_endpoints(snapshot)
 	var present_ids: Dictionary[int, bool] = {}
-	for ant: AntSnapshot in snapshot.colony.ants:
+	var visible_ants: Array[AntSnapshot] = _select_visible_ant_snapshots(
+		snapshot.colony.ants
+	)
+	var low_detail: bool = (
+		visible_ants.size() > DENSE_COLONY_DETAIL_THRESHOLD
+	)
+	for ant: AntSnapshot in visible_ants:
 		present_ids[ant.entity_id] = true
 		var view: AntView = _ant_views.get(ant.entity_id)
 		if view == null:
@@ -135,9 +143,12 @@ func apply_snapshot(snapshot: GameSnapshot) -> bool:
 				return false
 			view.set_visuals_paused(_visuals_paused)
 			view.set_reduced_motion(_reduced_motion)
+			view.set_low_detail(low_detail)
 			_ant_views[ant.entity_id] = view
 		elif not view.apply_snapshot(ant):
 			return false
+		else:
+			view.set_low_detail(low_detail)
 	var removed_ids: Array[int] = []
 	for entity_id: int in _ant_views:
 		if not present_ids.has(entity_id):
@@ -154,6 +165,52 @@ func apply_snapshot(snapshot: GameSnapshot) -> bool:
 	_layout_projection()
 	queue_redraw()
 	return true
+
+
+func _select_visible_ant_snapshots(
+	ants: Array[AntSnapshot]
+) -> Array[AntSnapshot]:
+	if ants.size() <= MAX_VISIBLE_ANT_VIEWS:
+		return ants
+	var workers: Array[AntSnapshot] = []
+	var active_brood_ids: Dictionary[int, bool] = {}
+	var brood_by_id: Dictionary[int, AntSnapshot] = {}
+	for ant: AntSnapshot in ants:
+		if ant.life_stage == AntModel.LifeStage.WORKER:
+			workers.append(ant)
+			if ant.carried_brood_id >= 0:
+				active_brood_ids[ant.carried_brood_id] = true
+			elif ant.target_brood_id >= 0:
+				active_brood_ids[ant.target_brood_id] = true
+		else:
+			brood_by_id[ant.entity_id] = ant
+	workers.sort_custom(
+		func(first: AntSnapshot, second: AntSnapshot) -> bool:
+			return first.entity_id < second.entity_id
+	)
+	var selected: Array[AntSnapshot] = []
+	for worker: AntSnapshot in workers:
+		if selected.size() >= MAX_VISIBLE_ANT_VIEWS:
+			return selected
+		selected.append(worker)
+	var priority_brood_ids: Array[int] = []
+	priority_brood_ids.assign(active_brood_ids.keys())
+	priority_brood_ids.sort()
+	for brood_id: int in priority_brood_ids:
+		if selected.size() >= MAX_VISIBLE_ANT_VIEWS:
+			return selected
+		var priority_brood: AntSnapshot = brood_by_id.get(brood_id)
+		if priority_brood != null:
+			selected.append(priority_brood)
+			brood_by_id.erase(brood_id)
+	var remaining_brood_ids: Array[int] = []
+	remaining_brood_ids.assign(brood_by_id.keys())
+	remaining_brood_ids.sort()
+	for brood_id: int in remaining_brood_ids:
+		if selected.size() >= MAX_VISIBLE_ANT_VIEWS:
+			break
+		selected.append(brood_by_id[brood_id])
+	return selected
 
 
 func reset_projection() -> void:

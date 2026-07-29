@@ -147,6 +147,7 @@ func _test_workers_autonomously_migrate_the_colony_core() -> void:
 			&"test_tube_nest",
 			state.simulation_tick
 		)
+	state.invalidate_worker_order()
 	var source: HabitatZoneState = state.get_zone(&"test_tube_nest")
 	source.set_humidity(0.30)
 	source.set_light_exposure(0.88)

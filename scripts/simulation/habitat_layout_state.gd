@@ -10,6 +10,10 @@ var _next_facility_id: int = 1
 var _next_connection_id: int = 1
 var _cached_revision: int = -1
 var _adjacency_cache: Dictionary[StringName, Array] = {}
+var _ordered_facility_revision: int = -1
+var _ordered_facility_cache: Array[FacilityState] = []
+var _ordered_connection_revision: int = -1
+var _ordered_connection_cache: Array[HabitatConnectionState] = []
 
 
 static func create_initial(
@@ -109,23 +113,29 @@ func get_connection(connection_id: int) -> HabitatConnectionState:
 
 
 func get_facilities_in_stable_order() -> Array[FacilityState]:
+	if _ordered_facility_revision == revision:
+		return _ordered_facility_cache
 	var ids: Array[int] = []
 	ids.assign(facilities.keys())
 	ids.sort()
-	var result: Array[FacilityState] = []
+	_ordered_facility_cache.clear()
 	for facility_id: int in ids:
-		result.append(facilities[facility_id])
-	return result
+		_ordered_facility_cache.append(facilities[facility_id])
+	_ordered_facility_revision = revision
+	return _ordered_facility_cache
 
 
 func get_connections_in_stable_order() -> Array[HabitatConnectionState]:
+	if _ordered_connection_revision == revision:
+		return _ordered_connection_cache
 	var ids: Array[int] = []
 	ids.assign(connections.keys())
 	ids.sort()
-	var result: Array[HabitatConnectionState] = []
+	_ordered_connection_cache.clear()
 	for connection_id: int in ids:
-		result.append(connections[connection_id])
-	return result
+		_ordered_connection_cache.append(connections[connection_id])
+	_ordered_connection_revision = revision
+	return _ordered_connection_cache
 
 
 func can_place(

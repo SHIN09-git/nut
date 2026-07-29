@@ -149,7 +149,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	var key_event: InputEventKey = event as InputEventKey
 	if key_event == null or not key_event.pressed or key_event.echo:
 		return
-	if key_event.keycode == KEY_F3:
+	if key_event.keycode == KEY_F3 and _debug_controls_available():
 		_debug_panel.visible = not _debug_panel.visible
 		_update_debug()
 		get_viewport().set_input_as_handled()
@@ -221,6 +221,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			_open_pause_menu()
 		get_viewport().set_input_as_handled()
+
+
+func _debug_controls_available() -> bool:
+	return OS.is_debug_build()
 
 
 func _connect_controls() -> void:

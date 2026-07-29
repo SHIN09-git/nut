@@ -3,6 +3,8 @@ extends RefCounted
 
 const HUMIDITY_EPSILON: float = 0.000001
 const ACT1_LIGHT_COVER_SLOT: Vector2i = Vector2i(1, 3)
+const FULL_OWNERSHIP_AUDIT_INTERVAL_TICKS: int = 50
+const FULL_OWNERSHIP_AUDIT_EVERY_TICK_ENTITY_LIMIT: int = 64
 
 signal egg_laid(entity_id: int, simulation_tick: int)
 signal life_stage_changed(
@@ -43,6 +45,11 @@ var _pending_commands: Array[PendingSimulationCommand] = []
 var _next_pending_command_sequence_id: int = 1
 var _configuration_error: String = ""
 var _tick_in_progress: bool = false
+var _validated_layout_state_id: int = -1
+var _validated_layout_id: int = -1
+var _validated_layout_revision: int = -1
+var _validated_layout_zone_count: int = -1
+var _validated_layout_result: bool = false
 
 
 func _init(
@@ -389,6 +396,11 @@ func advance_tick(tick_index: int) -> bool:
 			_scenario_director.advance_controlled_lifecycle(_state)
 		)
 		if not lifecycle_change.is_empty():
+			if (
+				int(lifecycle_change["current_stage"])
+				== AntModel.LifeStage.WORKER
+			):
+				_state.invalidate_worker_order()
 			life_stage_changed.emit(
 				int(lifecycle_change["entity_id"]),
 				int(lifecycle_change["previous_stage"]),
@@ -415,14 +427,15 @@ func advance_tick(tick_index: int) -> bool:
 			_nutrition_system.advance_tasks(_state)
 		if _colony_work_system != null:
 			_colony_work_system.advance_tasks(_state)
-	if _colony_work_system != null and worker_tasks_advance:
-		_colony_work_system.assign_idle_workers(_state)
-	if _should_assign_brood_relocation():
-		_brood_relocation_system.assign_idle_workers(_state)
-	if _should_assign_brood_feeding():
-		_nutrition_system.assign_idle_workers(_state)
-	if _should_assign_foraging():
-		_foraging_system.assign_idle_workers(_state)
+	if _has_idle_worker_for_assignment():
+		if _colony_work_system != null and worker_tasks_advance:
+			_colony_work_system.assign_idle_workers(_state)
+		if _should_assign_brood_relocation():
+			_brood_relocation_system.assign_idle_workers(_state)
+		if _should_assign_brood_feeding():
+			_nutrition_system.assign_idle_workers(_state)
+		if _should_assign_foraging():
+			_foraging_system.assign_idle_workers(_state)
 	if _should_update_humidity_observation():
 		_update_observation_record()
 	if _scenario_director != null:
@@ -433,7 +446,10 @@ func advance_tick(tick_index: int) -> bool:
 		_campaign_director.update_after_systems(_state)
 	if _act1_campaign_director != null:
 		_act1_campaign_director.update_after_systems(_state)
-	if not has_valid_habitat_ownership():
+	if (
+		_should_run_full_ownership_audit()
+		and not has_valid_habitat_ownership()
+	):
 		_configuration_error = (
 			"Habitat ownership invariant failed at Tick %d"
 			% _state.simulation_tick
@@ -442,6 +458,47 @@ func advance_tick(tick_index: int) -> bool:
 		return false
 	_tick_in_progress = false
 	return true
+
+
+func _should_run_full_ownership_audit() -> bool:
+	return (
+		_state.ants.size()
+			<= FULL_OWNERSHIP_AUDIT_EVERY_TICK_ENTITY_LIMIT
+		or _state.simulation_tick
+			% FULL_OWNERSHIP_AUDIT_INTERVAL_TICKS
+			== 0
+	)
+
+
+func _has_idle_worker_for_assignment() -> bool:
+	for worker: AntModel in _state.get_workers_in_stable_order():
+		if (
+			worker.worker_task != null
+			and worker.worker_task.state == WorkerTaskModel.State.IDLE
+			and worker.foraging_task != null
+			and worker.foraging_task.state == ForagingTaskModel.State.IDLE
+			and (
+				worker.feeding_task == null
+				or worker.feeding_task.state
+					== BroodFeedingTaskModel.State.IDLE
+			)
+			and (
+				worker.waste_cleanup_task == null
+				or worker.waste_cleanup_task.state
+					== WasteCleanupTaskModel.State.IDLE
+			)
+			and (
+				worker.scout_task == null
+				or worker.scout_task.state == ScoutTaskModel.State.IDLE
+			)
+			and (
+				worker.migration_task == null
+				or worker.migration_task.state
+					== MigrationTaskModel.State.IDLE
+			)
+		):
+			return true
+	return false
 
 
 func create_snapshot() -> ColonySnapshot:
@@ -490,8 +547,10 @@ func create_snapshot() -> ColonySnapshot:
 	)
 	snapshot.observation_events = _state.copy_observation_events()
 
-	for zone: HabitatZoneState in _state.zones:
-		snapshot.zones.append(HabitatZoneSnapshot.new(
+	snapshot.zones.resize(_state.zones.size())
+	for zone_index: int in _state.zones.size():
+		var zone: HabitatZoneState = _state.zones[zone_index]
+		snapshot.zones[zone_index] = HabitatZoneSnapshot.new(
 			zone.zone_id,
 			zone.humidity,
 			_state.get_connected_zone_ids(zone.zone_id),
@@ -500,7 +559,7 @@ func create_snapshot() -> ColonySnapshot:
 			zone.pollution,
 			zone.discovered,
 			zone.discovered_tick
-		))
+		)
 
 	var brood_reserved_by_worker_id: Dictionary[int, int] = {}
 	var brood_carrier_worker_id: Dictionary[int, int] = {}
@@ -547,8 +606,10 @@ func create_snapshot() -> ColonySnapshot:
 						ant.migration_task.carried_entity_id
 					] = ant.entity_id
 
-	for source: FoodSourceState in _state.food_sources:
-		snapshot.food_sources.append(FoodSourceSnapshot.new(
+	snapshot.food_sources.resize(_state.food_sources.size())
+	for source_index: int in _state.food_sources.size():
+		var source: FoodSourceState = _state.food_sources[source_index]
+		snapshot.food_sources[source_index] = FoodSourceSnapshot.new(
 			source.entity_id,
 			source.zone_id,
 			source.food_type,
@@ -556,9 +617,17 @@ func create_snapshot() -> ColonySnapshot:
 			source.available,
 			food_reserved_by_worker_id.get(source.entity_id, -1),
 			food_carrier_worker_id.get(source.entity_id, -1)
-		))
+		)
 
-	for ant: AntModel in _state.ants:
+	var stage_durations: PackedInt32Array = PackedInt32Array([
+		_lifecycle_config.egg_duration_ticks if is_ready() else 0,
+		_lifecycle_config.larva_duration_ticks if is_ready() else 0,
+		_lifecycle_config.pupa_duration_ticks if is_ready() else 0,
+		0,
+	])
+	snapshot.ants.resize(_state.ants.size())
+	for ant_index: int in _state.ants.size():
+		var ant: AntModel = _state.ants[ant_index]
 		var task_state: int = WorkerTaskModel.State.IDLE
 		var task_origin_zone_id: StringName = &""
 		var target_brood_id: int = -1
@@ -594,12 +663,12 @@ func create_snapshot() -> ColonySnapshot:
 			migration_snapshot = MigrationTaskSnapshot.new(
 				ant.migration_task
 			)
-		snapshot.ants.append(AntSnapshot.new(
+		snapshot.ants[ant_index] = AntSnapshot.new(
 			ant.entity_id,
 			ant.life_stage,
 			ant.total_age_ticks,
 			ant.stage_age_ticks,
-			get_stage_duration_ticks(ant.life_stage),
+			stage_durations[ant.life_stage],
 			ant.zone_id,
 			ant.zone_entered_tick,
 			brood_reserved_by_worker_id.get(ant.entity_id, -1),
@@ -617,7 +686,7 @@ func create_snapshot() -> ColonySnapshot:
 			waste_cleanup_snapshot,
 			scout_snapshot,
 			migration_snapshot
-		))
+		)
 
 	snapshot.work = _create_colony_work_snapshot()
 	return snapshot
@@ -649,12 +718,6 @@ func create_game_snapshot() -> GameSnapshot:
 			_is_place_sugar_action_available(),
 			place_action_pending,
 			1 if _state.total_sugar_portions_placed > 0 else 0
-		)
-	)
-	var observation_snapshot: ObservationJournalSnapshot = (
-		ObservationJournalSnapshot.new(
-			_state.copy_observation_events(),
-			_state.copy_unlocked_observation_card_ids()
 		)
 	)
 	var sequence_snapshot: ScenarioSequenceSnapshot
@@ -780,6 +843,12 @@ func create_game_snapshot() -> GameSnapshot:
 			)
 	var layout_snapshot: HabitatLayoutSnapshot = _create_layout_snapshot()
 	var colony_snapshot: ColonySnapshot = create_snapshot()
+	var observation_snapshot: ObservationJournalSnapshot = (
+		ObservationJournalSnapshot.new(
+			colony_snapshot.observation_events,
+			_state.copy_unlocked_observation_card_ids()
+		)
+	)
 	return GameSnapshot.new(
 		_state.simulation_tick,
 		colony_snapshot,
@@ -1732,6 +1801,15 @@ func _create_colony_work_snapshot() -> ColonyWorkSnapshot:
 func _has_valid_layout_state(state: ColonyState) -> bool:
 	if state == null or state.layout_state == null:
 		return false
+	var state_id: int = state.get_instance_id()
+	var layout_id: int = state.layout_state.get_instance_id()
+	if (
+		_validated_layout_state_id == state_id
+		and _validated_layout_id == layout_id
+		and _validated_layout_revision == state.layout_state.revision
+		and _validated_layout_zone_count == state.zones.size()
+	):
+		return _validated_layout_result
 	var zone_ids: Dictionary[StringName, bool] = {}
 	for zone: HabitatZoneState in state.zones:
 		zone_ids[zone.zone_id] = true
@@ -1739,6 +1817,7 @@ func _has_valid_layout_state(state: ColonyState) -> bool:
 		_habitat_config.facility_catalog_config,
 		zone_ids
 	):
+		_cache_layout_validation(state, false)
 		return false
 	var configured_zone_ids: Dictionary[StringName, bool] = {}
 	for configured_zone: HabitatZoneState in _habitat_config.zones:
@@ -1751,34 +1830,53 @@ func _has_valid_layout_state(state: ColonyState) -> bool:
 			)
 		)
 		if type_config == null or type_config.effect_config == null:
+			_cache_layout_validation(state, false)
 			return false
 		if type_config.effect_config.provides_zone():
 			if facility.zone_id.is_empty():
+				_cache_layout_validation(state, false)
 				return false
 			for zone_id: StringName in _facility_zone_ids(facility):
 				if not configured_zone_ids.has(zone_id):
 					if dynamic_zone_ids.has(zone_id):
+						_cache_layout_validation(state, false)
 						return false
 					dynamic_zone_ids[zone_id] = true
 			if (
 				type_config.effect_config.provides_secondary_zone()
 				!= not facility.secondary_zone_id.is_empty()
 			):
+				_cache_layout_validation(state, false)
 				return false
 		elif (
 			type_config.effect_config.requires_host_zone()
 			and facility.zone_id.is_empty()
 		):
+			_cache_layout_validation(state, false)
 			return false
 	for zone: HabitatZoneState in state.zones:
 		if (
 			not configured_zone_ids.has(zone.zone_id)
 			and not dynamic_zone_ids.has(zone.zone_id)
 		):
+			_cache_layout_validation(state, false)
 			return false
-	return state.zones.size() == (
+	var valid: bool = state.zones.size() == (
 		configured_zone_ids.size() + dynamic_zone_ids.size()
 	)
+	_cache_layout_validation(state, valid)
+	return valid
+
+
+func _cache_layout_validation(
+	state: ColonyState,
+	result: bool
+) -> void:
+	_validated_layout_state_id = state.get_instance_id()
+	_validated_layout_id = state.layout_state.get_instance_id()
+	_validated_layout_revision = state.layout_state.revision
+	_validated_layout_zone_count = state.zones.size()
+	_validated_layout_result = result
 
 
 func _is_facility_referenced(facility_id: int) -> bool:
@@ -2187,6 +2285,8 @@ func _update_existing_ants() -> void:
 
 		var previous_stage: AntModel.LifeStage = ant.life_stage
 		ant.transition_to(_get_next_life_stage(previous_stage))
+		if ant.life_stage == AntModel.LifeStage.WORKER:
+			_state.invalidate_worker_order()
 		ant.protein_supported_growth_ticks = 0
 		if (
 			_supports_nutrition_growth()

@@ -25,6 +25,7 @@ static func create_simulation() -> ColonySimulation:
 		if ant.entity_id == first_worker.entity_id:
 			continue
 		ant.configure_brood(&"test_tube_nest", state.simulation_tick)
+	state.invalidate_worker_order()
 	state.act1_state.first_worker_emerged_tick = state.simulation_tick
 	state.act1_state.first_worker_care_recorded = true
 	state.nutrition_state.protein_reserve_portions = 1
@@ -96,6 +97,7 @@ static func create_simulation() -> ColonySimulation:
 			)
 		else:
 			ant.configure_brood(dual.zone_id, state.simulation_tick)
+	state.invalidate_worker_order()
 	state.colony_work_state.completed_migration_count = maxi(
 		state.colony_work_state.completed_migration_count,
 		1

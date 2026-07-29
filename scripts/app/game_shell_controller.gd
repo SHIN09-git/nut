@@ -38,6 +38,7 @@ var _pending_binding_action: StringName = &""
 @onready var _profiles_page: Control = %ProfilesPage
 @onready var _settings_page: Control = %SettingsPage
 @onready var _controls_page: Control = %ControlsPage
+@onready var _credits_page: Control = %CreditsPage
 @onready var _confirm_panel: Control = %ConfirmPanel
 @onready var _title_heading: Label = %TitleHeading
 @onready var _title_subtitle: Label = %TitleSubtitle
@@ -45,6 +46,7 @@ var _pending_binding_action: StringName = &""
 @onready var _continue_button: Button = %ContinueButton
 @onready var _profiles_button: Button = %ProfilesButton
 @onready var _settings_button: Button = %SettingsButton
+@onready var _credits_button: Button = %CreditsButton
 @onready var _exit_button: Button = %ShellExitButton
 @onready var _profile_heading: Label = %ProfileHeading
 @onready var _profile_summary: Label = %ProfileSummary
@@ -79,6 +81,13 @@ var _pending_binding_action: StringName = &""
 @onready var _layout_binding_button: Button = %LayoutBindingButton
 @onready var _controls_reset_button: Button = %ControlsResetButton
 @onready var _controls_back_button: Button = %ControlsBackButton
+@onready var _credits_heading: Label = %CreditsHeading
+@onready var _project_credits_label: RichTextLabel = %ProjectCreditsLabel
+@onready var _engine_credits_label: RichTextLabel = %EngineCreditsLabel
+@onready var _privacy_heading: Label = %PrivacyHeading
+@onready var _privacy_body_label: RichTextLabel = %PrivacyBodyLabel
+@onready var _notices_label: RichTextLabel = %NoticesLabel
+@onready var _credits_back_button: Button = %CreditsBackButton
 @onready var _confirm_heading: Label = %ConfirmHeading
 @onready var _confirm_description: Label = %ConfirmDescription
 @onready var _confirm_accept_button: Button = %ConfirmAcceptButton
@@ -165,6 +174,7 @@ func _connect_controls() -> void:
 	_continue_button.pressed.connect(_on_continue_pressed)
 	_profiles_button.pressed.connect(_show_profiles_page)
 	_settings_button.pressed.connect(_show_settings_page)
+	_credits_button.pressed.connect(_show_credits_page)
 	_exit_button.pressed.connect(_on_exit_pressed)
 	_profile_continue_button.pressed.connect(_on_continue_pressed)
 	_restore_backup_button.pressed.connect(
@@ -177,6 +187,7 @@ func _connect_controls() -> void:
 	_settings_back_button.pressed.connect(_show_title_page)
 	_controls_button.pressed.connect(_show_controls_page)
 	_controls_back_button.pressed.connect(_show_settings_page)
+	_credits_back_button.pressed.connect(_show_title_page)
 	_controls_reset_button.pressed.connect(_reset_key_bindings)
 	_help_binding_button.pressed.connect(
 		_begin_binding_capture.bind(DemoSettingsState.ACTION_HELP)
@@ -253,6 +264,7 @@ func _refresh_copy() -> void:
 	_continue_button.text = tr("SHELL_CONTINUE")
 	_profiles_button.text = tr("SHELL_PROFILES")
 	_settings_button.text = tr("SHELL_SETTINGS")
+	_credits_button.text = tr("R16_CREDITS_OPEN")
 	_exit_button.text = tr("UI_EXIT")
 	_profile_heading.text = tr("SHELL_PROFILE_HEADING")
 	_profile_continue_button.text = tr("SHELL_PROFILE_CONTINUE")
@@ -277,6 +289,13 @@ func _refresh_copy() -> void:
 	_layout_binding_label.text = tr("R13_BINDING_LAYOUT")
 	_controls_reset_button.text = tr("R13_BINDING_RESET")
 	_controls_back_button.text = tr("SHELL_BACK")
+	_credits_heading.text = tr("R16_CREDITS_HEADING")
+	_project_credits_label.text = tr("R16_PROJECT_CREDITS")
+	_engine_credits_label.text = tr("R16_ENGINE_CREDITS")
+	_privacy_heading.text = tr("R16_PRIVACY_HEADING")
+	_privacy_body_label.text = tr("R16_PRIVACY_BODY")
+	_notices_label.text = tr("R16_NOTICES")
+	_credits_back_button.text = tr("SHELL_BACK")
 	_refresh_binding_buttons()
 	_confirm_accept_button.text = tr("SHELL_CONFIRM")
 	_confirm_cancel_button.text = tr("SHELL_CANCEL")
@@ -319,12 +338,18 @@ func _show_controls_page() -> void:
 	_help_binding_button.grab_focus()
 
 
+func _show_credits_page() -> void:
+	_show_shell_page(_credits_page)
+	_credits_back_button.grab_focus()
+
+
 func _show_shell_page(page: Control) -> void:
 	_shell_overlay.visible = true
 	_title_page.visible = page == _title_page
 	_profiles_page.visible = page == _profiles_page
 	_settings_page.visible = page == _settings_page
 	_controls_page.visible = page == _controls_page
+	_credits_page.visible = page == _credits_page
 	_confirm_panel.visible = false
 	_confirm_action = ConfirmAction.NONE
 	_active_page = page

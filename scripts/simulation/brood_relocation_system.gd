@@ -24,7 +24,7 @@ func validate_tasks(state: ColonyState) -> void:
 		return
 
 	var claimed_brood_ids: Dictionary = {}
-	for worker: AntModel in state.ants:
+	for worker: AntModel in state.get_workers_in_stable_order():
 		if worker.worker_task == null:
 			continue
 		var task: WorkerTaskModel = worker.worker_task
@@ -63,7 +63,7 @@ func advance_tasks(state: ColonyState) -> void:
 	if state == null or not is_ready():
 		return
 
-	for worker: AntModel in state.ants:
+	for worker: AntModel in state.get_workers_in_stable_order():
 		if worker.worker_task == null:
 			continue
 		var task: WorkerTaskModel = worker.worker_task
@@ -165,7 +165,7 @@ func assign_idle_workers(state: ColonyState) -> void:
 		return
 
 	var reserved_brood_ids: Dictionary = {}
-	for worker: AntModel in state.ants:
+	for worker: AntModel in state.get_workers_in_stable_order():
 		if (
 			worker.worker_task != null
 			and worker.worker_task.state != WorkerTaskModel.State.IDLE
@@ -181,7 +181,7 @@ func assign_idle_workers(state: ColonyState) -> void:
 				worker.migration_task.target_entity_id
 			] = true
 
-	for worker: AntModel in state.ants:
+	for worker: AntModel in state.get_workers_in_stable_order():
 		if (
 			worker.worker_task == null
 			or worker.worker_task.state != WorkerTaskModel.State.IDLE
@@ -237,9 +237,7 @@ func has_valid_ownership(state: ColonyState) -> bool:
 
 	var reservation_counts: Dictionary = {}
 	var carrier_counts: Dictionary = {}
-	for ant: AntModel in state.ants:
-		if ant.life_stage != AntModel.LifeStage.WORKER:
-			continue
+	for ant: AntModel in state.get_workers_in_stable_order():
 		if ant.worker_task == null or state.get_zone(ant.zone_id) == null:
 			return false
 
