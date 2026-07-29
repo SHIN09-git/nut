@@ -327,7 +327,7 @@ text = "Inspect"
 autowrap_mode = 2
 
 [node name="ToolBar" type="PanelContainer" parent="Main"]
-custom_minimum_size = Vector2(0, 124)
+custom_minimum_size = Vector2(0, 154)
 layout_mode = 2
 theme_override_styles/panel = SubResource("Style_panel")
 
@@ -342,56 +342,64 @@ theme_override_constants/margin_bottom = 8
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="ToolRow" type="HBoxContainer" parent="Main/ToolBar/ToolMargin/ToolContent"]
+[node name="ToolRowScroll" type="ScrollContainer" parent="Main/ToolBar/ToolMargin/ToolContent"]
+custom_minimum_size = Vector2(0, 64)
 layout_mode = 2
+size_flags_horizontal = 3
+horizontal_scroll_mode = 1
+vertical_scroll_mode = 0
+
+[node name="ToolRow" type="HBoxContainer" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRowScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
 theme_override_constants/separation = 10
 
-[node name="ToolLabel" type="Label" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRow"]
+[node name="ToolLabel" type="Label" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRowScroll/ToolRow"]
 custom_minimum_size = Vector2(90, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.63, 0.72, 0.67, 1)
 text = "Facilities & tools"
 vertical_alignment = 1
 
-[node name="CoverButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRow"]
+[node name="CoverButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRowScroll/ToolRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(170, 48)
 layout_mode = 2
 text = "Install light cover"
 
-[node name="MagnifierButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRow"]
+[node name="MagnifierButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRowScroll/ToolRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(155, 48)
 layout_mode = 2
 toggle_mode = true
 text = "Inspect with magnifier"
 
-[node name="SugarButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRow"]
+[node name="SugarButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRowScroll/ToolRow"]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(180, 48)
 layout_mode = 2
 text = "Place sugar water at the feeding port"
 
-[node name="ProteinButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRow"]
+[node name="ProteinButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRowScroll/ToolRow"]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(150, 48)
 layout_mode = 2
 text = "Refill protein"
 
-[node name="CleanWasteButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRow"]
+[node name="CleanWasteButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRowScroll/ToolRow"]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(170, 48)
 layout_mode = 2
 text = "Clean waste tray"
 
-[node name="ToolSpacer" type="Control" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRow"]
+[node name="ToolSpacer" type="Control" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRowScroll/ToolRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="PrototypeLabel" type="Label" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRow"]
+[node name="PrototypeLabel" type="Label" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRowScroll/ToolRow"]
 custom_minimum_size = Vector2(230, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.45, 0.54, 0.50, 1)
@@ -401,45 +409,54 @@ horizontal_alignment = 2
 vertical_alignment = 1
 autowrap_mode = 2
 
-[node name="LayoutRow" type="HBoxContainer" parent="Main/ToolBar/ToolMargin/ToolContent"]
+[node name="LayoutRowScroll" type="ScrollContainer" parent="Main/ToolBar/ToolMargin/ToolContent"]
+custom_minimum_size = Vector2(0, 58)
 layout_mode = 2
+size_flags_horizontal = 3
+horizontal_scroll_mode = 1
+vertical_scroll_mode = 0
+
+[node name="LayoutRow" type="HBoxContainer" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRowScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
 theme_override_constants/separation = 8
 
-[node name="LayoutButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
+[node name="LayoutButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRowScroll/LayoutRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(150, 42)
 layout_mode = 2
 toggle_mode = true
 text = "Module layout [L]"
 
-[node name="FacilityTypeOption" type="OptionButton" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
+[node name="FacilityTypeOption" type="OptionButton" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRowScroll/LayoutRow"]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(174, 42)
 layout_mode = 2
+fit_to_longest_item = false
 
-[node name="PlaceBoxButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
+[node name="PlaceBoxButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRowScroll/LayoutRow"]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(142, 42)
 layout_mode = 2
 text = "Start placement [P]"
 
-[node name="RotateFacilityButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
+[node name="RotateFacilityButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRowScroll/LayoutRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(112, 42)
 layout_mode = 2
 disabled = true
 text = "Rotate [R]"
 
-[node name="RemoveFacilityButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
+[node name="RemoveFacilityButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRowScroll/LayoutRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(112, 42)
 layout_mode = 2
 disabled = true
 text = "Remove [Del]"
 
-[node name="ToggleGateButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
+[node name="ToggleGateButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRowScroll/LayoutRow"]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(112, 42)
@@ -447,23 +464,23 @@ layout_mode = 2
 disabled = true
 text = "Toggle gate"
 
-[node name="LayoutSpacer" type="Control" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
+[node name="LayoutSpacer" type="Control" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRowScroll/LayoutRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="ZoomOutButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
+[node name="ZoomOutButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRowScroll/LayoutRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(48, 42)
 layout_mode = 2
 text = "−"
 
-[node name="ResetCameraButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
+[node name="ResetCameraButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRowScroll/LayoutRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(92, 42)
 layout_mode = 2
 text = "Reset view"
 
-[node name="ZoomInButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRow"]
+[node name="ZoomInButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRowScroll/LayoutRow"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(48, 42)
 layout_mode = 2

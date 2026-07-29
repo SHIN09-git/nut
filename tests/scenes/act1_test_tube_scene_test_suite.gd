@@ -392,7 +392,9 @@ func _test_supported_viewport_layouts() -> void:
 		for ui_scale: float in [1.0, 1.5]:
 			var controller: Act1TestTubeController = _create_controller(
 				viewport_size,
-				ui_scale
+				ui_scale,
+				null,
+				"en"
 			)
 			(
 				controller.get_node("%StartObservationButton") as Button
@@ -440,6 +442,40 @@ func _test_supported_viewport_layouts() -> void:
 						int(ui_scale * 100.0),
 					]
 			)
+			for node_path: String in [
+				"%SugarButton",
+				"%ProteinButton",
+				"%CleanWasteButton",
+				"%FacilityTypeOption",
+				"%PlaceBoxButton",
+				"%ToggleGateButton",
+			]:
+				(controller.get_node(node_path) as Control).visible = true
+			_settle_container_layout(controller)
+			for node_path: String in [
+				"%Title",
+				"%HelpButton",
+				"%JournalButton",
+				"Main/Body/SidePanel",
+				"Main/ToolBar",
+				"Main/ToolBar/ToolMargin/ToolContent/ToolRowScroll",
+				"Main/ToolBar/ToolMargin/ToolContent/LayoutRowScroll",
+			]:
+				var control: Control = controller.get_node(node_path) as Control
+				_expect_true(
+					viewport_rect.encloses(control.get_global_rect()),
+					(
+						"%s remains inside the maximum-tool layout "
+						+ "at %dx%d / %d%% (actual %s)"
+					)
+						% [
+							node_path,
+							int(viewport_size.x),
+							int(viewport_size.y),
+							int(ui_scale * 100.0),
+							str(control.get_global_rect()),
+						]
+				)
 			(controller.get_node("%HelpButton") as Button).pressed.emit()
 			_settle_container_layout(controller)
 			var help_panel: Control = controller.get_node(
@@ -1224,13 +1260,14 @@ func _synchronize_controller_after_direct_advance(
 func _create_controller(
 	viewport_size: Vector2,
 	ui_scale: float = 1.0,
-	scenario_data: HabitatScenarioData = null
+	scenario_data: HabitatScenarioData = null,
+	locale: String = "zh_CN"
 ) -> Act1TestTubeController:
 	var controller: Act1TestTubeController = (
 		ACT1_SCENE.instantiate() as Act1TestTubeController
 	)
 	controller.provided_settings_state = DemoSettingsState.new(
-		"zh_CN",
+		locale,
 		Vector2i(int(viewport_size.x), int(viewport_size.y)),
 		false,
 		ui_scale,
