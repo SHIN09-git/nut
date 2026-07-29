@@ -30,6 +30,9 @@ var _active_page: Control
 var _confirm_action: ConfirmAction = ConfirmAction.NONE
 var _ui_scale_theme: Theme
 var _pending_binding_action: StringName = &""
+var _profile_playtime: ProfilePlaytimeState = ProfilePlaytimeState.new()
+var _application_focused: bool = true
+var _skip_next_playtime_sample: bool = false
 
 @onready var _game_host: Control = %GameHost
 @onready var _audio_director: AudioDirector = %AudioDirector
@@ -119,9 +122,40 @@ func _ready() -> void:
 		)
 
 
+func _process(delta: float) -> void:
+	if _skip_next_playtime_sample:
+		_skip_next_playtime_sample = false
+		return
+	if (
+		not _application_focused
+		or _game_controller == null
+		or not _game_controller.has_method(
+			&"get_profile_playtime_context"
+		)
+	):
+		return
+	var context: Dictionary = _game_controller.call(
+		&"get_profile_playtime_context"
+	)
+	if not bool(context.get("active", false)):
+		return
+	_profile_playtime.advance_seconds(
+		delta,
+		int(context.get("chapter", -1)),
+		bool(context.get("completed", false))
+	)
+
+
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_TRANSLATION_CHANGED and is_node_ready():
-		_refresh_copy()
+	match what:
+		NOTIFICATION_TRANSLATION_CHANGED:
+			if is_node_ready():
+				_refresh_copy()
+		NOTIFICATION_APPLICATION_FOCUS_IN:
+			_application_focused = true
+			_skip_next_playtime_sample = true
+		NOTIFICATION_APPLICATION_FOCUS_OUT:
+			_application_focused = false
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -372,11 +406,32 @@ func _refresh_profile_summary() -> void:
 	var source_note: String = ""
 	if String(summary.get("recovered_from", "primary")) != "primary":
 		source_note = tr("SHELL_RECOVERY_NOTE")
+	var playtime_gap_note: String = (
+		" %s" % tr("R17_PLAYTIME_PARTIAL")
+		if bool(summary.get("playtime_has_legacy_gap", false))
+		else ""
+	)
+	var completion_seconds: float = float(
+		summary.get("completion_active_seconds", -1.0)
+	)
+	var completion_text: String = (
+		_format_active_duration(completion_seconds)
+		if completion_seconds >= 0.0
+		else tr("R17_PLAYTIME_NOT_RECORDED")
+	)
 	_profile_summary.text = tr("SHELL_PROFILE_SUMMARY") % [
 		_campaign_chapter_name(
 			int(summary.get("campaign_chapter", -1)),
 			bool(summary.get("campaign_completed", false))
 		),
+		_format_active_duration(
+			float(summary.get("active_play_seconds", 0.0))
+		),
+		playtime_gap_note,
+		_format_active_duration(
+			float(summary.get("chapter_active_seconds", 0.0))
+		),
+		completion_text,
 		_format_duration(float(summary.get("simulation_seconds", 0.0))),
 		_observation_name(String(summary.get("recent_observation_id", ""))),
 		String(summary.get("saved_at_utc", "—")),
@@ -399,6 +454,7 @@ func _begin_new_profile() -> void:
 			true
 		)
 		return
+	_profile_playtime.reset()
 	_create_game_controller(ACT1_SCENARIO_ID)
 	_shell_overlay.visible = false
 
@@ -413,6 +469,15 @@ func _on_continue_pressed() -> void:
 		_refresh_profile_summary()
 		return
 	var restored_simulation: ColonySimulation = load_result["simulation"]
+	var restored_playtime := ProfilePlaytimeState.new()
+	if not restored_playtime.restore(
+		load_result["envelope"]["profile_playtime"]
+	):
+		_show_status(
+			tr("SHELL_LOAD_FAILED"),
+			true
+		)
+		return
 	_create_game_controller(
 		restored_simulation.create_snapshot().scenario_id
 	)
@@ -427,6 +492,7 @@ func _on_continue_pressed() -> void:
 			true
 		)
 		return
+	_profile_playtime = restored_playtime
 	_shell_overlay.visible = false
 	if String(load_result.get("recovered_from", "primary")) != "primary":
 		_show_status(
@@ -486,8 +552,16 @@ func _destroy_game_controller() -> void:
 func _save_active_profile() -> bool:
 	if _game_controller == null:
 		return false
+	var context: Dictionary = _game_controller.call(
+		&"get_profile_playtime_context"
+	)
+	_profile_playtime.mark_completion_if_needed(
+		bool(context.get("completed", false))
+	)
 	var envelope: Dictionary = _game_controller.call(
-		&"create_profile_envelope"
+		&"create_profile_envelope",
+		"",
+		_profile_playtime.create_save_data()
 	)
 	if envelope.is_empty():
 		_game_controller.call(&"report_profile_save_result", false)
@@ -542,6 +616,8 @@ func _on_confirmation_accepted() -> void:
 			_begin_new_profile()
 		ConfirmAction.DELETE_PROFILE:
 			var result: Dictionary = _profile_store.delete_profile()
+			if result.get("ok", false):
+				_profile_playtime.reset()
 			_refresh_profile_summary()
 			_show_status(
 				tr("SHELL_DELETE_SUCCESS")
@@ -778,6 +854,21 @@ func _observation_name(observation_id: String) -> String:
 func _format_duration(seconds: float) -> String:
 	var total_seconds: int = maxi(0, int(floor(seconds)))
 	return "%02d:%02d" % [total_seconds / 60, total_seconds % 60]
+
+
+func _format_active_duration(seconds: float) -> String:
+	var total_seconds: int = maxi(0, int(floor(seconds)))
+	var hours: int = total_seconds / 3600
+	var minutes: int = (total_seconds % 3600) / 60
+	return "%02d:%02d:%02d" % [
+		hours,
+		minutes,
+		total_seconds % 60,
+	]
+
+
+func get_profile_playtime_snapshot() -> Dictionary:
+	return _profile_playtime.create_save_data()
 
 
 func _show_status(message: String, is_error: bool) -> void:

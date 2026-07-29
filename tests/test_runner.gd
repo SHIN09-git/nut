@@ -54,6 +54,9 @@ const ObservationEventTestSuiteScript: Script = preload(
 const SaveCoreTestSuiteScript: Script = preload(
 	"res://tests/save/save_core_test_suite.gd"
 )
+const ProfilePlaytimeStateTestSuiteScript: Script = preload(
+	"res://tests/save/profile_playtime_state_test_suite.gd"
+)
 const ProfileStoreTestSuiteScript: Script = preload(
 	"res://tests/save/profile_store_test_suite.gd"
 )
@@ -153,6 +156,7 @@ func _run_all_tests() -> void:
 	_run_v1_release_readiness_test_suite()
 	_run_observation_event_test_suite()
 	_run_save_core_test_suite()
+	_run_profile_playtime_state_test_suite()
 	_run_profile_store_test_suite()
 	_run_player_annotation_state_test_suite()
 	_run_demo_settings_state_test_suite()
@@ -207,6 +211,7 @@ func _validate_suite_scripts() -> bool:
 		V1ReleaseReadinessTestSuiteScript,
 		ObservationEventTestSuiteScript,
 		SaveCoreTestSuiteScript,
+		ProfilePlaytimeStateTestSuiteScript,
 		ProfileStoreTestSuiteScript,
 		PlayerAnnotationStateTestSuiteScript,
 		DemoSettingsStateTestSuiteScript,
@@ -357,6 +362,14 @@ func _run_observation_event_test_suite() -> void:
 
 func _run_save_core_test_suite() -> void:
 	var suite: SaveCoreTestSuite = SaveCoreTestSuiteScript.new()
+	suite.run()
+	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
+
+
+func _run_profile_playtime_state_test_suite() -> void:
+	var suite: ProfilePlaytimeStateTestSuite = (
+		ProfilePlaytimeStateTestSuiteScript.new()
+	)
 	suite.run()
 	_collect_suite_results(suite.get_assertion_count(), suite.get_failure_count())
 

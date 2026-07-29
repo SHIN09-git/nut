@@ -1476,7 +1476,10 @@ func get_master_volume() -> float:
 	return _demo_settings_state.get_master_volume()
 
 
-func create_profile_envelope(saved_at_utc: String = "") -> Dictionary:
+func create_profile_envelope(
+	saved_at_utc: String = "",
+	profile_playtime: Dictionary = {}
+) -> Dictionary:
 	if (
 		_preparation_gate_active
 		or not _fatal_simulation_error.is_empty()
@@ -1488,8 +1491,28 @@ func create_profile_envelope(saved_at_utc: String = "") -> Dictionary:
 		_colony_simulation,
 		_simulation_clock,
 		ProfileStore.MAIN_SLOT_ID,
-		saved_at_utc
+		saved_at_utc,
+		profile_playtime
 	)
+
+
+func get_profile_playtime_context() -> Dictionary:
+	if (
+		_preparation_gate_active
+		or not _fatal_simulation_error.is_empty()
+		or _latest_snapshot == null
+		or _latest_snapshot.campaign == null
+	):
+		return {
+			"active": false,
+			"chapter": -1,
+			"completed": false,
+		}
+	return {
+		"active": true,
+		"chapter": int(_latest_snapshot.campaign.chapter),
+		"completed": _latest_snapshot.campaign.completed,
+	}
 
 
 func start_new_profile() -> bool:

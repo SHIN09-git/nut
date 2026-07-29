@@ -26,6 +26,7 @@ var _failure_count: int = 0
 func run() -> void:
 	_test_canonical_encoding()
 	_test_legacy_numeric_encoding_migrates()
+	_test_profile_playtime_envelope_metadata()
 	_test_combined_round_trip_during_relocation()
 	_test_pending_command_survives_boundary()
 	_test_mid_tick_capture_is_deferred()
@@ -130,6 +131,104 @@ func _test_legacy_numeric_encoding_migrates() -> void:
 			result["envelope"]["save_checksum"],
 			service.seal_envelope(result["envelope"])["save_checksum"],
 			"legacy numeric envelope is resealed with current encoding"
+		)
+
+
+func _test_profile_playtime_envelope_metadata() -> void:
+	var simulation: ColonySimulation = _new_combined_simulation()
+	var service := SaveGameService.new()
+	var playtime := ProfilePlaytimeState.new()
+	playtime.advance_seconds(
+		125.5,
+		CampaignState.Chapter.FOUNDING_OBSERVATION,
+		false
+	)
+	var envelope: Dictionary = service.create_envelope(
+		simulation,
+		_clock_at(0),
+		TEST_SLOT_ID,
+		TEST_TIMESTAMP,
+		playtime.create_save_data()
+	)
+	_expect_int(
+		int(envelope.get("format_version", -1)),
+		SaveGameService.CURRENT_FORMAT_VERSION,
+		"new saves use the current envelope format"
+	)
+	_expect_true(
+		ProfilePlaytimeState.is_valid_save_data(
+			envelope.get("profile_playtime", {})
+		),
+		"new saves contain validated profile playtime metadata"
+	)
+	var load_result: Dictionary = service.load_envelope(envelope)
+	_expect_true(
+		load_result.get("ok", false),
+		"playtime-bearing envelope loads"
+	)
+	if load_result.get("ok", false):
+		var restored := ProfilePlaytimeState.new()
+		_expect_true(
+			restored.restore(
+				load_result["envelope"]["profile_playtime"]
+			),
+			"loaded playtime metadata restores"
+		)
+		_expect_float(
+			restored.get_active_seconds(),
+			125.5,
+			"active profile time survives envelope round trip"
+		)
+
+	var tampered: Dictionary = envelope.duplicate(true)
+	tampered["profile_playtime"]["active_microseconds"] += 1
+	_expect_true(
+		not service.load_envelope(tampered).get("ok", false),
+		"checksum protects profile playtime metadata"
+	)
+	var invalid_playtime: Dictionary = playtime.create_save_data()
+	invalid_playtime["active_microseconds"] = -1
+	_expect_true(
+		service.create_envelope(
+			simulation,
+			_clock_at(0),
+			TEST_SLOT_ID,
+			TEST_TIMESTAMP,
+			invalid_playtime
+		).is_empty(),
+		"invalid playtime metadata cannot be saved"
+	)
+
+	var legacy: Dictionary = envelope.duplicate(true)
+	legacy.erase("profile_playtime")
+	legacy["format_version"] = SaveGameService.LEGACY_FORMAT_VERSION
+	legacy["game_version"] = "0.3.0"
+	legacy = service.seal_envelope(legacy)
+	var legacy_result: Dictionary = service.load_envelope(legacy)
+	_expect_true(
+		legacy_result.get("ok", false),
+		"legacy format without playtime metadata migrates"
+	)
+	_expect_true(
+		legacy_result.get("migrated", false),
+		"legacy envelope reports metadata migration"
+	)
+	if legacy_result.get("ok", false):
+		var migrated_playtime := ProfilePlaytimeState.new()
+		_expect_true(
+			migrated_playtime.restore(
+				legacy_result["envelope"]["profile_playtime"]
+			),
+			"migrated envelope contains valid playtime metadata"
+		)
+		_expect_true(
+			migrated_playtime.has_legacy_gap(),
+			"legacy profile exposes its incomplete timing history"
+		)
+		_expect_float(
+			migrated_playtime.get_active_seconds(),
+			0.0,
+			"migration does not invent historical playtime"
 		)
 
 

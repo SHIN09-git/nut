@@ -270,7 +270,7 @@ layout_mode = 2
 
 [node name="ProfileSummary" type="Label" parent="ShellOverlay/Center/ProfilesPage/Margin/Content/ProfileSummaryPanel"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 120)
+custom_minimum_size = Vector2(0, 160)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.76, 0.79, 0.72, 1)
 theme_override_constants/outline_size = 4

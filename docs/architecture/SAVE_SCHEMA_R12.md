@@ -2,9 +2,13 @@
 
 > 当前 schema：`r12.authority.v10`
 >
-> 游戏版本：`0.12.0-dev`
+> 游戏版本：`1.0.0-beta`
 >
 > 状态：已实现并由自动测试覆盖
+
+权威状态 schema 仍为 `r12.authority.v10`。R17 只把外层
+`SaveEnvelope` 升级为格式 v2，用于保存不参与模拟的档案有效游玩时长；
+字段、迁移和校验边界见 `SAVE_ENVELOPE_V2.md`。
 
 ## 1. 变更目的
 

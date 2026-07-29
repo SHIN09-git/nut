@@ -1,7 +1,8 @@
 class_name SaveGameService
 extends RefCounted
 
-const CURRENT_FORMAT_VERSION: int = 1
+const CURRENT_FORMAT_VERSION: int = 2
+const LEGACY_FORMAT_VERSION: int = 1
 const CURRENT_GAME_VERSION: String = "1.0.0-beta"
 const CURRENT_CONTENT_MANIFEST_ID: String = (
 	"colony-under-glass.r2-base.1"
@@ -20,7 +21,8 @@ func create_envelope(
 	simulation: ColonySimulation,
 	clock: SimulationClock,
 	slot_id: String,
-	saved_at_utc: String = ""
+	saved_at_utc: String = "",
+	profile_playtime: Dictionary = {}
 ) -> Dictionary:
 	if (
 		simulation == null
@@ -45,6 +47,15 @@ func create_envelope(
 	)
 	if frozen_config_hash.is_empty():
 		return {}
+	var normalized_playtime: Dictionary = (
+		ProfilePlaytimeState.create_default_save_data()
+		if profile_playtime.is_empty()
+		else ProfilePlaytimeState.normalize_save_data(
+			profile_playtime
+		)
+	)
+	if normalized_playtime.is_empty():
+		return {}
 	var timestamp: String = saved_at_utc
 	if timestamp.is_empty():
 		timestamp = Time.get_datetime_string_from_system(true, true)
@@ -62,6 +73,7 @@ func create_envelope(
 		"clock_paused": clock.is_paused(),
 		"next_ids": components["next_ids"],
 		"pending_commands": components["pending_commands"],
+		"profile_playtime": normalized_playtime,
 		"state_schema_id": SimulationStateCodec.CURRENT_SCHEMA_ID,
 		"state_payload": components["state_payload"],
 	}
@@ -252,7 +264,11 @@ func _verify_and_migrate_envelope(envelope: Dictionary) -> Dictionary:
 	var initial_error: String = _validate_outer_shape(envelope)
 	if not initial_error.is_empty():
 		return _failure(initial_error)
-	if int(envelope["format_version"]) != CURRENT_FORMAT_VERSION:
+	var envelope_format_version: int = int(envelope["format_version"])
+	if envelope_format_version not in [
+		LEGACY_FORMAT_VERSION,
+		CURRENT_FORMAT_VERSION,
+	]:
 		return _failure("Unsupported save format version")
 	if String(envelope["content_manifest_id"]) != CURRENT_CONTENT_MANIFEST_ID:
 		return _failure("Save content manifest is not compatible")
@@ -278,16 +294,26 @@ func _verify_and_migrate_envelope(envelope: Dictionary) -> Dictionary:
 	if not current_config_hash_matches and not legacy_config_hash_matches:
 		return _failure("Frozen configuration hash does not match")
 
-	var migrated: bool = false
 	var current: Dictionary = envelope.duplicate(true)
+	var migrated: bool = false
+	var needs_reseal: bool = false
 	if not current_checksum_matches or not current_config_hash_matches:
 		current["frozen_config_hash"] = CanonicalSaveJson.sha256(
 			current["frozen_config_bundle"]
 		)
+		needs_reseal = true
+	if envelope_format_version == LEGACY_FORMAT_VERSION:
+		current["format_version"] = CURRENT_FORMAT_VERSION
+		current["game_version"] = CURRENT_GAME_VERSION
+		current["profile_playtime"] = (
+			ProfilePlaytimeState.create_default_save_data(true)
+		)
+		needs_reseal = true
+	if needs_reseal:
 		current = seal_envelope(current)
 		if current.is_empty():
 			return _failure(
-				"Legacy numeric encoding could not be migrated"
+				"Legacy save metadata could not be migrated"
 			)
 		migrated = true
 	match String(current["state_schema_id"]):
@@ -1955,6 +1981,17 @@ func _derive_campaign_for_v1(state_payload: Dictionary) -> Variant:
 
 
 func _validate_outer_shape(envelope: Dictionary) -> String:
+	if (
+		not envelope.has("format_version")
+		or not _is_integral_number(envelope["format_version"])
+	):
+		return "Save envelope format version is invalid"
+	var format_version: int = int(envelope["format_version"])
+	if format_version not in [
+		LEGACY_FORMAT_VERSION,
+		CURRENT_FORMAT_VERSION,
+	]:
+		return "Unsupported save format version"
 	var required_keys: Array[String] = [
 		"format_version",
 		"game_version",
@@ -1969,9 +2006,12 @@ func _validate_outer_shape(envelope: Dictionary) -> String:
 		"clock_paused",
 		"next_ids",
 		"pending_commands",
+		"profile_playtime",
 		"state_schema_id",
 		"state_payload",
 	]
+	if format_version == LEGACY_FORMAT_VERSION:
+		required_keys.erase("profile_playtime")
 	if envelope.size() != required_keys.size():
 		return "Save envelope has unexpected fields"
 	for key: String in required_keys:
@@ -1996,6 +2036,16 @@ func _validate_outer_shape(envelope: Dictionary) -> String:
 	):
 		return "Save envelope contains an invalid value type"
 	if (
+		format_version == CURRENT_FORMAT_VERSION
+		and (
+			typeof(envelope["profile_playtime"]) != TYPE_DICTIONARY
+			or not ProfilePlaytimeState.is_valid_save_data(
+				envelope["profile_playtime"]
+			)
+		)
+	):
+		return "Save envelope playtime metadata is invalid"
+	if (
 		not _is_valid_slot_id(envelope["slot_id"])
 		or String(envelope["saved_at_utc"]).is_empty()
 		or String(envelope["frozen_config_hash"]).length()
@@ -2007,6 +2057,13 @@ func _validate_outer_shape(envelope: Dictionary) -> String:
 
 
 func _validate_current_envelope(envelope: Dictionary) -> String:
+	if (
+		int(envelope["format_version"]) != CURRENT_FORMAT_VERSION
+		or not ProfilePlaytimeState.is_valid_save_data(
+			envelope.get("profile_playtime", {})
+		)
+	):
+		return "Save playtime metadata was not migrated"
 	if String(envelope["state_schema_id"]) != (
 		SimulationStateCodec.CURRENT_SCHEMA_ID
 	):

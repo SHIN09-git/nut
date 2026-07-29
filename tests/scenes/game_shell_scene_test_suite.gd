@@ -27,6 +27,7 @@ func run(scene_root: Node) -> void:
 	_cleanup()
 	TranslationServer.set_locale("zh_CN")
 	_test_title_new_save_return_and_continue_path()
+	_test_effective_playtime_uses_the_real_profile_path()
 	_test_legacy_profile_uses_legacy_scene()
 	_test_profile_delete_requires_confirmation()
 	_test_settings_persist_outside_the_profile()
@@ -127,6 +128,113 @@ func _test_title_new_save_return_and_continue_path() -> void:
 		_expect_true(
 			restored_game.is_pause_menu_open(),
 			"paused save restores to a visible pause menu"
+		)
+	_destroy_shell(shell)
+
+
+func _test_effective_playtime_uses_the_real_profile_path() -> void:
+	_cleanup()
+	var shell: GameShellController = _create_shell(Vector2(1280, 720))
+	shell._process(5.0)
+	var before_start: Dictionary = shell.get_profile_playtime_snapshot()
+	_expect_int(
+		int(before_start["active_microseconds"]),
+		0,
+		"title and preparation time are excluded"
+	)
+	(shell.get_node("%NewGameButton") as Button).pressed.emit()
+	var game: Act1TestTubeController = (
+		shell.get_game_controller() as Act1TestTubeController
+	)
+	_expect_true(game != null, "playtime fixture creates Act 1")
+	if game == null:
+		_destroy_shell(shell)
+		return
+	shell._process(3.0)
+	_expect_int(
+		int(shell.get_profile_playtime_snapshot()["active_microseconds"]),
+		0,
+		"preparation gate time remains excluded"
+	)
+	(game.get_node("%StartObservationButton") as Button).pressed.emit()
+	shell._process(2.0)
+	(game.get_node("%Speed16xButton") as Button).pressed.emit()
+	shell._process(3.0)
+	_expect_float(
+		float(
+			shell.get_profile_playtime_snapshot()[
+				"active_microseconds"
+			]
+		) / 1_000_000.0,
+		5.0,
+		"effective time is independent of simulation speed"
+	)
+	(game.get_node("%PauseButton") as Button).pressed.emit()
+	shell._process(1.0)
+	_expect_float(
+		float(
+			shell.get_profile_playtime_snapshot()[
+				"active_microseconds"
+			]
+		) / 1_000_000.0,
+		6.0,
+		"manual reading and pause-menu time remain included"
+	)
+	shell._notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
+	shell._process(4.0)
+	_expect_float(
+		float(
+			shell.get_profile_playtime_snapshot()[
+				"active_microseconds"
+			]
+		) / 1_000_000.0,
+		6.0,
+		"unfocused application time is excluded"
+	)
+	shell._notification(Node.NOTIFICATION_APPLICATION_FOCUS_IN)
+	shell._process(4.0)
+	shell._process(1.0)
+	(game.get_node("%SaveGameButton") as Button).pressed.emit()
+	var first_summary: Dictionary = ProfileStore.new(
+		TEST_PROFILE_PATH
+	).get_summary()
+	_expect_float(
+		float(first_summary.get("active_play_seconds", -1.0)),
+		7.0,
+		"pause-menu Save persists effective time"
+	)
+	_expect_float(
+		float(first_summary.get("chapter_active_seconds", -1.0)),
+		7.0,
+		"pause-menu Save persists the chapter split"
+	)
+	(game.get_node("%ReturnToTitleButton") as Button).pressed.emit()
+	(shell.get_node("%ContinueButton") as Button).pressed.emit()
+	var restored_game: Act1TestTubeController = (
+		shell.get_game_controller() as Act1TestTubeController
+	)
+	_expect_true(
+		restored_game != null,
+		"Continue restores a playtime-bearing profile"
+	)
+	if restored_game != null:
+		shell._process(1.0)
+		(restored_game.get_node("%SaveGameButton") as Button).pressed.emit()
+		var continued_summary: Dictionary = ProfileStore.new(
+			TEST_PROFILE_PATH
+		).get_summary()
+		_expect_float(
+			float(continued_summary.get("active_play_seconds", -1.0)),
+			8.0,
+			"continued sessions extend the same effective-time record"
+		)
+		(shell.get_node("%ShellOverlay") as Control).visible = true
+		(shell.get_node("%ProfilesButton") as Button).pressed.emit()
+		_expect_true(
+			(shell.get_node("%ProfileSummary") as Label).text.contains(
+				"00:00:08"
+			),
+			"profile page exposes the persisted effective duration"
 		)
 	_destroy_shell(shell)
 

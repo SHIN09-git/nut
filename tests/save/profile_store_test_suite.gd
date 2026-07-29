@@ -50,11 +50,18 @@ func _test_primary_backup_recovery_and_delete(store: ProfileStore) -> void:
 	_expect_true(simulation.is_ready(), "profile fixture simulation is ready")
 	var service: SaveGameService = SaveGameService.new()
 	_expect_true(_advance_to(simulation, 5), "profile fixture reaches Tick 5")
+	var playtime := ProfilePlaytimeState.new()
+	playtime.advance_seconds(
+		125.5,
+		CampaignState.Chapter.FOUNDING_OBSERVATION,
+		false
+	)
 	var first: Dictionary = service.create_envelope(
 		simulation,
 		_clock_at(5),
 		ProfileStore.MAIN_SLOT_ID,
-		"2026-07-28T08:00:00Z"
+		"2026-07-28T08:00:00Z",
+		playtime.create_save_data()
 	)
 	_expect_true(not first.is_empty(), "first profile envelope is valid")
 	_expect_true(
@@ -80,13 +87,33 @@ func _test_primary_backup_recovery_and_delete(store: ProfileStore) -> void:
 		not bool(first_summary.get("campaign_completed", true)),
 		"summary does not confuse an active chapter with completion"
 	)
+	_expect_float(
+		float(first_summary.get("active_play_seconds", -1.0)),
+		125.5,
+		"summary reports effective profile time"
+	)
+	_expect_float(
+		float(first_summary.get("chapter_active_seconds", -1.0)),
+		125.5,
+		"summary reports time in the authoritative current chapter"
+	)
+	_expect_float(
+		float(first_summary.get("completion_active_seconds", 0.0)),
+		-1.0,
+		"summary distinguishes an unfinished profile"
+	)
+	_expect_true(
+		not bool(first_summary.get("playtime_has_legacy_gap", true)),
+		"new profile summary has complete timing history"
+	)
 
 	_expect_true(_advance_to(simulation, 6), "profile fixture reaches Tick 6")
 	var second: Dictionary = service.create_envelope(
 		simulation,
 		_clock_at(6),
 		ProfileStore.MAIN_SLOT_ID,
-		"2026-07-28T08:01:00Z"
+		"2026-07-28T08:01:00Z",
+		playtime.create_save_data()
 	)
 	var second_result: Dictionary = store.save_envelope(second)
 	_expect_true(second_result.get("ok", false), "second profile save commits")
@@ -193,6 +220,17 @@ func _expect_string(actual: String, expected: String, message: String) -> void:
 	if actual == expected:
 		return
 	_record_failure(message, expected, actual)
+
+
+func _expect_float(
+	actual: float,
+	expected: float,
+	message: String
+) -> void:
+	_assertion_count += 1
+	if is_equal_approx(actual, expected):
+		return
+	_record_failure(message, str(expected), str(actual))
 
 
 func _record_failure(

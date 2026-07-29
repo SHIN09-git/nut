@@ -85,6 +85,9 @@ func get_summary() -> Dictionary:
 	var recent_observation_id: String = ""
 	if not cards.is_empty():
 		recent_observation_id = String(cards[-1])
+	var playtime := ProfilePlaytimeState.new()
+	if not playtime.restore(envelope["profile_playtime"]):
+		return _failure("Profile playtime metadata is invalid")
 	return {
 		"available": true,
 		"primary_exists": primary_exists,
@@ -99,6 +102,14 @@ func get_summary() -> Dictionary:
 		"phase": phase,
 		"campaign_chapter": campaign_chapter,
 		"campaign_completed": campaign_completed,
+		"active_play_seconds": playtime.get_active_seconds(),
+		"chapter_active_seconds": (
+			playtime.get_chapter_active_seconds(campaign_chapter)
+		),
+		"completion_active_seconds": (
+			playtime.get_completion_active_seconds()
+		),
+		"playtime_has_legacy_gap": playtime.has_legacy_gap(),
 		"saved_at_utc": String(envelope["saved_at_utc"]),
 		"recent_observation_id": recent_observation_id,
 		"error": "",
