@@ -6,7 +6,7 @@ R14 已为正式六章主流程接入原创生产视觉：暖玻璃观察台标�
 
 R15 增加项目自有的低干扰玻璃观察氛围和八个有限反馈音，分别覆盖界面、遮光、补水、设施、闸门、手册、章节与报告。主音量、环境氛围和操作反馈可以独立调整；音频只强化已有画面与文字，不承担唯一信息。简体中文与英文玩家文案已完成本轮逐条校对和格式占位检查。
 
-R16 正在冻结 Windows v1.0 Beta 候选：标题页现有双语“制作名单与隐私”入口；发行资料包含项目 Credits、离线隐私说明、Beta 发布说明，以及从精确 Godot 4.7.1 二进制导出的完整引擎／第三方许可。最大规模目标为 80 只工蚁、180 个幼体、48 项设施和 36 个逻辑区域；权威模拟保留全部实体，画面按稳定 ID 优先显示活动个体并将同时存在的蚂蚁视觉节点限制在 240 个。
+R16 Windows v1.0 Beta 技术候选已经冻结：标题页现有双语“制作名单与隐私”入口；发行资料包含项目 Credits、离线隐私说明、Beta 发布说明，以及从精确 Godot 4.7.1 二进制导出的完整引擎／第三方许可。最大规模验证覆盖 80 只工蚁、180 个幼体、48 项设施和 36 个逻辑区域；权威模拟保留全部实体，画面按稳定 ID 优先显示活动个体并将同时存在的蚂蚁视觉节点限制在 240 个。40,381 项回归、144,000 Tick 完整档案、300,000 Tick 最大规模、干净 Windows 流程和最终显示矩阵的证据见 `docs/validation/v1_r16_beta_candidate_001.md`。
 
 ## 当前功能
 
@@ -191,7 +191,7 @@ New-Item -ItemType Directory -Force -Path '.\builds\windows'
 - 物种与节奏参数均未经科学审校；本轮文本终校不构成物种级科学审校。
 - 正式原创视觉与音频已经登记；仍未加入 Steam、第三方插件或商店发布授权。
 
-v0.1 发布基线见 `docs/validation/v0.1_baseline_001.md`；M2 身份验证见 `docs/validation/worker_identity_001.md`；M3 糖水验证见 `docs/validation/sugar_foraging_001.md`；M4 连续体验验证见 `docs/validation/v0_2_combined_001.md`；R0-A／R0-B 与 M5 记录位于 `docs/validation/`；R1～R15 的技术验证分别见同目录的 `v1_r1_…` 至 `v1_r15_…` 记录。R16 冻结后使用 `docs/validation/v1_r16_beta_candidate_001.md` 记录最终性能、Windows 包、显示矩阵与哈希。
+v0.1 发布基线见 `docs/validation/v0.1_baseline_001.md`；M2 身份验证见 `docs/validation/worker_identity_001.md`；M3 糖水验证见 `docs/validation/sugar_foraging_001.md`；M4 连续体验验证见 `docs/validation/v0_2_combined_001.md`；R0-A／R0-B 与 M5 记录位于 `docs/validation/`；R1～R15 的技术验证分别见同目录的 `v1_r1_…` 至 `v1_r15_…` 记录；R16 最终性能、Windows 包、显示矩阵与哈希见 `docs/validation/v1_r16_beta_candidate_001.md`。
 
 未来 3～4 小时完整独立游戏的章节、设施、音画、验证与发行路线见 `CODEX_V1_MASTER_PLAN.md`；当前存档 schema 见 `docs/architecture/SAVE_SCHEMA_R12.md`，R11／R10／R9／R8／R7／R6／R5／R4／R2 文档保留为历史基线。这些计划不表示未来能力已经实现；当前可运行事实仍以本 README、`GDD.md` 和 `ARCHITECTURE.md` 为准。
 
