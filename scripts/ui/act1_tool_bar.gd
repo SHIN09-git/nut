@@ -31,6 +31,9 @@ signal zoom_in_requested
 @onready var reset_camera_button: Button = %ResetCameraButton
 @onready var zoom_in_button: Button = %ZoomInButton
 @onready var action_feedback_label: Label = %ActionFeedbackLabel
+@onready var context_label: Label = %ContextLabel
+@onready var layout_controls: ScrollContainer = %LayoutRowScroll
+@onready var prototype_label: Label = %PrototypeLabel
 
 
 func _ready() -> void:
@@ -65,7 +68,8 @@ func set_copy(
 	rotate_text: String,
 	remove_text: String,
 	gate_text: String,
-	reset_camera_text: String
+	reset_camera_text: String,
+	prototype_notice_text: String
 ) -> void:
 	cover_button.text = cover_text
 	magnifier_button.text = magnifier_text
@@ -77,10 +81,16 @@ func set_copy(
 	remove_button.text = remove_text
 	gate_button.text = gate_text
 	reset_camera_button.text = reset_camera_text
+	prototype_label.text = prototype_notice_text
 
 
 func set_layout_enabled(value: bool) -> void:
 	layout_button.button_pressed = value
+	layout_controls.visible = value
+
+
+func set_context_text(value: String) -> void:
+	context_label.text = value
 
 
 func set_feedback(

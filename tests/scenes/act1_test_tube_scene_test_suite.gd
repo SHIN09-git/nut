@@ -16,6 +16,7 @@ var _scene_root: Node
 func run(scene_root: Node) -> void:
 	_scene_root = scene_root
 	_test_component_and_theme_boundaries()
+	_test_contextual_hud_and_inspector()
 	_test_real_controls_complete_both_chapters()
 	_test_chapter_five_real_layout_and_migration_path()
 	_test_help_overlay_focus_and_pause()
@@ -93,7 +94,101 @@ func _test_component_and_theme_boundaries() -> void:
 			== "res://themes/styles/observation_card.tres",
 		"observation cards share one external style resource"
 	)
+	_expect_int(
+		(
+			controller.get_node(
+				"Main/ToolBar/ToolMargin/ToolContent/ToolRowScroll"
+			) as ScrollContainer
+		).horizontal_scroll_mode,
+		ScrollContainer.SCROLL_MODE_DISABLED,
+		"ordinary context actions do not use horizontal scrolling"
+	)
+	_expect_int(
+		(
+			controller.get_node("%LayoutRowScroll") as ScrollContainer
+		).horizontal_scroll_mode,
+		ScrollContainer.SCROLL_MODE_DISABLED,
+		"layout context actions do not use horizontal scrolling"
+	)
 	controller.free()
+
+
+func _test_contextual_hud_and_inspector() -> void:
+	var controller: Act1TestTubeController = _create_controller(
+		Vector2(1280, 720)
+	)
+	(controller.get_node("%StartObservationButton") as Button).pressed.emit()
+	_settle_container_layout(controller)
+	var layout_controls: Control = controller.get_node(
+		"%LayoutRowScroll"
+	) as Control
+	_expect_true(
+		not layout_controls.visible,
+		"layout-only actions stay hidden during ordinary observation"
+	)
+	var objective_label: Label = controller.get_node(
+		"%ObjectiveLabel"
+	) as Label
+	_expect_int(
+		objective_label.text.split("\n").size(),
+		1,
+		"observation trace shows one current target instead of a full checklist"
+	)
+	var body: Control = controller.get_node("Main/Body") as Control
+	var habitat_panel: Control = controller.get_node(
+		"Main/Body/HabitatPanel"
+	) as Control
+	var main: Control = controller.get_node("Main") as Control
+	_expect_true(
+		habitat_panel.size.x / body.size.x >= 0.65,
+		"habitat world keeps at least 65 percent of the content width"
+	)
+	_expect_true(
+		body.size.y / main.size.y >= 0.65,
+		"habitat body keeps at least 65 percent of the content height"
+	)
+	var layout_button: Button = controller.get_node("%LayoutButton") as Button
+	layout_button.button_pressed = true
+	layout_button.pressed.emit()
+	_settle_container_layout(controller)
+	_expect_true(
+		layout_controls.visible,
+		"layout actions appear only after entering layout editing"
+	)
+	var context_label: Label = controller.get_node("%ContextLabel") as Label
+	_expect_true(
+		not context_label.text.is_empty(),
+		"context action bar describes the current interaction mode"
+	)
+	var view: Act1TestTubeView = controller.get_node(
+		"%Act1TestTubeView"
+	) as Act1TestTubeView
+	view.get_layout_view()._set_selected_facility(1)
+	_expect_true(
+		(controller.get_node("%InspectPanel") as Control).visible,
+		"selecting a facility opens the shared inspector"
+	)
+	_expect_true(
+		(controller.get_node("%InspectLabel") as Label).text.contains("001"),
+		"facility inspector preserves the selected stable ID"
+	)
+	var snapshot: GameSnapshot = controller.get_latest_snapshot()
+	if not snapshot.colony.ants.is_empty():
+		var worker: AntSnapshot = snapshot.colony.ants[0]
+		worker.life_stage = AntModel.LifeStage.WORKER
+		worker.zone_id = &"test_tube_nest"
+		_expect_true(
+			view.apply_snapshot(snapshot),
+			"worker inspector fixture remains a snapshot-only projection"
+		)
+		controller._on_worker_selected(worker.entity_id)
+		_expect_true(
+			(controller.get_node("%InspectLabel") as Label).text.contains(
+				"%03d" % worker.entity_id
+			),
+			"worker inspector follows the selected stable entity ID"
+		)
+	_destroy_controller(controller)
 
 
 func _test_help_overlay_focus_and_pause() -> void:

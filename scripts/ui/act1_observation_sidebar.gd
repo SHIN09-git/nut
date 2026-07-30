@@ -10,6 +10,7 @@ signal journal_requested
 @onready var guidance_label: Label = %GuidanceLabel
 @onready var journal_button: Button = %JournalButton
 @onready var inspect_panel: PanelContainer = %InspectPanel
+@onready var inspect_heading: Label = %InspectHeading
 @onready var inspect_label: Label = %InspectLabel
 
 
@@ -20,11 +21,13 @@ func _ready() -> void:
 func set_copy(
 	objective_heading_text: String,
 	evidence_heading_text: String,
-	journal_button_text: String
+	journal_button_text: String,
+	inspect_heading_text: String
 ) -> void:
 	objective_heading.text = objective_heading_text
 	evidence_heading.text = evidence_heading_text
 	journal_button.text = journal_button_text
+	inspect_heading.text = inspect_heading_text
 
 
 func set_observation_text(

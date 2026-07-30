@@ -31,11 +31,13 @@ func _ready() -> void:
 
 func set_copy(
 	title_text: String,
-	help_tooltip: String
+	help_tooltip: String,
+	pause_text: String
 ) -> void:
 	title_label.text = title_text
 	help_button.text = "?"
 	help_button.tooltip_text = help_tooltip
+	pause_button.text = pause_text
 
 
 func set_runtime_state(

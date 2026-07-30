@@ -79,7 +79,7 @@ theme_override_constants/separation = 10
 
 [node name="Header" type="PanelContainer" parent="Main"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 70)
+custom_minimum_size = Vector2(0, 64)
 layout_mode = 2
 theme_override_styles/panel = SubResource("Style_header")
 script = ExtResource("7_top_bar")
@@ -96,7 +96,7 @@ layout_mode = 2
 theme_override_constants/separation = 8
 
 [node name="TitleBlock" type="VBoxContainer" parent="Main/Header/HeaderMargin/HeaderRow"]
-custom_minimum_size = Vector2(390, 0)
+custom_minimum_size = Vector2(300, 0)
 layout_mode = 2
 theme_override_constants/separation = 1
 
@@ -104,7 +104,7 @@ theme_override_constants/separation = 1
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.93, 0.84, 0.62, 1)
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 21
 text = "Colony Under Glass · Test-tube Founding"
 
 [node name="ChapterLabel" type="Label" parent="Main/Header/HeaderMargin/HeaderRow/TitleBlock"]
@@ -119,7 +119,7 @@ size_flags_horizontal = 3
 
 [node name="StatusLabel" type="Label" parent="Main/Header/HeaderMargin/HeaderRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(116, 0)
+custom_minimum_size = Vector2(104, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.68, 0.86, 0.72, 1)
 text = "Observing · 1×"
@@ -183,7 +183,7 @@ layout_mode = 2
 
 [node name="SidePanel" type="PanelContainer" parent="Main/Body"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(360, 0)
+custom_minimum_size = Vector2(300, 0)
 layout_mode = 2
 theme_override_styles/panel = SubResource("Style_panel")
 script = ExtResource("8_sidebar")
@@ -202,7 +202,7 @@ size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
 [node name="SideContent" type="VBoxContainer" parent="Main/Body/SidePanel/SideMargin/SideScroll"]
-custom_minimum_size = Vector2(330, 0)
+custom_minimum_size = Vector2(276, 0)
 layout_mode = 2
 theme_override_constants/separation = 8
 
@@ -219,7 +219,7 @@ theme_override_styles/panel = ExtResource("6_card")
 
 [node name="ObjectiveLabel" type="Label" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent/ObjectiveCard"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(306, 0)
+custom_minimum_size = Vector2(252, 0)
 layout_mode = 2
 text = "○ Install light cover\n○ Observe queen care\n○ Record the first pupa"
 autowrap_mode = 2
@@ -238,7 +238,7 @@ theme_override_styles/panel = ExtResource("6_card")
 
 [node name="EvidenceLabel" type="Label" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent/EvidenceCard"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(306, 0)
+custom_minimum_size = Vector2(252, 0)
 layout_mode = 2
 size_flags_vertical = 3
 text = "• Keep observing visible changes"
@@ -246,7 +246,7 @@ autowrap_mode = 2
 
 [node name="GuidanceLabel" type="Label" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(330, 52)
+custom_minimum_size = Vector2(276, 52)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.82, 0.74, 0.55, 1)
 text = "Install the light cover and observe the queen's response."
@@ -265,16 +265,27 @@ visible = false
 layout_mode = 2
 theme_override_styles/panel = ExtResource("6_card")
 
-[node name="InspectLabel" type="Label" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent/InspectPanel"]
+[node name="InspectContent" type="VBoxContainer" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent/InspectPanel"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="InspectHeading" type="Label" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent/InspectPanel/InspectContent"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(306, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.91, 0.80, 0.56, 1)
+theme_override_font_sizes/font_size = 17
+text = "Selected object"
+
+[node name="InspectLabel" type="Label" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent/InspectPanel/InspectContent"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(252, 0)
 layout_mode = 2
 text = "Inspect"
 autowrap_mode = 2
 
 [node name="ToolBar" type="PanelContainer" parent="Main"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 154)
+custom_minimum_size = Vector2(0, 76)
 layout_mode = 2
 theme_override_styles/panel = SubResource("Style_panel")
 script = ExtResource("9_tool_bar")
@@ -290,19 +301,28 @@ theme_override_constants/margin_bottom = 8
 layout_mode = 2
 theme_override_constants/separation = 6
 
+[node name="ContextLabel" type="Label" parent="Main/ToolBar/ToolMargin/ToolContent"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.78, 0.69, 0.49, 1)
+theme_override_font_sizes/font_size = 14
+text = "Observation actions"
+
 [node name="ToolRowScroll" type="ScrollContainer" parent="Main/ToolBar/ToolMargin/ToolContent"]
-custom_minimum_size = Vector2(0, 64)
+custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 size_flags_horizontal = 3
-horizontal_scroll_mode = 1
+horizontal_scroll_mode = 0
 vertical_scroll_mode = 0
 
-[node name="ToolRow" type="HBoxContainer" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRowScroll"]
+[node name="ToolRow" type="HFlowContainer" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRowScroll"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 10
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 6
 
 [node name="ToolLabel" type="Label" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRowScroll/ToolRow"]
+visible = false
 custom_minimum_size = Vector2(90, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.63, 0.72, 0.67, 1)
@@ -311,13 +331,13 @@ vertical_alignment = 1
 
 [node name="CoverButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRowScroll/ToolRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(170, 48)
+custom_minimum_size = Vector2(142, 42)
 layout_mode = 2
 text = "Install light cover"
 
 [node name="MagnifierButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRowScroll/ToolRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(155, 48)
+custom_minimum_size = Vector2(142, 42)
 layout_mode = 2
 toggle_mode = true
 text = "Inspect with magnifier"
@@ -325,81 +345,81 @@ text = "Inspect with magnifier"
 [node name="SugarButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRowScroll/ToolRow"]
 unique_name_in_owner = true
 visible = false
-custom_minimum_size = Vector2(180, 48)
+custom_minimum_size = Vector2(158, 42)
 layout_mode = 2
 text = "Place sugar water at the feeding port"
 
 [node name="ProteinButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRowScroll/ToolRow"]
 unique_name_in_owner = true
 visible = false
-custom_minimum_size = Vector2(150, 48)
+custom_minimum_size = Vector2(138, 42)
 layout_mode = 2
 text = "Refill protein"
 
 [node name="CleanWasteButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRowScroll/ToolRow"]
 unique_name_in_owner = true
 visible = false
-custom_minimum_size = Vector2(170, 48)
+custom_minimum_size = Vector2(148, 42)
 layout_mode = 2
 text = "Clean waste tray"
 
-[node name="ToolSpacer" type="Control" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRowScroll/ToolRow"]
+[node name="LayoutButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRowScroll/ToolRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(142, 42)
 layout_mode = 2
-size_flags_horizontal = 3
+toggle_mode = true
+text = "Module layout [L]"
 
 [node name="PrototypeLabel" type="Label" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRowScroll/ToolRow"]
-custom_minimum_size = Vector2(230, 0)
+unique_name_in_owner = true
+custom_minimum_size = Vector2(270, 0)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.45, 0.54, 0.50, 1)
 theme_override_font_sizes/font_size = 12
-text = "Prototype pacing; not real species-care advice"
+text = "Prototype pacing; not husbandry advice"
 horizontal_alignment = 2
 vertical_alignment = 1
 autowrap_mode = 2
 
 [node name="LayoutRowScroll" type="ScrollContainer" parent="Main/ToolBar/ToolMargin/ToolContent"]
-custom_minimum_size = Vector2(0, 58)
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 size_flags_horizontal = 3
-horizontal_scroll_mode = 1
+horizontal_scroll_mode = 0
 vertical_scroll_mode = 0
 
-[node name="LayoutRow" type="HBoxContainer" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRowScroll"]
+[node name="LayoutRow" type="HFlowContainer" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRowScroll"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 8
-
-[node name="LayoutButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRowScroll/LayoutRow"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(150, 42)
-layout_mode = 2
-toggle_mode = true
-text = "Module layout [L]"
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 6
 
 [node name="FacilityTypeOption" type="OptionButton" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRowScroll/LayoutRow"]
 unique_name_in_owner = true
 visible = false
-custom_minimum_size = Vector2(174, 42)
+custom_minimum_size = Vector2(160, 42)
 layout_mode = 2
 fit_to_longest_item = false
 
 [node name="PlaceBoxButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRowScroll/LayoutRow"]
 unique_name_in_owner = true
 visible = false
-custom_minimum_size = Vector2(142, 42)
+custom_minimum_size = Vector2(132, 42)
 layout_mode = 2
 text = "Start placement [P]"
 
 [node name="RotateFacilityButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRowScroll/LayoutRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(112, 42)
+custom_minimum_size = Vector2(104, 42)
 layout_mode = 2
 disabled = true
 text = "Rotate [R]"
 
 [node name="RemoveFacilityButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRowScroll/LayoutRow"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(112, 42)
+custom_minimum_size = Vector2(104, 42)
 layout_mode = 2
 disabled = true
 text = "Remove [Del]"
@@ -407,14 +427,10 @@ text = "Remove [Del]"
 [node name="ToggleGateButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRowScroll/LayoutRow"]
 unique_name_in_owner = true
 visible = false
-custom_minimum_size = Vector2(112, 42)
+custom_minimum_size = Vector2(104, 42)
 layout_mode = 2
 disabled = true
 text = "Toggle gate"
-
-[node name="LayoutSpacer" type="Control" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRowScroll/LayoutRow"]
-layout_mode = 2
-size_flags_horizontal = 3
 
 [node name="ZoomOutButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/LayoutRowScroll/LayoutRow"]
 unique_name_in_owner = true

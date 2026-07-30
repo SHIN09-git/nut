@@ -222,7 +222,12 @@ func _connect_controls() -> void:
 		_on_facility_removal_requested
 	)
 	_habitat_view.facility_selection_changed.connect(
-		func(_facility_id: int) -> void:
+		func(facility_id: int) -> void:
+			if facility_id >= 0:
+				_habitat_view.set_selected_worker_id(-1)
+				_magnifier_active = true
+				_sidebar.set_inspector_visible(true)
+			_update_inspector()
 			_update_controls()
 	)
 	_habitat_view.facility_feedback_requested.connect(
@@ -568,8 +573,8 @@ func _update_main_panel() -> void:
 	var campaign: CampaignSnapshot = _latest_snapshot.campaign
 	_top_bar.chapter_label.text = _chapter_name(campaign.chapter)
 	_sidebar.set_observation_text(
-		_objective_text(campaign),
-		_evidence_text(campaign),
+		_current_observation_text(campaign),
+		_recent_evidence_text(campaign),
 		_guidance_text(campaign)
 	)
 	if campaign.completed and _latest_snapshot.act1.final_report_available:
@@ -770,6 +775,9 @@ func _update_controls() -> void:
 		if layout_available
 		else null
 	)
+	_tool_bar.set_context_text(
+		_context_action_text(layout_mode, selected_facility)
+	)
 	var can_edit_selected: bool = (
 		not blocked
 		and layout_mode
@@ -937,9 +945,35 @@ func _update_inspector() -> void:
 		)
 		if worker != null:
 			_sidebar.set_inspector_text(
-				tr("ACT1_INSPECT_WORKER") % [
+				tr("R19_INSPECT_WORKER") % [
 					selected_id,
 					_worker_activity(worker),
+					_zone_display_name(worker.zone_id),
+					_carried_item_text(worker),
+				]
+			)
+			return
+	var selected_facility_id: int = _habitat_view.get_selected_facility_id()
+	if (
+		selected_facility_id >= 0
+		and _latest_snapshot.layout != null
+	):
+		var facility: FacilitySnapshot = (
+			_latest_snapshot.layout.get_facility(selected_facility_id)
+		)
+		if facility != null:
+			_sidebar.set_inspector_text(
+				tr("R19_INSPECT_FACILITY") % [
+					_facility_display_name(facility.type_id),
+					facility.facility_id,
+					_zone_display_name(facility.zone_id),
+					_environment_cue_text(facility),
+					facility.ports.size(),
+					tr(
+						"R19_FACILITY_REMOVABLE"
+						if facility.player_removable
+						else "R19_FACILITY_FIXED"
+					),
 				]
 			)
 			return
@@ -1177,6 +1211,16 @@ func _objective_text(campaign: CampaignSnapshot) -> String:
 	]
 
 
+func _current_observation_text(campaign: CampaignSnapshot) -> String:
+	var lines: PackedStringArray = _objective_text(campaign).split("\n")
+	for line: String in lines:
+		if line.begins_with("○"):
+			return line
+	if campaign.status == CampaignState.Status.AWAITING_INFERENCE:
+		return tr("ACT1_GUIDANCE_INFERENCE")
+	return _guidance_text(campaign)
+
+
 func _evidence_text(campaign: CampaignSnapshot) -> String:
 	var lines: PackedStringArray = []
 	for evidence_id: StringName in _chapter_evidence_ids(campaign.chapter):
@@ -1185,6 +1229,16 @@ func _evidence_text(campaign: CampaignSnapshot) -> String:
 	if lines.is_empty():
 		lines.append("• " + tr("CAMPAIGN_EVIDENCE_NONE"))
 	return "\n".join(lines)
+
+
+func _recent_evidence_text(campaign: CampaignSnapshot) -> String:
+	var all_lines: PackedStringArray = _evidence_text(campaign).split("\n")
+	if all_lines.size() <= 3:
+		return "\n".join(all_lines)
+	var recent_lines: PackedStringArray = []
+	for index: int in range(all_lines.size() - 3, all_lines.size()):
+		recent_lines.append(all_lines[index])
+	return "\n".join(recent_lines)
 
 
 func _chapter_evidence_ids(chapter: int) -> Array[StringName]:
@@ -1435,6 +1489,68 @@ func _worker_activity(worker: AntSnapshot) -> String:
 	return tr("ACT1_WORKER_RESTING")
 
 
+func _context_action_text(
+	layout_mode: bool,
+	selected_facility: FacilitySnapshot
+) -> String:
+	if not layout_mode:
+		return tr("R19_CONTEXT_OBSERVATION")
+	if selected_facility != null:
+		return tr("R19_CONTEXT_FACILITY") % (
+			_facility_display_name(selected_facility.type_id)
+		)
+	return tr("R19_CONTEXT_LAYOUT")
+
+
+func _zone_display_name(zone_id: StringName) -> String:
+	if zone_id.is_empty():
+		return tr("R19_ZONE_IN_TRANSIT")
+	match zone_id:
+		&"test_tube_nest":
+			return tr("R19_ZONE_TEST_TUBE")
+		&"tube_passage":
+			return tr("R19_ZONE_PASSAGE")
+		&"foraging_box":
+			return tr("R19_ZONE_FORAGING")
+	return String(zone_id).replace("_", " ")
+
+
+func _carried_item_text(worker: AntSnapshot) -> String:
+	if worker.carried_brood_id >= 0:
+		return tr("R19_CARRYING_BROOD") % worker.carried_brood_id
+	if (
+		worker.migration_task != null
+		and worker.migration_task.carried_entity_id >= 0
+	):
+		return tr("R19_CARRYING_BROOD") % (
+			worker.migration_task.carried_entity_id
+		)
+	return tr("R19_CARRYING_NONE")
+
+
+func _environment_cue_text(facility: FacilitySnapshot) -> String:
+	var humidity_cue: String = tr("R19_HUMIDITY_BALANCED")
+	if facility.zone_humidity < 0.35:
+		humidity_cue = tr("R19_HUMIDITY_DRY")
+	elif facility.zone_humidity > 0.75:
+		humidity_cue = tr("R19_HUMIDITY_DAMP")
+	var light_cue: String = (
+		tr("R19_LIGHT_SHELTERED")
+		if facility.zone_light_exposure < 0.35
+		else tr("R19_LIGHT_EXPOSED")
+	)
+	var pollution_cue: String = (
+		tr("R19_POLLUTION_PRESENT")
+		if facility.zone_pollution >= 0.3
+		else tr("R19_POLLUTION_CLEAR")
+	)
+	return "%s · %s · %s" % [
+		humidity_cue,
+		light_cue,
+		pollution_cue,
+	]
+
+
 func _completion_report_text() -> String:
 	if _latest_snapshot == null:
 		return tr("ACT1_COMPLETION_BODY")
@@ -1474,12 +1590,14 @@ func _refresh_copy() -> void:
 				DemoSettingsState.ACTION_HELP
 			)
 			if _settings_state != null else "F1"
-		)
+		),
+		tr("R19_PAUSE_BUTTON")
 	)
 	_sidebar.set_copy(
 		tr("ACT1_OBJECTIVE_HEADING"),
 		tr("ACT1_EVIDENCE_HEADING"),
-		tr("CAMPAIGN_JOURNAL_OPEN")
+		tr("CAMPAIGN_JOURNAL_OPEN"),
+		tr("R19_INSPECTOR_HEADING")
 	)
 	_tool_bar.set_copy(
 		tr("ACT1_TOOL_COVER"),
@@ -1491,7 +1609,8 @@ func _refresh_copy() -> void:
 		tr("R7_LAYOUT_ROTATE"),
 		tr("R7_LAYOUT_REMOVE"),
 		tr("R10_GATE_TOGGLE"),
-		tr("R7_LAYOUT_RESET_CAMERA")
+		tr("R7_LAYOUT_RESET_CAMERA"),
+		tr("R19_PROTOTYPE_NOTICE")
 	)
 	_preparation_gate.set_copy(
 		tr("ACT1_PREPARATION_HEADING"),
