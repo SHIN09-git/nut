@@ -71,8 +71,13 @@ const PRODUCTION_FACILITY_TYPES: Array[StringName] = [
 ]
 
 var _snapshot: HabitatLayoutSnapshot
+var _zone_snapshots: Array[HabitatZoneSnapshot] = []
+var _spatial_projection: HabitatSpatialProjection = (
+	HabitatSpatialProjection.new()
+)
 var _camera_zoom: float = 1.0
 var _camera_offset: Vector2 = Vector2.ZERO
+var _editing_enabled: bool = false
 var _selected_facility_id: int = -1
 var _placement_type_id: StringName = &""
 var _placement_slot: Vector2i = Vector2i.ZERO
@@ -84,7 +89,7 @@ var _facility_hit_rects: Dictionary[int, Rect2] = {}
 
 func _ready() -> void:
 	focus_mode = Control.FOCUS_ALL
-	mouse_filter = Control.MOUSE_FILTER_STOP
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	queue_redraw()
 
 
@@ -101,6 +106,15 @@ func _notification(what: int) -> void:
 func apply_snapshot(snapshot: HabitatLayoutSnapshot) -> bool:
 	if snapshot == null or not snapshot.active:
 		return false
+	if not _spatial_projection.configure(
+		snapshot.grid_size,
+		Rect2(
+			Vector2.ZERO,
+			Vector2(snapshot.grid_size) * CELL_SIZE
+		),
+		0.0
+	):
+		return false
 	_snapshot = snapshot
 	if _snapshot.get_facility(_selected_facility_id) == null:
 		_set_selected_facility(-1)
@@ -113,12 +127,39 @@ func apply_snapshot(snapshot: HabitatLayoutSnapshot) -> bool:
 	return true
 
 
+func apply_zone_topology(zones: Array[HabitatZoneSnapshot]) -> void:
+	_zone_snapshots.assign(zones)
+	queue_redraw()
+
+
+func set_editing_enabled(value: bool) -> void:
+	if _editing_enabled == value:
+		return
+	_editing_enabled = value
+	mouse_filter = (
+		Control.MOUSE_FILTER_STOP
+		if _editing_enabled
+		else Control.MOUSE_FILTER_IGNORE
+	)
+	if _editing_enabled:
+		grab_focus()
+	else:
+		cancel_placement()
+	queue_redraw()
+
+
+func is_editing_enabled() -> bool:
+	return _editing_enabled
+
+
 func begin_placement(type_id: StringName) -> bool:
 	if _snapshot == null:
 		interaction_feedback.emit(
 			InteractionFeedback.PLACEMENT_UNAVAILABLE
 		)
 		return false
+	if not _editing_enabled:
+		set_editing_enabled(true)
 	if _snapshot.action_pending:
 		interaction_feedback.emit(InteractionFeedback.ACTION_PENDING)
 		return false
@@ -218,7 +259,7 @@ func pan_by(delta: Vector2) -> void:
 
 
 func handle_keyboard_action(keycode: Key) -> bool:
-	if not visible or _snapshot == null:
+	if not visible or not _editing_enabled or _snapshot == null:
 		return false
 	match keycode:
 		KEY_P:
@@ -333,6 +374,8 @@ func select_next_facility() -> bool:
 
 
 func _gui_input(event: InputEvent) -> void:
+	if not _editing_enabled:
+		return
 	var button: InputEventMouseButton = event as InputEventMouseButton
 	if button != null:
 		if button.button_index == MOUSE_BUTTON_WHEEL_UP and button.pressed:
@@ -467,17 +510,54 @@ func _view_to_slot(view_position: Vector2) -> Vector2i:
 	var world: Vector2 = (
 		(view_position - _grid_origin()) / _camera_zoom
 	)
-	return Vector2i(
-		floori(world.x / CELL_SIZE),
-		floori(world.y / CELL_SIZE)
-	)
+	return _spatial_projection.world_to_slot(world)
 
 
 func _slot_rect(slot: Vector2i, footprint: Vector2i) -> Rect2:
-	return Rect2(
-		_world_to_view(Vector2(slot) * CELL_SIZE),
-		Vector2(footprint) * CELL_SIZE * _camera_zoom
+	var world_rect: Rect2 = _spatial_projection.slot_rect(
+		slot,
+		footprint
 	)
+	return Rect2(
+		_world_to_view(world_rect.position),
+		world_rect.size * _camera_zoom
+	)
+
+
+func project_zone_position(
+	zone_id: StringName,
+	entity_id: int = 0
+) -> Vector2:
+	if _snapshot == null:
+		return size * 0.5
+	var anchor: Variant = _spatial_projection.find_logical_zone_anchor(
+		_snapshot,
+		_zone_snapshots,
+		zone_id
+	)
+	if not anchor is Vector2:
+		return size * 0.5
+	var offset: Vector2 = Vector2.ZERO
+	if entity_id > 0:
+		offset = Vector2(
+			float(posmod(entity_id, 3) - 1) * 15.0,
+			float(
+				posmod(
+					floori(float(entity_id) / 3.0),
+					3
+				) - 1
+			) * 10.0
+		)
+	return _world_to_view(anchor as Vector2) + offset
+
+
+func project_facility_rect(facility_id: int) -> Rect2:
+	if _snapshot == null:
+		return Rect2()
+	var facility: FacilitySnapshot = _snapshot.get_facility(facility_id)
+	if facility == null:
+		return Rect2()
+	return _slot_rect(facility.slot, facility.footprint)
 
 
 func _clamp_camera_offset() -> void:
@@ -503,43 +583,60 @@ func _clamp_camera_offset() -> void:
 
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), BACKGROUND_COLOR)
 	if _snapshot == null:
 		return
 	_facility_hit_rects.clear()
-	_draw_grid()
+	if _editing_enabled:
+		draw_rect(
+			Rect2(Vector2.ZERO, size),
+			BACKGROUND_COLOR.lerp(Color.TRANSPARENT, 0.22)
+		)
+		_draw_grid()
 	_draw_connections()
 	for facility: FacilitySnapshot in _snapshot.facilities:
 		if facility.available:
 			_draw_facility(facility)
-	for facility: FacilitySnapshot in _snapshot.facilities:
-		if (
-			facility.available
-			and facility.placement_layer
-				!= FacilityData.PlacementLayer.OVERLAY
-		):
-			_draw_facility_label(facility)
-	if is_placing():
-		_draw_placement_preview()
-	_draw_hud()
+	if _editing_enabled:
+		for facility: FacilitySnapshot in _snapshot.facilities:
+			if (
+				facility.available
+				and facility.placement_layer
+					!= FacilityData.PlacementLayer.OVERLAY
+			):
+				_draw_facility_label(facility)
+		if is_placing():
+			_draw_placement_preview()
+		_draw_hud()
 
 
 func _draw_grid() -> void:
-	var grid_size_pixels: Vector2 = Vector2(_snapshot.grid_size) * CELL_SIZE
+	var grid_rect: Rect2 = _spatial_projection.get_grid_rect()
 	for x: int in range(_snapshot.grid_size.x + 1):
 		var start: Vector2 = _world_to_view(
-			Vector2(float(x) * CELL_SIZE, 0.0)
+			Vector2(
+				grid_rect.position.x + float(x) * CELL_SIZE,
+				grid_rect.position.y
+			)
 		)
 		var end: Vector2 = _world_to_view(
-			Vector2(float(x) * CELL_SIZE, grid_size_pixels.y)
+			Vector2(
+				grid_rect.position.x + float(x) * CELL_SIZE,
+				grid_rect.end.y
+			)
 		)
 		draw_line(start, end, GRID_AXIS_COLOR if x == 0 else GRID_COLOR, 1.0)
 	for y: int in range(_snapshot.grid_size.y + 1):
 		var start: Vector2 = _world_to_view(
-			Vector2(0.0, float(y) * CELL_SIZE)
+			Vector2(
+				grid_rect.position.x,
+				grid_rect.position.y + float(y) * CELL_SIZE
+			)
 		)
 		var end: Vector2 = _world_to_view(
-			Vector2(grid_size_pixels.x, float(y) * CELL_SIZE)
+			Vector2(
+				grid_rect.end.x,
+				grid_rect.position.y + float(y) * CELL_SIZE
+			)
 		)
 		draw_line(start, end, GRID_AXIS_COLOR if y == 0 else GRID_COLOR, 1.0)
 
@@ -874,22 +971,16 @@ func _draw_connections() -> void:
 	if _snapshot == null:
 		return
 	for connection: HabitatConnectionSnapshot in _snapshot.connections:
-		var first: FacilitySnapshot = _find_zone_facility(
-			connection.first_zone_id
+		var world_endpoints: PackedVector2Array = (
+			_spatial_projection.connection_endpoints(
+				_snapshot,
+				connection
+			)
 		)
-		var second: FacilitySnapshot = _find_zone_facility(
-			connection.second_zone_id
-		)
-		if first == null or second == null:
+		if world_endpoints.size() != 2:
 			continue
-		var first_center: Vector2 = _slot_rect(
-			first.slot,
-			first.footprint
-		).get_center()
-		var second_center: Vector2 = _slot_rect(
-			second.slot,
-			second.footprint
-		).get_center()
+		var first_center: Vector2 = _world_to_view(world_endpoints[0])
+		var second_center: Vector2 = _world_to_view(world_endpoints[1])
 		draw_line(
 			first_center,
 			second_center,

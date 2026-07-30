@@ -569,9 +569,39 @@ func _test_layout_controls_after_chapter_two(
 	var view: Act1TestTubeView = controller.get_node(
 		"%Act1TestTubeView"
 	) as Act1TestTubeView
+	var layout_view: FacilityLayoutView = view.get_layout_view()
+	var test_tube: FacilitySnapshot = (
+		controller.get_latest_snapshot().layout.get_facility(1)
+	)
+	_expect_true(
+		layout_view.visible
+			and not layout_view.is_editing_enabled()
+			and layout_view.mouse_filter == Control.MOUSE_FILTER_IGNORE,
+		"ordinary observation keeps the habitat world visible without "
+			+ "capturing layout input"
+	)
+	_expect_true(
+		controller.get_node(
+			"%Act1TestTubeView/Act1WorldOverlay"
+		) is Act1WorldOverlay,
+		"world activity cues use the shared habitat projection overlay"
+	)
+	var ordinary_test_tube_rect: Rect2 = (
+		layout_view.project_facility_rect(test_tube.facility_id)
+	)
 	layout_button.button_pressed = true
 	layout_button.pressed.emit()
-	_expect_true(view.is_layout_mode(), "layout button opens the module view")
+	_expect_true(
+		view.is_layout_mode()
+			and layout_view.mouse_filter == Control.MOUSE_FILTER_STOP,
+		"layout button enables editing on the same habitat world"
+	)
+	_expect_rect_near(
+		layout_view.project_facility_rect(test_tube.facility_id),
+		ordinary_test_tube_rect,
+		0.001,
+		"entering layout editing does not move an existing facility"
+	)
 	_expect_true(
 		place_button.visible and not place_button.disabled,
 		"completed Act 1 exposes one placeable foraging box"
@@ -587,7 +617,6 @@ func _test_layout_controls_after_chapter_two(
 	_expect_true(option != null, "layout snapshot provides a valid box slot")
 	if option == null:
 		return
-	var layout_view: FacilityLayoutView = view.get_layout_view()
 	var click: InputEventMouseButton = InputEventMouseButton.new()
 	click.button_index = MOUSE_BUTTON_LEFT
 	click.pressed = true
@@ -614,6 +643,35 @@ func _test_layout_controls_after_chapter_two(
 		before_count + 1,
 		"mouse placement creates one facility on the next Tick"
 	)
+	var placed_box: FacilitySnapshot
+	for facility: FacilitySnapshot in (
+		controller.get_latest_snapshot().layout.facilities
+	):
+		if facility.type_id == CampaignState.FACILITY_SMALL_FORAGING_BOX:
+			placed_box = facility
+			break
+	_expect_true(placed_box != null, "placed facility is present in the world")
+	if placed_box != null:
+		var editing_rect: Rect2 = layout_view.project_facility_rect(
+			placed_box.facility_id
+		)
+		layout_button.button_pressed = false
+		layout_button.pressed.emit()
+		_expect_true(
+			layout_view.visible
+				and not view.is_layout_mode()
+				and layout_view.mouse_filter
+					== Control.MOUSE_FILTER_IGNORE,
+			"closing layout keeps the placed facility visible in observation"
+		)
+		_expect_rect_near(
+			layout_view.project_facility_rect(placed_box.facility_id),
+			editing_rect,
+			0.001,
+			"placed facility keeps the same position outside editing"
+		)
+		layout_button.button_pressed = true
+		layout_button.pressed.emit()
 
 	var zoom_before: float = view.get_layout_camera_zoom()
 	var wheel: InputEventMouseButton = InputEventMouseButton.new()
@@ -625,6 +683,21 @@ func _test_layout_controls_after_chapter_two(
 		"mouse wheel zoom changes only the layout camera"
 	)
 	var offset_before: Vector2 = view.get_layout_camera_offset()
+	var projected_ant: AntSnapshot
+	for ant: AntSnapshot in controller.get_latest_snapshot().colony.ants:
+		if view.get_ant_view(ant.entity_id) != null:
+			projected_ant = ant
+			break
+	var ant_position_before: Vector2 = Vector2.ZERO
+	var zone_position_before: Vector2 = Vector2.ZERO
+	if projected_ant != null:
+		ant_position_before = view.get_ant_view(
+			projected_ant.entity_id
+		).position
+		zone_position_before = layout_view.project_zone_position(
+			projected_ant.zone_id,
+			projected_ant.entity_id
+		)
 	_send_key(controller, KEY_D)
 	_expect_true(
 		view.get_layout_camera_offset() != offset_before,
@@ -635,6 +708,20 @@ func _test_layout_controls_after_chapter_two(
 		before_count + 1,
 		"camera input cannot mutate simulation layout"
 	)
+	if projected_ant != null:
+		var camera_delta: Vector2 = (
+			layout_view.project_zone_position(
+				projected_ant.zone_id,
+				projected_ant.entity_id
+			) - zone_position_before
+		)
+		_expect_vector_near(
+			view.get_ant_view(projected_ant.entity_id).position
+				- ant_position_before,
+			camera_delta,
+			0.001,
+			"camera pan moves facilities and projected entities together"
+		)
 
 	_send_key(controller, KEY_TAB)
 	_expect_true(
@@ -1387,6 +1474,21 @@ func _expect_vector_near(
 ) -> void:
 	_assertion_count += 1
 	if actual.distance_to(expected) <= tolerance:
+		return
+	_record_failure(message, str(expected), str(actual))
+
+
+func _expect_rect_near(
+	actual: Rect2,
+	expected: Rect2,
+	tolerance: float,
+	message: String
+) -> void:
+	_assertion_count += 1
+	if (
+		actual.position.distance_to(expected.position) <= tolerance
+		and actual.size.distance_to(expected.size) <= tolerance
+	):
 		return
 	_record_failure(message, str(expected), str(actual))
 

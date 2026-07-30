@@ -166,6 +166,40 @@ func find_zone_anchor(
 	return rect.get_center() - primary_axis * extent
 
 
+func find_logical_zone_anchor(
+	layout: HabitatLayoutSnapshot,
+	zones: Array[HabitatZoneSnapshot],
+	zone_id: StringName
+) -> Variant:
+	var facility_anchor: Variant = find_zone_anchor(layout, zone_id)
+	if facility_anchor is Vector2:
+		return facility_anchor
+	var zone: HabitatZoneSnapshot
+	for candidate: HabitatZoneSnapshot in zones:
+		if candidate != null and candidate.zone_id == zone_id:
+			zone = candidate
+			break
+	if zone == null:
+		return null
+	var connected_ids: Array[StringName] = []
+	connected_ids.assign(zone.connected_zone_ids)
+	connected_ids.sort()
+	var connected_anchors: Array[Vector2] = []
+	for connected_zone_id: StringName in connected_ids:
+		var connected_anchor: Variant = find_zone_anchor(
+			layout,
+			connected_zone_id
+		)
+		if connected_anchor is Vector2:
+			connected_anchors.append(connected_anchor as Vector2)
+	if connected_anchors.is_empty():
+		return null
+	var combined: Vector2 = Vector2.ZERO
+	for connected_anchor: Vector2 in connected_anchors:
+		combined += connected_anchor
+	return combined / float(connected_anchors.size())
+
+
 func connection_endpoints(
 	layout: HabitatLayoutSnapshot,
 	connection: HabitatConnectionSnapshot

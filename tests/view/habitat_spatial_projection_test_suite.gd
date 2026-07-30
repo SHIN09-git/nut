@@ -17,6 +17,7 @@ func run() -> void:
 	_test_port_coordinates_are_exact_cell_interfaces()
 	_test_snapshot_copies_rotated_port_geometry()
 	_test_dual_chamber_zone_anchors_follow_orientation()
+	_test_logical_passage_uses_connected_facility_anchors()
 	_test_connection_and_hit_results_ignore_array_order()
 
 
@@ -286,6 +287,83 @@ func _test_dual_chamber_zone_anchors_follow_orientation() -> void:
 		endpoints[1],
 		Vector2(250.0, 100.0),
 		"connection ends at the secondary chamber"
+	)
+
+
+func _test_logical_passage_uses_connected_facility_anchors() -> void:
+	var projection: HabitatSpatialProjection = HabitatSpatialProjection.new()
+	_expect_true(
+		projection.configure(
+			Vector2i(6, 2),
+			Rect2(0.0, 0.0, 600.0, 200.0),
+			0.0
+		),
+		"logical-passage fixture projection configures"
+	)
+	var layout: HabitatLayoutSnapshot = HabitatLayoutSnapshot.new()
+	layout.active = true
+	layout.grid_size = Vector2i(6, 2)
+	var nest: FacilitySnapshot = _facility(
+		1,
+		Vector2i(1, 0),
+		Vector2i(2, 1),
+		FacilityData.PlacementLayer.BASE,
+		&"nest"
+	)
+	var feeding_port: FacilitySnapshot = _facility(
+		2,
+		Vector2i(4, 0),
+		Vector2i.ONE,
+		FacilityData.PlacementLayer.BASE,
+		&"feeding_port"
+	)
+	layout.facilities.assign([nest, feeding_port])
+	var zones: Array[HabitatZoneSnapshot] = [
+		HabitatZoneSnapshot.new(
+			&"nest",
+			0.5,
+			[&"passage"],
+			true
+		),
+		HabitatZoneSnapshot.new(
+			&"passage",
+			0.5,
+			[&"feeding_port", &"nest"],
+			true
+		),
+		HabitatZoneSnapshot.new(
+			&"feeding_port",
+			0.5,
+			[&"passage"],
+			true
+		),
+	]
+	_expect_vector(
+		projection.find_logical_zone_anchor(
+			layout,
+			zones,
+			&"passage"
+		) as Vector2,
+		Vector2(325.0, 50.0),
+		"unrepresented passage projects to its connected facilities"
+	)
+	zones[1].connected_zone_ids.reverse()
+	_expect_vector(
+		projection.find_logical_zone_anchor(
+			layout,
+			zones,
+			&"passage"
+		) as Vector2,
+		Vector2(325.0, 50.0),
+		"passage projection ignores topology array order"
+	)
+	_expect_true(
+		projection.find_logical_zone_anchor(
+			layout,
+			zones,
+			&"missing_zone"
+		) == null,
+		"unknown logical zones do not receive fabricated coordinates"
 	)
 
 

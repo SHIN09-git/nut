@@ -1,6 +1,6 @@
 # 《玻璃蚁国》技术架构
 
-> 文档版本：2.4｜更新日期：2026-07-30
+> 文档版本：2.5｜更新日期：2026-07-30
 >
 > 本文描述当前 R17 正式 Act 1 六章、生产音画与双语文本、档案有效游玩时长、稳定群落结局、UX／无障碍收口与双室模块化迁巢、R9 清理／侦察／迁巢任务、R8 设施与环境传播、R7 模块化布局与镜头、版本化存档和档案设置外壳，以及仍保留的旧组合与独立调试／验证路径。
 
@@ -24,7 +24,7 @@
 | 设施效果 | 巢室、补水、喂食、垃圾、连接和遮光使用强类型冻结效果；不使用通用 Dictionary 效果框架 |
 | 区域环境 | 湿度、光照、污染均为 0～1 权威值；开放连接上的污染传播按稳定顺序确定性计算 |
 | 群落工作 | 废物清理、区域侦察、群落迁移使用三个专用显式状态机；与搬运、觅食、喂食互斥 |
-| 布局镜头 | `HabitatSpatialProjection` 提供统一纯空间映射；镜头和输入仍不进入模拟或存档 |
+| 栖息地世界与镜头 | 普通观察与布局编辑共用 `HabitatSpatialProjection`；编辑只叠加网格和输入，镜头仍不进入模拟或存档 |
 | 存档核心 | `r12.authority.v10` 权威状态、SaveEnvelope v2 档案计时、规范化 JSON、版本／清单／checksum 校验、双室／终章报告权威、主档／备份恢复和单向迁移 |
 | 测试 | 项目自建 headless runner，无第三方插件 |
 
@@ -71,7 +71,9 @@ GameSnapshot
     ├── HabitatLayoutSnapshot
     └── CampaignSnapshot
             ├── Act1TestTubeView
-            │    └── FacilityLayoutView
+            │    ├── FacilityLayoutView
+            │    ├── Act1WorldOverlay
+            │    └── QueenView / AntView
             ├── Act1TestTubeController 的章节 UI
             └── 开发调试构建中的 F3 DebugPanel
 ```
@@ -545,7 +547,7 @@ SaveEnvelope 外层格式 v2 保存 `profile_playtime` 并让 checksum 覆盖它
 
 `Act1TestTubeView` 只读取完整 `GameSnapshot`：
 
-- 程序化绘制生产级试管玻璃、储水棉端、遮光套、管道、微型喂食口、糖液、桌面、凝水和基质；坐标、尺寸与颜色只存在于 View。
+- 绘制观察桌背景，并把设施、连接、食物、环境提示与实体交给共用空间投影；坐标、尺寸与颜色只存在于 View。
 - 维护稳定的 `entity_id -> AntView` 映射和独立的蚁后绘制。
 - 首工从蛹转换为工蚁时沿用相同实体 ID，因此对已有 `AntView` 应用新阶段快照，不替换节点。
 - 根据 `ForagingTaskSnapshot`、`BroodFeedingTaskSnapshot` 与三个 R9 工作任务快照的逻辑路线和进度计算工蚁位置；迁移成员跟随快照中的实际搬运者，蚁后位置由护理或迁巢快照决定，不使用与模拟脱节的 Tween。
@@ -555,16 +557,20 @@ SaveEnvelope 外层格式 v2 保存 `profile_playtime` 并让 checksum 覆盖它
 
 `Act1TestTubeController` 从 `CampaignSnapshot` 投影章节、目标、证据、提示、推论按钮、设施工具包和最终结算；从 `Act1Snapshot`、`NutritionSnapshot`、`HabitatLayoutSnapshot` 与 `ColonyWorkSnapshot` 投影遮光、糖／蛋白动作、设施选择、闸门、护理和可清理托盘。清理按钮只把快照提供的稳定托盘 ID 提交给模拟；设施下拉栏也只组合已解锁库存和合法放置选项。UI 不能直接推进章节或修改群落状态。完成面板的“继续观察”只关闭应用层遮罩，后续 Tick 不会重新打开。
 
-`FacilityLayoutView` 是 `Act1TestTubeView` 的独立子视图，只读取 `HabitatLayoutSnapshot`。它把逻辑槽位投影成网格、命中矩形、环境底色、连接状态和十二类原创设施／连接件轮廓，并把鼠标／键盘意图作为逻辑类型、槽位、方向或稳定设施 ID 交给控制器。每类目录设施都在有限 `PRODUCTION_FACILITY_TYPES` 清单中拥有生产样式；合法／非法预览同时投影颜色、勾／叉和文字语义；闸门开关同时使用不同线条符号。View 只发出有限的拒绝原因枚举，控制器将其翻译为带 `✓`／`!` 前缀的普通 UI 恢复反馈，不写回模拟。湿度、光照、污染和垃圾容量只来自设施／区域快照；镜头 offset 与 zoom 是纯显示状态，拖动、WASD、滚轮、`+/-/0` 不创建命令、不推进 Tick，也不写入存档。
+`FacilityLayoutView` 是 `Act1TestTubeView` 的独立子视图，只读取 `HabitatLayoutSnapshot` 和复制后的 `HabitatZoneSnapshot` 拓扑。它在普通观察和布局编辑中始终绘制同一批设施与连接；进入布局只增加网格、设施标签、预览和输入捕获，退出后不会隐藏或移动已经放置的设施。它把逻辑槽位投影成命中矩形、环境底色、连接状态和十二类原创设施／连接件轮廓，并把鼠标／键盘意图作为逻辑类型、槽位、方向或稳定设施 ID 交给控制器。每类目录设施都在有限 `PRODUCTION_FACILITY_TYPES` 清单中拥有生产样式；合法／非法预览同时投影颜色、勾／叉和文字语义；闸门开关同时使用不同线条符号。View 只发出有限的拒绝原因枚举，控制器将其翻译为带 `✓`／`!` 前缀的普通 UI 恢复反馈，不写回模拟。湿度、光照、污染和垃圾容量只来自设施／区域快照；镜头 offset 与 zoom 是纯显示状态，拖动、WASD、滚轮、`+/-/0` 不创建命令、不推进 Tick，也不写入存档。
 
-R19-A 新增纯 `RefCounted` 的 `HabitatSpatialProjection`。它只接收
-`HabitatLayoutSnapshot` 中的逻辑网格和复制几何，把槽位、设施占地、旋转后
-的接口边界、单／双室区域锚点、连接端点和命中结果投影到调用方给定的内容
-矩形。接口快照只包含旋转后的全局逻辑单元、方向和连接种类，不引用
-`FacilityConfig` 或权威 `FacilityState`。投影按布局层和稳定设施 ID 排序，
-不依赖数组／字典迭代顺序，也不读取屏幕外的 Resource。R19-A 只建立后续
-统一世界的坐标事实来源；现有观察与布局画面将在后续 R19 工作包切换到该
-投影。
+R19-A/B 的纯 `RefCounted` `HabitatSpatialProjection` 只接收逻辑网格和复制
+几何，把槽位、设施占地、旋转后的接口边界、单／双室区域锚点、连接端点和
+命中结果投影到画面。没有独立设施的逻辑通道区域由复制后的稳定区域拓扑
+投影到相邻设施锚点之间，不使用字符串哈希或任意屏幕落点。接口快照只包含
+旋转后的全局逻辑单元、方向和连接种类，不引用 `FacilityConfig` 或权威
+`FacilityState`。投影按布局层、稳定设施 ID 和区域 ID 排序，不依赖数组／
+字典迭代顺序，也不读取屏幕外 Resource。
+
+`Act1WorldOverlay` 只读取 `GameSnapshot` 和 `FacilityLayoutView` 提供的显示
+投影，在设施之上、实体之下绘制食物、污染、护理、侦察、迁移与携带提示。
+实体位置仍由任务快照和插值端点决定；镜头变化会统一重算设施、连接、蚁后、
+工蚁和幼体的显示位置，不产生模拟命令。
 
 `ChapterArtView` 只把 `CampaignSnapshot.chapter` 映射为六个代码内原创标记；`ObservationReportSealView` 是不读取模拟的静态结局印记。两者不能完成章节或生成报告。标题背景由 `TextureRect` 读取 `assets/production/` 中已登记文件；主题缩放从场景生产主题复制后修改，不再用空主题覆盖按钮和焦点材质。
 

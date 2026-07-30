@@ -56,12 +56,14 @@ var _selected_worker_id: int = -1
 @onready var _entity_layer: Node2D = %EntityLayer
 @onready var _queen_view: QueenView = %QueenView
 @onready var _facility_layout_view: FacilityLayoutView = %FacilityLayoutView
+@onready var _world_overlay: Act1WorldOverlay = %Act1WorldOverlay
 
 
 func _ready() -> void:
 	_queen_view.z_index = 5
 	_queen_view.set_visuals_paused(_visuals_paused)
 	_queen_view.set_reduced_motion(_reduced_motion)
+	_world_overlay.configure(_facility_layout_view)
 	_facility_layout_view.placement_requested.connect(
 		func(type_id: StringName, slot: Vector2i, orientation: int) -> void:
 			facility_placement_requested.emit(type_id, slot, orientation)
@@ -81,6 +83,12 @@ func _ready() -> void:
 	_facility_layout_view.interaction_feedback.connect(
 		func(feedback: int) -> void:
 			facility_feedback_requested.emit(feedback)
+	)
+	_facility_layout_view.camera_changed.connect(
+		func(_zoom: float, _offset: Vector2) -> void:
+			_recalculate_endpoints()
+			_layout_projection()
+			queue_redraw()
 	)
 	_layout_projection()
 	queue_redraw()
@@ -119,6 +127,9 @@ func apply_snapshot(snapshot: GameSnapshot) -> bool:
 	):
 		return false
 	if not _facility_layout_view.apply_snapshot(snapshot.layout):
+		return false
+	_facility_layout_view.apply_zone_topology(snapshot.colony.zones)
+	if not _world_overlay.apply_snapshot(snapshot):
 		return false
 	_update_endpoints(snapshot)
 	var present_ids: Dictionary[int, bool] = {}
@@ -225,6 +236,7 @@ func reset_projection() -> void:
 	_current_queen_position = Vector2.ZERO
 	_interpolation_alpha = 1.0
 	_selected_worker_id = -1
+	_world_overlay.reset_projection()
 	_layout_projection()
 	queue_redraw()
 
@@ -289,13 +301,11 @@ func get_queen_view() -> QueenView:
 
 
 func set_layout_mode(value: bool) -> void:
-	_facility_layout_view.visible = value
-	if value:
-		_facility_layout_view.grab_focus()
+	_facility_layout_view.set_editing_enabled(value)
 
 
 func is_layout_mode() -> bool:
-	return _facility_layout_view.visible
+	return _facility_layout_view.is_editing_enabled()
 
 
 func begin_facility_placement(type_id: StringName) -> bool:
@@ -577,7 +587,8 @@ func _get_worker_position(
 			worker.entity_id
 		)
 		var food_position: Vector2 = _get_food_position(
-			task.target_food_source_id
+			task.target_food_source_id,
+			snapshot
 		)
 		match task.state:
 			ForagingTaskSnapshot.State.SEEKING_FOOD:
@@ -605,18 +616,13 @@ func _calculate_queen_position(
 			positions[snapshot.colony.queen_carrier_ant_id]
 			+ Vector2(20.0, -24.0)
 		)
+	var queen_zone_id: StringName = snapshot.colony.queen_zone_id
+	if queen_zone_id.is_empty():
+		queen_zone_id = &"test_tube_nest"
 	var base: Vector2 = (
-		_get_nest_rect().position
-		+ _get_nest_rect().size * Vector2(0.28, 0.42)
+		_get_zone_position(queen_zone_id, 0)
+		+ Vector2(-20.0, -18.0)
 	)
-	if (
-		not snapshot.colony.queen_zone_id.is_empty()
-		and snapshot.colony.queen_zone_id != &"test_tube_nest"
-	):
-		base = (
-			_get_zone_position(snapshot.colony.queen_zone_id, 0)
-			+ Vector2(-20.0, -18.0)
-		)
 	var care: QueenCareSnapshot = snapshot.act1.queen_care
 	if (
 		snapshot.colony.queen_zone_id != &"test_tube_nest"
@@ -642,13 +648,15 @@ func _calculate_queen_position(
 
 
 func _layout_projection() -> void:
-	if _queen_view != null:
-		_queen_view.set_habitat_position(
-			_previous_queen_position.lerp(
-				_current_queen_position,
-				_interpolation_alpha
-			)
+	var display_positions: Dictionary[int, Vector2] = {}
+	var queen_position: Vector2 = (
+		_previous_queen_position.lerp(
+			_current_queen_position,
+			_interpolation_alpha
 		)
+	)
+	if _queen_view != null:
+		_queen_view.set_habitat_position(queen_position)
 	for entity_id: int in _ant_views:
 		var view: AntView = _ant_views[entity_id]
 		var current: Vector2 = _current_positions.get(
@@ -656,13 +664,21 @@ func _layout_projection() -> void:
 			Vector2.ZERO
 		)
 		var previous: Vector2 = _previous_positions.get(entity_id, current)
-		view.set_slot_position(
-			previous.lerp(current, _interpolation_alpha)
+		var display_position: Vector2 = previous.lerp(
+			current,
+			_interpolation_alpha
 		)
+		display_positions[entity_id] = display_position
+		view.set_slot_position(display_position)
 		view.z_index = (
 			6
 			if view.life_stage == AntModel.LifeStage.WORKER
 			else 4
+		)
+	if _world_overlay != null:
+		_world_overlay.set_display_positions(
+			display_positions,
+			queen_position
 		)
 
 
@@ -690,38 +706,9 @@ func _get_brood_slot_offset(entity_id: int) -> Vector2:
 
 
 func _get_zone_position(zone_id: StringName, entity_id: int) -> Vector2:
-	var tube: Rect2 = _get_tube_rect()
-	var ratio: float = 0.42
-	if zone_id == &"tube_passage":
-		ratio = 0.68
-	elif zone_id == &"micro_feeding_port":
-		ratio = 0.88
-	elif String(zone_id).begins_with("dual_chamber_nest_"):
-		var utility: bool = String(zone_id).ends_with("_utility")
-		return Vector2(
-			lerpf(
-				tube.position.x,
-				tube.end.x,
-				0.84 if utility else 0.70
-			),
-			tube.position.y
-				+ tube.size.y * 0.38
-				+ float(posmod(entity_id, 3) - 1) * 8.0
-		)
-	elif zone_id != &"test_tube_nest":
-		var stable_slot: int = posmod(String(zone_id).hash(), 4)
-		ratio = 0.76 + float(stable_slot % 2) * 0.13
-		return Vector2(
-			lerpf(tube.position.x, tube.end.x, ratio),
-			tube.position.y
-			+ tube.size.y * (0.38 + float(stable_slot / 2) * 0.24)
-			+ float(posmod(entity_id, 3) - 1) * 8.0
-		)
-	return Vector2(
-		lerpf(tube.position.x, tube.end.x, ratio),
-		tube.position.y + tube.size.y * (
-			0.58 + float(posmod(entity_id, 3) - 1) * 0.07
-		)
+	return _facility_layout_view.project_zone_position(
+		zone_id,
+		entity_id
 	)
 
 
@@ -757,13 +744,18 @@ func _get_route_position(
 	)
 
 
-func _get_food_position(food_source_id: int) -> Vector2:
-	var tube: Rect2 = _get_tube_rect()
-	return Vector2(
-		tube.end.x - tube.size.y * 0.26,
-		tube.position.y + tube.size.y * (
-			0.66 + float(posmod(food_source_id, 2)) * 0.06
-		)
+func _get_food_position(
+	food_source_id: int,
+	snapshot: GameSnapshot
+) -> Vector2:
+	var source: FoodSourceSnapshot = snapshot.colony.find_food_source(
+		food_source_id
+	)
+	if source == null:
+		return _get_zone_position(&"micro_feeding_port", food_source_id)
+	return (
+		_get_zone_position(source.zone_id, food_source_id)
+		+ Vector2(10.0, 14.0)
 	)
 
 
@@ -788,6 +780,12 @@ func _draw() -> void:
 	if size.x < 280.0 or size.y < 180.0:
 		return
 	_draw_observation_table()
+	if (
+		_latest_snapshot != null
+		and _latest_snapshot.layout != null
+		and _latest_snapshot.layout.active
+	):
+		return
 	var tube: Rect2 = _get_tube_rect()
 	_draw_capsule(
 		Rect2(
@@ -887,7 +885,10 @@ func _draw() -> void:
 		for source: FoodSourceSnapshot in _latest_snapshot.colony.food_sources:
 			if source.remaining_portions <= 0:
 				continue
-			var food: Vector2 = _get_food_position(source.food_source_id)
+			var food: Vector2 = _get_food_position(
+				source.food_source_id,
+				_latest_snapshot
+			)
 			draw_circle(food, 16.0, SUGAR_GLOW)
 			draw_circle(food, 7.0, SUGAR_COLOR)
 		for ant: AntSnapshot in _latest_snapshot.colony.ants:
