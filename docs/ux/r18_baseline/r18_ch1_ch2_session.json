@@ -1,0 +1,177 @@
+{
+  "schema": "r18-baseline-session-v1",
+  "captured_commit": "b9daddcb00833da75811cc594e354178a2120e89",
+  "capture_mode": "real Windows release UI via Computer Use",
+  "window_client": "1280x720",
+  "locale": "zh_CN",
+  "ui_scale": 1,
+  "chapter_2_complete_wall_ms": 363953,
+  "recorded_wall_seconds": 363.953,
+  "click_count_to_chapter_2": 13,
+  "continuous_foraging_observation_seconds": 18,
+  "known_capture_overhead": "Wall time includes screenshot, inspection, and tool latency; do not interpret as pure player completion time.",
+  "events": [
+    {
+      "elapsed_ms": null,
+      "action": "title_new_game",
+      "note": "entered preparation gate"
+    },
+    {
+      "elapsed_ms": 399,
+      "action": "start_observation",
+      "x": 640,
+      "y": 504
+    },
+    {
+      "elapsed_ms": 17393,
+      "action": "apply_light_cover",
+      "x": 255,
+      "y": 614
+    },
+    {
+      "elapsed_ms": 28703,
+      "action": "speed_16x",
+      "x": 1220,
+      "y": 84
+    },
+    {
+      "elapsed_ms": 36830,
+      "action": "open_journal_ch1",
+      "x": 1078,
+      "y": 524
+    },
+    {
+      "elapsed_ms": 53100,
+      "action": "submit_ch1_inference",
+      "x": 639,
+      "y": 495
+    },
+    {
+      "elapsed_ms": 62583,
+      "action": "close_journal_ch1",
+      "x": 640,
+      "y": 657
+    },
+    {
+      "elapsed_ms": 70531,
+      "action": "speed_1x_before_sugar",
+      "x": 1101,
+      "y": 84
+    },
+    {
+      "elapsed_ms": 81632,
+      "action": "place_sugar_at_feeding_port",
+      "x": 604,
+      "y": 614
+    },
+    {
+      "elapsed_ms": 95871,
+      "action": "begin_continuous_foraging_observation"
+    },
+    {
+      "elapsed_ms": 114683,
+      "action": "end_continuous_foraging_observation",
+      "duration_ms": 18000
+    },
+    {
+      "event": "open_ch2_journal",
+      "wall_ms": 285777
+    },
+    {
+      "event": "open_ch2_journal_key",
+      "wall_ms": 309999
+    },
+    {
+      "event": "submit_ch2_inference",
+      "wall_ms": 331743
+    },
+    {
+      "event": "close_ch2_journal",
+      "wall_ms": 345463
+    },
+    {
+      "event": "chapter_2_complete_chapter_3_entered",
+      "wall_ms": 363953,
+      "click_count": 13
+    },
+    {
+      "event": "open_ch3_layout",
+      "wall_ms": 372467
+    },
+    {
+      "event": "ch3_start_place_foraging_box",
+      "wall_ms": 410659
+    },
+    {
+      "event": "ch3_place_foraging_box",
+      "wall_ms": 424156
+    },
+    {
+      "event": "ch3_place_sugar_station",
+      "wall_ms": 451757
+    },
+    {
+      "event": "ch3_place_sugar_station_micro_port",
+      "wall_ms": 474605
+    },
+    {
+      "event": "ch3_place_protein_dish",
+      "wall_ms": 515950
+    },
+    {
+      "event": "ch3_place_waste_tray",
+      "wall_ms": 594972
+    },
+    {
+      "event": "ch3_supply_sugar",
+      "wall_ms": 631814
+    },
+    {
+      "event": "ch3_supply_protein",
+      "wall_ms": 643078
+    },
+    {
+      "event": "ch3_speed_16x",
+      "wall_ms": 648231
+    },
+    {
+      "event": "fatal_simulation_rejected_tick_10407",
+      "wall_ms": 689920
+    }
+  ],
+  "animation": {
+    "file": "r18_ch1_ch2_real_flow.webp",
+    "frames": 27,
+    "frame_height": 752,
+    "loop": 0,
+    "delays_ms": [
+      1500,
+      2000,
+      1500,
+      500,
+      2500,
+      800,
+      1000,
+      1000,
+      1000,
+      1000,
+      1000,
+      1000,
+      1000,
+      1000,
+      1000,
+      1000,
+      1000,
+      1000,
+      1000,
+      1000,
+      1000,
+      1000,
+      1000,
+      1000,
+      1000,
+      1200,
+      1500
+    ]
+  }
+}
