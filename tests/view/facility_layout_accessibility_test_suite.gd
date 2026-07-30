@@ -31,12 +31,24 @@ func run(scene_root: Node) -> void:
 		),
 		"available facility begins placement"
 	)
+	var preview: FacilityPlacementPreviewView = (
+		view.get_node_or_null("PlacementPreviewView")
+		as FacilityPlacementPreviewView
+	)
+	_expect_true(
+		preview != null and preview.visible,
+		"placement uses a visible dedicated preview node"
+	)
 	_expect_int(
 		view.get_placement_cue(),
 		FacilityLayoutView.PlacementCue.VALID,
 		"valid preview exposes a non-color semantic cue"
 	)
 	view.handle_keyboard_action(KEY_LEFT)
+	_expect_true(
+		view.get_node_or_null("PlacementPreviewView") == preview,
+		"moving the placement cursor reuses the preview node"
+	)
 	_expect_int(
 		view.get_placement_cue(),
 		FacilityLayoutView.PlacementCue.INVALID,
@@ -50,6 +62,10 @@ func run(scene_root: Node) -> void:
 	)
 
 	view.cancel_placement()
+	_expect_true(
+		not preview.visible,
+		"canceling placement hides the preview node"
+	)
 	view.request_remove_selected()
 	_expect_int(
 		feedback[-1],

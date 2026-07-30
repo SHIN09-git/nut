@@ -36,6 +36,27 @@ func run(scene_root: Node) -> void:
 	)
 	snapshot.facilities.assign([overlay, base])
 	_expect_true(view.apply_snapshot(snapshot), "world fixture applies")
+	_expect_int(
+		view.get_facility_view_count(),
+		2,
+		"available facilities create one stable node each"
+	)
+	var base_view: FacilityView = view.get_facility_view(
+		base.facility_id
+	)
+	var overlay_view: FacilityView = view.get_facility_view(
+		overlay.facility_id
+	)
+	_expect_true(
+		base_view != null and overlay_view != null,
+		"stable facility IDs resolve to facility views"
+	)
+	_expect_true(
+		base_view.mouse_filter == Control.MOUSE_FILTER_IGNORE
+			and overlay_view.mouse_filter
+				== Control.MOUSE_FILTER_IGNORE,
+		"facility nodes do not take interaction authority from the layout"
+	)
 	var zones: Array[HabitatZoneSnapshot] = [
 		HabitatZoneSnapshot.new(
 			&"base_zone",
@@ -73,6 +94,17 @@ func run(scene_root: Node) -> void:
 		view.apply_snapshot(snapshot),
 		"reordered world fixture reapplies"
 	)
+	_expect_true(
+		view.get_facility_view(base.facility_id) == base_view
+			and view.get_facility_view(overlay.facility_id)
+				== overlay_view,
+		"snapshot array order does not replace stable facility nodes"
+	)
+	_expect_int(
+		view.get_facility_view_count(),
+		2,
+		"reapplying a snapshot does not duplicate facility nodes"
+	)
 	_expect_int(
 		view.find_facility_at(shared_center),
 		overlay.facility_id,
@@ -107,6 +139,10 @@ func run(scene_root: Node) -> void:
 		overlay.facility_id,
 		"ordinary selection emits the stable facility ID"
 	)
+	_expect_true(
+		overlay_view.is_selected() and not base_view.is_selected(),
+		"selection updates the existing facility view"
+	)
 
 	view.set_camera_zoom(1.45)
 	view.pan_by(Vector2(76.0, -42.0))
@@ -139,6 +175,21 @@ func run(scene_root: Node) -> void:
 			and is_finite(view.get_camera_zoom()),
 		"focus keeps camera values finite"
 	)
+	var focused_base_rect: Rect2 = view.project_facility_rect(
+		base.facility_id
+	)
+	_expect_vector_near(
+		base_view.position,
+		focused_base_rect.position,
+		0.001,
+		"camera changes reposition the existing facility node"
+	)
+	_expect_vector_near(
+		base_view.size,
+		focused_base_rect.size,
+		0.001,
+		"camera changes resize the existing facility node"
+	)
 	_expect_true(
 		view.set_selected_facility_id(-1),
 		"selection can be cleared without editing authority"
@@ -147,6 +198,25 @@ func run(scene_root: Node) -> void:
 		selected_ids[-1],
 		-1,
 		"clearing selection emits the empty stable ID"
+	)
+	overlay.available = false
+	snapshot.revision += 1
+	_expect_true(
+		view.apply_snapshot(snapshot),
+		"snapshot with an unavailable facility reapplies"
+	)
+	_expect_int(
+		view.get_facility_view_count(),
+		1,
+		"unavailable facilities leave no mapped visual node"
+	)
+	_expect_true(
+		view.get_facility_view(overlay.facility_id) == null,
+		"removed facility ID no longer resolves to a view"
+	)
+	_expect_true(
+		view.get_facility_view(base.facility_id) == base_view,
+		"removing another facility preserves the surviving node"
 	)
 	scene_root.remove_child(view)
 	view.free()
