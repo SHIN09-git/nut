@@ -1652,6 +1652,16 @@ func _create_layout_snapshot() -> HabitatLayoutSnapshot:
 				0.0,
 				1.0
 			)
+		var port_snapshots: Array[FacilityPortSnapshot] = []
+		for port: FacilityPortConfig in type_config.ports:
+			port_snapshots.append(FacilityPortSnapshot.new(
+				facility.slot + port.rotated_cell(
+					type_config.footprint,
+					facility.orientation
+				),
+				port.rotated_direction(facility.orientation),
+				port.connection_kind
+			))
 		snapshot.facilities.append(FacilitySnapshot.new(
 			facility.facility_id,
 			facility.type_id,
@@ -1682,7 +1692,8 @@ func _create_layout_snapshot() -> HabitatLayoutSnapshot:
 				secondary_zone.pollution
 				if secondary_zone != null
 				else 0.0
-			)
+			),
+			port_snapshots
 		))
 	for connection: HabitatConnectionState in (
 		_state.layout_state.get_connections_in_stable_order()

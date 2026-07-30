@@ -1,6 +1,6 @@
 # 《玻璃蚁国》技术架构
 
-> 文档版本：2.3｜更新日期：2026-07-29
+> 文档版本：2.4｜更新日期：2026-07-30
 >
 > 本文描述当前 R17 正式 Act 1 六章、生产音画与双语文本、档案有效游玩时长、稳定群落结局、UX／无障碍收口与双室模块化迁巢、R9 清理／侦察／迁巢任务、R8 设施与环境传播、R7 模块化布局与镜头、版本化存档和档案设置外壳，以及仍保留的旧组合与独立调试／验证路径。
 
@@ -24,7 +24,7 @@
 | 设施效果 | 巢室、补水、喂食、垃圾、连接和遮光使用强类型冻结效果；不使用通用 Dictionary 效果框架 |
 | 区域环境 | 湿度、光照、污染均为 0～1 权威值；开放连接上的污染传播按稳定顺序确定性计算 |
 | 群落工作 | 废物清理、区域侦察、群落迁移使用三个专用显式状态机；与搬运、觅食、喂食互斥 |
-| 布局镜头 | `FacilityLayoutView` 只读布局快照；鼠标与键盘平移缩放不进入模拟或存档 |
+| 布局镜头 | `HabitatSpatialProjection` 提供统一纯空间映射；镜头和输入仍不进入模拟或存档 |
 | 存档核心 | `r12.authority.v10` 权威状态、SaveEnvelope v2 档案计时、规范化 JSON、版本／清单／checksum 校验、双室／终章报告权威、主档／备份恢复和单向迁移 |
 | 测试 | 项目自建 headless runner，无第三方插件 |
 
@@ -514,7 +514,7 @@ R9 工作场景还必须满足：
 - `GameSnapshot.campaign: CampaignSnapshot`，保存六章状态、证据、确认推论、提示层级、设施工具包和推论命令可用／待处理状态
 - `GameSnapshot.nutrition: NutritionSnapshot`，只在营养场景存在，保存两类储备／供应／消耗、短缺线索、活跃喂食数量和糖／蛋白动作的可用／待处理状态
 - `GameSnapshot.act1: Act1Snapshot`，只在正式 Act 1 存在，保存遮光动作、蚁后护理、蛹观察、稳定首工 ID／羽化 Tick、工蚁护理证据、环境／终章稳定计数与冻结要求，以及最终报告 Tick／可用状态
-- `GameSnapshot.layout: HabitatLayoutSnapshot`，保存稳定设施、逻辑槽位、方向、动态区域、派生连接、闸门、库存、合法放置选项和布局命令待处理状态
+- `GameSnapshot.layout: HabitatLayoutSnapshot`，保存稳定设施、逻辑槽位、方向、复制后的设施接口几何、动态区域、派生连接、闸门、库存、合法放置选项和布局命令待处理状态
 - `GameSnapshot.work: ColonyWorkSnapshot`，保存迁巢候选／目标、完成计数、三类活动任务数、可清理托盘 ID 和待处理清理目标
 
 `sequence` 只在旧组合场景存在；`campaign` 同时用于旧组合和正式 Act 1；`nutrition` 同时用于营养基线和正式 Act 1。独立糖水场景继续使用其必要组成部分。M2 兼容路径仍保留 `ColonySnapshot.observation_events`。任何快照都不是命令入口，也不能写回模拟。
@@ -556,6 +556,15 @@ SaveEnvelope 外层格式 v2 保存 `profile_playtime` 并让 checksum 覆盖它
 `Act1TestTubeController` 从 `CampaignSnapshot` 投影章节、目标、证据、提示、推论按钮、设施工具包和最终结算；从 `Act1Snapshot`、`NutritionSnapshot`、`HabitatLayoutSnapshot` 与 `ColonyWorkSnapshot` 投影遮光、糖／蛋白动作、设施选择、闸门、护理和可清理托盘。清理按钮只把快照提供的稳定托盘 ID 提交给模拟；设施下拉栏也只组合已解锁库存和合法放置选项。UI 不能直接推进章节或修改群落状态。完成面板的“继续观察”只关闭应用层遮罩，后续 Tick 不会重新打开。
 
 `FacilityLayoutView` 是 `Act1TestTubeView` 的独立子视图，只读取 `HabitatLayoutSnapshot`。它把逻辑槽位投影成网格、命中矩形、环境底色、连接状态和十二类原创设施／连接件轮廓，并把鼠标／键盘意图作为逻辑类型、槽位、方向或稳定设施 ID 交给控制器。每类目录设施都在有限 `PRODUCTION_FACILITY_TYPES` 清单中拥有生产样式；合法／非法预览同时投影颜色、勾／叉和文字语义；闸门开关同时使用不同线条符号。View 只发出有限的拒绝原因枚举，控制器将其翻译为带 `✓`／`!` 前缀的普通 UI 恢复反馈，不写回模拟。湿度、光照、污染和垃圾容量只来自设施／区域快照；镜头 offset 与 zoom 是纯显示状态，拖动、WASD、滚轮、`+/-/0` 不创建命令、不推进 Tick，也不写入存档。
+
+R19-A 新增纯 `RefCounted` 的 `HabitatSpatialProjection`。它只接收
+`HabitatLayoutSnapshot` 中的逻辑网格和复制几何，把槽位、设施占地、旋转后
+的接口边界、单／双室区域锚点、连接端点和命中结果投影到调用方给定的内容
+矩形。接口快照只包含旋转后的全局逻辑单元、方向和连接种类，不引用
+`FacilityConfig` 或权威 `FacilityState`。投影按布局层和稳定设施 ID 排序，
+不依赖数组／字典迭代顺序，也不读取屏幕外的 Resource。R19-A 只建立后续
+统一世界的坐标事实来源；现有观察与布局画面将在后续 R19 工作包切换到该
+投影。
 
 `ChapterArtView` 只把 `CampaignSnapshot.chapter` 映射为六个代码内原创标记；`ObservationReportSealView` 是不读取模拟的静态结局印记。两者不能完成章节或生成报告。标题背景由 `TextureRect` 读取 `assets/production/` 中已登记文件；主题缩放从场景生产主题复制后修改，不再用空主题覆盖按钮和焦点材质。
 

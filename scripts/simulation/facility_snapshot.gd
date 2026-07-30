@@ -19,6 +19,7 @@ var secondary_zone_humidity: float
 var secondary_zone_light_exposure: float
 var secondary_zone_pollution: float
 var waste_fill_ratio: float
+var ports: Array[FacilityPortSnapshot] = []
 
 
 func _init(
@@ -39,7 +40,8 @@ func _init(
 	new_secondary_zone_id: StringName = &"",
 	new_secondary_zone_humidity: float = 0.0,
 	new_secondary_zone_light_exposure: float = 0.0,
-	new_secondary_zone_pollution: float = 0.0
+	new_secondary_zone_pollution: float = 0.0,
+	new_ports: Array[FacilityPortSnapshot] = []
 ) -> void:
 	facility_id = new_facility_id
 	type_id = new_type_id
@@ -59,3 +61,9 @@ func _init(
 	secondary_zone_light_exposure = new_secondary_zone_light_exposure
 	secondary_zone_pollution = new_secondary_zone_pollution
 	waste_fill_ratio = new_waste_fill_ratio
+	for port: FacilityPortSnapshot in new_ports:
+		ports.append(FacilityPortSnapshot.new(
+			port.global_cell,
+			port.direction,
+			port.connection_kind
+		))
