@@ -104,7 +104,9 @@ func has_valid_state(state: ColonyState) -> bool:
 		or act1.pupa_stable_ticks > _config.pupa_observation_ticks
 	):
 		return false
-	if not _is_care_environment_ready(state):
+	var care_environment_ready: bool = _is_care_environment_ready(state)
+	var has_brood: bool = _get_lowest_brood(state) != null
+	if not care_environment_ready or not has_brood:
 		if (
 			act1.queen_care_state != Act1State.QueenCareState.RESTING
 			or act1.queen_care_elapsed_ticks != 0

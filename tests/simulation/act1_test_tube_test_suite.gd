@@ -14,6 +14,7 @@ func run() -> void:
 	_test_frozen_opening_and_cover_command_boundary()
 	_test_source_resource_mutation_does_not_change_session()
 	_test_act1_snapshot_isolated_from_authority()
+	_test_no_brood_is_a_valid_founding_care_state()
 	_test_two_chapter_authoritative_path()
 	_test_same_commands_are_deterministic()
 	_test_clock_speeds_preserve_same_tick_result()
@@ -153,6 +154,40 @@ func _test_act1_snapshot_isolated_from_authority() -> void:
 		fresh.nutrition.protein_reserve_portions,
 		SCENARIO.nutrition_data.initial_protein_reserve_portions,
 		"mutating nutrition snapshot cannot change authority"
+	)
+
+
+func _test_no_brood_is_a_valid_founding_care_state() -> void:
+	var simulation: ColonySimulation = _new_simulation()
+	var state: ColonyState = simulation._state
+	for ant: AntModel in state.ants:
+		ant.configure_nutrition_worker(
+			simulation._habitat_config.nest_zone_id,
+			state.simulation_tick
+		)
+	state.invalidate_worker_order()
+	_expect_true(
+		simulation.submit_apply_light_cover_action(),
+		"no-brood fixture submits the cover action"
+	)
+	_expect_true(
+		simulation.advance_tick(1),
+		"a covered founding colony with no brood accepts the next Tick"
+	)
+	var snapshot: GameSnapshot = simulation.create_game_snapshot()
+	_expect_int(
+		snapshot.act1.queen_care.care_state,
+		Act1State.QueenCareState.RESTING,
+		"queen care rests when no brood remain"
+	)
+	_expect_int(
+		snapshot.act1.queen_care.target_brood_id,
+		-1,
+		"queen care has no target when no brood remain"
+	)
+	_expect_true(
+		simulation.has_valid_habitat_ownership(),
+		"no-brood founding state preserves all simulation invariants"
 	)
 
 
