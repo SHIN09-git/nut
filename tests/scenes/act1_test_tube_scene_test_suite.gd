@@ -15,6 +15,7 @@ var _scene_root: Node
 
 func run(scene_root: Node) -> void:
 	_scene_root = scene_root
+	_test_component_and_theme_boundaries()
 	_test_real_controls_complete_both_chapters()
 	_test_chapter_five_real_layout_and_migration_path()
 	_test_help_overlay_focus_and_pause()
@@ -30,6 +31,69 @@ func get_assertion_count() -> int:
 
 func get_failure_count() -> int:
 	return _failure_count
+
+
+func _test_component_and_theme_boundaries() -> void:
+	var controller: Act1TestTubeController = (
+		ACT1_SCENE.instantiate() as Act1TestTubeController
+	)
+	_expect_true(
+		controller.theme != null
+		and controller.theme.resource_path
+			== "res://themes/act1_observation_theme.tres",
+		"observation scene uses the external frozen theme"
+	)
+	_expect_true(
+		controller.get_node("%Header") is Act1TopBar,
+		"header owns the top-bar interaction component"
+	)
+	_expect_true(
+		controller.get_node("%SidePanel") is Act1ObservationSidebar,
+		"side panel owns the observation-sidebar component"
+	)
+	_expect_true(
+		controller.get_node("%ToolBar") is Act1ToolBar,
+		"tool row owns the observation-toolbar component"
+	)
+	_expect_true(
+		controller.get_node("%PreparationGate") is Act1PreparationGate,
+		"preparation overlay owns its interaction component"
+	)
+	_expect_true(
+		controller.get_node("%JournalPanel") is Act1JournalPanel,
+		"journal overlay owns its interaction component"
+	)
+	_expect_true(
+		controller.get_node("%HelpPanel") is Act1HelpPanel,
+		"help overlay owns its interaction component"
+	)
+	_expect_true(
+		controller.get_node("%CompletionPanel") is Act1CompletionPanel,
+		"completion overlay owns its interaction component"
+	)
+	_expect_true(
+		controller.get_node("%PauseMenu") is Act1PauseMenu,
+		"pause overlay owns its interaction component"
+	)
+	var objective_card: PanelContainer = controller.get_node(
+		"Main/Body/SidePanel/SideMargin/SideScroll/SideContent/ObjectiveCard"
+	) as PanelContainer
+	var evidence_card: PanelContainer = controller.get_node(
+		"Main/Body/SidePanel/SideMargin/SideScroll/SideContent/EvidenceCard"
+	) as PanelContainer
+	var objective_style: StyleBox = objective_card.get_theme_stylebox(
+		&"panel"
+	)
+	var evidence_style: StyleBox = evidence_card.get_theme_stylebox(
+		&"panel"
+	)
+	_expect_true(
+		objective_style == evidence_style
+		and objective_style.resource_path
+			== "res://themes/styles/observation_card.tres",
+		"observation cards share one external style resource"
+	)
+	controller.free()
 
 
 func _test_help_overlay_focus_and_pause() -> void:

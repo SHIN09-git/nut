@@ -1,9 +1,19 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=18 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/act1_test_tube_controller.gd" id="1_controller"]
 [ext_resource type="PackedScene" path="res://scenes/habitat/act1_test_tube_habitat.tscn" id="2_habitat"]
 [ext_resource type="Script" path="res://scripts/view/chapter_art_view.gd" id="3_chapter_art"]
 [ext_resource type="Script" path="res://scripts/view/observation_report_seal_view.gd" id="4_report_seal"]
+[ext_resource type="Theme" path="res://themes/act1_observation_theme.tres" id="5_theme"]
+[ext_resource type="StyleBox" path="res://themes/styles/observation_card.tres" id="6_card"]
+[ext_resource type="Script" path="res://scripts/ui/act1_top_bar.gd" id="7_top_bar"]
+[ext_resource type="Script" path="res://scripts/ui/act1_observation_sidebar.gd" id="8_sidebar"]
+[ext_resource type="Script" path="res://scripts/ui/act1_tool_bar.gd" id="9_tool_bar"]
+[ext_resource type="Script" path="res://scripts/ui/act1_preparation_gate.gd" id="10_preparation"]
+[ext_resource type="Script" path="res://scripts/ui/act1_journal_panel.gd" id="11_journal"]
+[ext_resource type="Script" path="res://scripts/ui/act1_completion_panel.gd" id="12_completion"]
+[ext_resource type="Script" path="res://scripts/ui/act1_help_panel.gd" id="13_help"]
+[ext_resource type="Script" path="res://scripts/ui/act1_pause_menu.gd" id="14_pause"]
 
 [sub_resource type="StyleBoxFlat" id="Style_panel"]
 bg_color = Color(0.044, 0.061, 0.056, 0.96)
@@ -16,22 +26,6 @@ corner_radius_top_left = 12
 corner_radius_top_right = 12
 corner_radius_bottom_right = 12
 corner_radius_bottom_left = 12
-
-[sub_resource type="StyleBoxFlat" id="Style_card"]
-bg_color = Color(0.075, 0.099, 0.089, 0.96)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.36, 0.38, 0.27, 0.9)
-corner_radius_top_left = 9
-corner_radius_top_right = 9
-corner_radius_bottom_right = 9
-corner_radius_bottom_left = 9
-content_margin_left = 12.0
-content_margin_top = 10.0
-content_margin_right = 12.0
-content_margin_bottom = 10.0
 
 [sub_resource type="StyleBoxFlat" id="Style_overlay"]
 bg_color = Color(0.025, 0.035, 0.033, 0.97)
@@ -50,58 +44,6 @@ bg_color = Color(0.035, 0.051, 0.047, 0.98)
 border_width_bottom = 1
 border_color = Color(0.51, 0.44, 0.25, 0.88)
 
-[sub_resource type="StyleBoxFlat" id="Style_button_hover"]
-bg_color = Color(0.13, 0.17, 0.135, 0.98)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.76, 0.61, 0.31, 0.96)
-corner_radius_top_left = 9
-corner_radius_top_right = 9
-corner_radius_bottom_right = 9
-corner_radius_bottom_left = 9
-
-[sub_resource type="StyleBoxFlat" id="Style_button_pressed"]
-bg_color = Color(0.17, 0.14, 0.085, 1)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.93, 0.73, 0.34, 1)
-corner_radius_top_left = 9
-corner_radius_top_right = 9
-corner_radius_bottom_right = 9
-corner_radius_bottom_left = 9
-
-[sub_resource type="StyleBoxFlat" id="Style_button_focus"]
-bg_color = Color(0, 0, 0, 0)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(1, 0.84, 0.43, 1)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
-expand_margin_left = 2.0
-expand_margin_top = 2.0
-expand_margin_right = 2.0
-expand_margin_bottom = 2.0
-
-[sub_resource type="Theme" id="Theme_game"]
-Button/colors/font_color = Color(0.84, 0.88, 0.81, 1)
-Button/colors/font_hover_color = Color(1, 0.9, 0.61, 1)
-Button/colors/font_pressed_color = Color(1, 0.88, 0.48, 1)
-Button/colors/font_focus_color = Color(1, 0.91, 0.64, 1)
-Button/colors/font_disabled_color = Color(0.48, 0.52, 0.48, 0.78)
-Button/font_sizes/font_size = 15
-Button/styles/normal = SubResource("Style_card")
-Button/styles/hover = SubResource("Style_button_hover")
-Button/styles/pressed = SubResource("Style_button_pressed")
-Button/styles/focus = SubResource("Style_button_focus")
-
 [node name="Act1TestTube" type="Control"]
 layout_mode = 3
 anchors_preset = 15
@@ -109,7 +51,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme = SubResource("Theme_game")
+theme = ExtResource("5_theme")
 script = ExtResource("1_controller")
 
 [node name="Background" type="ColorRect" parent="."]
@@ -136,9 +78,11 @@ grow_vertical = 2
 theme_override_constants/separation = 10
 
 [node name="Header" type="PanelContainer" parent="Main"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 70)
 layout_mode = 2
 theme_override_styles/panel = SubResource("Style_header")
+script = ExtResource("7_top_bar")
 
 [node name="HeaderMargin" type="MarginContainer" parent="Main/Header"]
 layout_mode = 2
@@ -238,9 +182,11 @@ unique_name_in_owner = true
 layout_mode = 2
 
 [node name="SidePanel" type="PanelContainer" parent="Main/Body"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(360, 0)
 layout_mode = 2
 theme_override_styles/panel = SubResource("Style_panel")
+script = ExtResource("8_sidebar")
 
 [node name="SideMargin" type="MarginContainer" parent="Main/Body/SidePanel"]
 layout_mode = 2
@@ -269,7 +215,7 @@ text = "Chapter goals"
 
 [node name="ObjectiveCard" type="PanelContainer" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent"]
 layout_mode = 2
-theme_override_styles/panel = SubResource("Style_card")
+theme_override_styles/panel = ExtResource("6_card")
 
 [node name="ObjectiveLabel" type="Label" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent/ObjectiveCard"]
 unique_name_in_owner = true
@@ -288,7 +234,7 @@ text = "Recorded evidence"
 [node name="EvidenceCard" type="PanelContainer" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent"]
 layout_mode = 2
 size_flags_vertical = 3
-theme_override_styles/panel = SubResource("Style_card")
+theme_override_styles/panel = ExtResource("6_card")
 
 [node name="EvidenceLabel" type="Label" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent/EvidenceCard"]
 unique_name_in_owner = true
@@ -317,7 +263,7 @@ text = "Open observation journal"
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-theme_override_styles/panel = SubResource("Style_card")
+theme_override_styles/panel = ExtResource("6_card")
 
 [node name="InspectLabel" type="Label" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent/InspectPanel"]
 unique_name_in_owner = true
@@ -327,9 +273,11 @@ text = "Inspect"
 autowrap_mode = 2
 
 [node name="ToolBar" type="PanelContainer" parent="Main"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 154)
 layout_mode = 2
 theme_override_styles/panel = SubResource("Style_panel")
+script = ExtResource("9_tool_bar")
 
 [node name="ToolMargin" type="MarginContainer" parent="Main/ToolBar"]
 layout_mode = 2
@@ -505,6 +453,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+script = ExtResource("10_preparation")
 
 [node name="Dim" type="ColorRect" parent="PreparationGate"]
 layout_mode = 1
@@ -574,6 +523,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+script = ExtResource("11_journal")
 
 [node name="Dim" type="ColorRect" parent="JournalPanel"]
 layout_mode = 1
@@ -706,6 +656,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+script = ExtResource("12_completion")
 
 [node name="Center" type="CenterContainer" parent="CompletionPanel"]
 layout_mode = 1
@@ -778,6 +729,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+script = ExtResource("13_help")
 
 [node name="Dim" type="ColorRect" parent="HelpPanel"]
 layout_mode = 1
@@ -848,6 +800,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+script = ExtResource("14_pause")
 
 [node name="Dim" type="ColorRect" parent="PauseMenu"]
 layout_mode = 1

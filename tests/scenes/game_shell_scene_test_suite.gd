@@ -26,6 +26,7 @@ func run(scene_root: Node) -> void:
 	_previous_scale = scene_root.get_window().content_scale_factor
 	_cleanup()
 	TranslationServer.set_locale("zh_CN")
+	_test_external_shell_theme()
 	_test_title_new_save_return_and_continue_path()
 	_test_effective_playtime_uses_the_real_profile_path()
 	_test_legacy_profile_uses_legacy_scene()
@@ -47,6 +48,19 @@ func get_assertion_count() -> int:
 
 func get_failure_count() -> int:
 	return _failure_count
+
+
+func _test_external_shell_theme() -> void:
+	var shell: GameShellController = (
+		SHELL_SCENE.instantiate() as GameShellController
+	)
+	_expect_true(
+		shell.theme != null
+		and shell.theme.resource_path
+			== "res://themes/game_shell_theme.tres",
+		"title shell uses the external frozen theme"
+	)
+	shell.free()
 
 
 func _test_title_new_save_return_and_continue_path() -> void:
