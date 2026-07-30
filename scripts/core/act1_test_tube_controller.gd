@@ -202,6 +202,7 @@ func _connect_controls() -> void:
 	_tool_bar.zoom_in_requested.connect(_habitat_view.zoom_layout_in)
 	_sidebar.journal_requested.connect(_open_journal)
 	_sidebar.focus_requested.connect(_on_focus_requested)
+	_sidebar.follow_requested.connect(_on_follow_requested)
 	_journal_panel.close_requested.connect(_close_journal)
 	_journal_panel.inference_requested.connect(
 		_on_inference_requested
@@ -225,6 +226,7 @@ func _connect_controls() -> void:
 	_habitat_view.facility_selection_changed.connect(
 		func(facility_id: int) -> void:
 			if facility_id >= 0:
+				_habitat_view.set_followed_worker_id(-1)
 				_habitat_view.set_selected_worker_id(-1)
 				_magnifier_active = true
 				_sidebar.set_inspector_visible(true)
@@ -318,8 +320,9 @@ func _on_start_pressed() -> void:
 	_preparation_gate.visible = false
 	_simulation_clock.set_paused(false)
 	_habitat_view.set_visuals_paused(false)
-	_tool_bar.focus_primary_action()
 	_update_controls()
+	_tool_bar.set_hint("")
+	_tool_bar.focus_primary_action()
 	presentation_audio_cue_requested.emit(&"ui_confirm")
 
 
@@ -473,8 +476,13 @@ func _on_magnifier_pressed() -> void:
 
 
 func _on_worker_selected(entity_id: int) -> void:
+	var was_following: bool = (
+		_habitat_view.get_followed_worker_id() >= 0
+	)
 	_habitat_view.set_selected_worker_id(entity_id)
 	if entity_id >= 0:
+		if was_following:
+			_habitat_view.set_followed_worker_id(entity_id)
 		_magnifier_active = true
 		_sidebar.set_inspector_visible(true)
 	_update_inspector()
@@ -484,6 +492,25 @@ func _on_worker_selected(entity_id: int) -> void:
 func _on_focus_requested() -> void:
 	if _habitat_view.focus_selected_object():
 		_sidebar.set_guidance_text(tr("R19_FOCUS_FEEDBACK"))
+
+
+func _on_follow_requested(enabled: bool) -> void:
+	var selected_id: int = _habitat_view.get_selected_worker_id()
+	var following: bool = (
+		enabled
+		and selected_id >= 0
+		and _habitat_view.set_followed_worker_id(selected_id)
+	)
+	if not following:
+		_habitat_view.set_followed_worker_id(-1)
+	_sidebar.set_guidance_text(
+		tr(
+			"R19_FOLLOW_FEEDBACK"
+			if following
+			else "R19_FOLLOW_STOPPED"
+		)
+	)
+	_update_inspector()
 
 
 func _open_journal() -> void:
@@ -826,6 +853,17 @@ func _update_controls() -> void:
 	_sidebar.set_journal_disabled(
 		_preparation_gate_active or _pause_menu_open or _help_open
 	)
+	_update_disabled_reasons(
+		blocked,
+		care,
+		work,
+		layout,
+		layout_available,
+		layout_mode,
+		selected_supply,
+		selected_facility,
+		selected_gate
+	)
 	var speed: int = _simulation_clock.get_speed_multiplier()
 	_top_bar.set_runtime_state(
 		_chapter_name(_latest_snapshot.campaign.chapter),
@@ -839,6 +877,138 @@ func _update_controls() -> void:
 		_pause_menu_open
 			or _journal_open
 			or not _fatal_error.is_empty()
+	)
+
+
+func _update_disabled_reasons(
+	blocked: bool,
+	care: QueenCareSnapshot,
+	work: ColonyWorkSnapshot,
+	layout: HabitatLayoutSnapshot,
+	layout_available: bool,
+	layout_mode: bool,
+	selected_supply: FacilitySupplySnapshot,
+	selected_facility: FacilitySnapshot,
+	selected_gate: HabitatConnectionSnapshot
+) -> void:
+	_set_button_reason(
+		_tool_bar.cover_button,
+		(
+			"R19_REASON_PENDING"
+			if care.light_cover_action_pending
+			else "R19_REASON_ALREADY_APPLIED"
+				if care.light_cover_applied
+				else "R19_REASON_BLOCKED"
+					if blocked
+					else "R19_REASON_ACTION_UNAVAILABLE"
+		)
+	)
+	_set_button_reason(
+		_tool_bar.sugar_button,
+		(
+			"R19_REASON_PENDING"
+			if _latest_snapshot.nutrition.sugar_action_pending
+			else "R19_REASON_BLOCKED"
+				if blocked
+				else "R19_REASON_ACTION_UNAVAILABLE"
+		)
+	)
+	_set_button_reason(
+		_tool_bar.protein_button,
+		(
+			"R19_REASON_PENDING"
+			if _latest_snapshot.nutrition.protein_action_pending
+			else "R19_REASON_BLOCKED"
+				if blocked
+				else "R19_REASON_ACTION_UNAVAILABLE"
+		)
+	)
+	_set_button_reason(
+		_tool_bar.clean_waste_button,
+		(
+			"R19_REASON_PENDING"
+			if (
+				work != null
+				and work.clean_action_pending_facility_id >= 0
+			)
+			else "R19_REASON_BLOCKED"
+				if blocked
+				else "R19_REASON_NO_CLEANABLE_WASTE"
+		)
+	)
+	_set_button_reason(
+		_tool_bar.layout_button,
+		(
+			"R19_REASON_BLOCKED"
+			if blocked
+			else "R19_REASON_LAYOUT_UNAVAILABLE"
+		)
+	)
+	_set_button_reason(
+		_tool_bar.place_button,
+		(
+			"R19_REASON_PENDING"
+			if layout != null and layout.action_pending
+			else "R19_REASON_NO_SUPPLY"
+				if (
+					selected_supply == null
+					or selected_supply.remaining_count <= 0
+				)
+				else "R19_REASON_LAYOUT_MODE"
+					if not layout_mode
+					else "R19_REASON_BLOCKED"
+		)
+	)
+	var edit_reason: String = (
+		"R19_REASON_PENDING"
+		if layout != null and layout.action_pending
+		else "R19_REASON_SELECT_REMOVABLE"
+			if (
+				selected_facility == null
+				or not selected_facility.player_removable
+			)
+			else "R19_REASON_BLOCKED"
+	)
+	_set_button_reason(_tool_bar.rotate_button, edit_reason)
+	_set_button_reason(_tool_bar.remove_button, edit_reason)
+	_set_button_reason(
+		_tool_bar.gate_button,
+		(
+			"R19_REASON_PENDING"
+			if layout != null and layout.action_pending
+			else "R19_REASON_SELECT_GATE"
+				if selected_gate == null
+				else "R19_REASON_BLOCKED"
+		)
+	)
+	for camera_button: Button in [
+		_tool_bar.zoom_out_button,
+		_tool_bar.reset_camera_button,
+		_tool_bar.zoom_in_button,
+	]:
+		_set_button_reason(
+			camera_button,
+			(
+				"R19_REASON_BLOCKED"
+				if blocked
+				else "R19_REASON_LAYOUT_MODE"
+			)
+		)
+	_set_button_reason(
+		_tool_bar.magnifier_button,
+		"R19_REASON_BLOCKED"
+	)
+	if not layout_available:
+		_set_button_reason(
+			_tool_bar.place_button,
+			"R19_REASON_LAYOUT_UNAVAILABLE"
+		)
+
+
+func _set_button_reason(button: Button, message_key: String) -> void:
+	_tool_bar.set_disabled_reason(
+		button,
+		tr(message_key) if button.disabled else ""
 	)
 
 
@@ -946,6 +1116,7 @@ func _update_inspector() -> void:
 	if _latest_snapshot == null:
 		return
 	_sidebar.set_inspector_focus_available(false)
+	_sidebar.set_inspector_follow_state(false, false)
 	var selected_id: int = _habitat_view.get_selected_worker_id()
 	if selected_id >= 0:
 		var worker: AntSnapshot = _latest_snapshot.colony.find_ant(
@@ -961,6 +1132,10 @@ func _update_inspector() -> void:
 				]
 			)
 			_sidebar.set_inspector_focus_available(true)
+			_sidebar.set_inspector_follow_state(
+				true,
+				_habitat_view.is_following_selected_worker()
+			)
 			return
 	var selected_facility_id: int = _habitat_view.get_selected_facility_id()
 	if (
@@ -1608,7 +1783,8 @@ func _refresh_copy() -> void:
 		tr("ACT1_EVIDENCE_HEADING"),
 		tr("CAMPAIGN_JOURNAL_OPEN"),
 		tr("R19_INSPECTOR_HEADING"),
-		tr("R19_FOCUS_SELECTION")
+		tr("R19_FOCUS_SELECTION"),
+		tr("R19_FOLLOW_SELECTION")
 	)
 	_tool_bar.set_copy(
 		tr("ACT1_TOOL_COVER"),

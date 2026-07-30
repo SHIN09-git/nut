@@ -3,6 +3,7 @@ extends PanelContainer
 
 signal journal_requested
 signal focus_requested
+signal follow_requested(enabled: bool)
 
 @onready var objective_heading: Label = %ObjectiveHeading
 @onready var objective_label: Label = %ObjectiveLabel
@@ -14,11 +15,16 @@ signal focus_requested
 @onready var inspect_heading: Label = %InspectHeading
 @onready var inspect_label: Label = %InspectLabel
 @onready var inspect_focus_button: Button = %InspectFocusButton
+@onready var inspect_follow_button: Button = %InspectFollowButton
 
 
 func _ready() -> void:
 	journal_button.pressed.connect(journal_requested.emit)
 	inspect_focus_button.pressed.connect(focus_requested.emit)
+	inspect_follow_button.pressed.connect(
+		func() -> void:
+			follow_requested.emit(inspect_follow_button.button_pressed)
+	)
 
 
 func set_copy(
@@ -26,13 +32,15 @@ func set_copy(
 	evidence_heading_text: String,
 	journal_button_text: String,
 	inspect_heading_text: String,
-	inspect_focus_button_text: String
+	inspect_focus_button_text: String,
+	inspect_follow_button_text: String
 ) -> void:
 	objective_heading.text = objective_heading_text
 	evidence_heading.text = evidence_heading_text
 	journal_button.text = journal_button_text
 	inspect_heading.text = inspect_heading_text
 	inspect_focus_button.text = inspect_focus_button_text
+	inspect_follow_button.text = inspect_follow_button_text
 
 
 func set_observation_text(
@@ -64,6 +72,15 @@ func set_inspector_text(value: String) -> void:
 func set_inspector_focus_available(value: bool) -> void:
 	inspect_focus_button.visible = value
 	inspect_focus_button.disabled = not value
+
+
+func set_inspector_follow_state(
+	available: bool,
+	following: bool
+) -> void:
+	inspect_follow_button.visible = available
+	inspect_follow_button.disabled = not available
+	inspect_follow_button.button_pressed = available and following
 
 
 func focus_journal_button() -> void:

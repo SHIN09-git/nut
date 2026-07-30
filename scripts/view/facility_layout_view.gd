@@ -299,6 +299,8 @@ func reset_camera() -> void:
 func pan_by(delta: Vector2) -> void:
 	if not delta.is_finite():
 		return
+	if delta.is_zero_approx():
+		return
 	_camera_offset += delta
 	_clamp_camera_offset()
 	camera_changed.emit(_camera_zoom, _camera_offset)

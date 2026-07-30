@@ -18,6 +18,7 @@ func run(scene_root: Node) -> void:
 	_test_component_and_theme_boundaries()
 	_test_contextual_hud_and_inspector()
 	_test_direct_world_interaction()
+	_test_disabled_action_reason_and_worker_follow()
 	_test_real_controls_complete_both_chapters()
 	_test_chapter_five_real_layout_and_migration_path()
 	_test_help_overlay_focus_and_pause()
@@ -290,6 +291,121 @@ func _test_direct_world_interaction() -> void:
 	_expect_true(
 		not (controller.get_node("%InspectFocusButton") as Button).visible,
 		"colony summary does not offer a false focus target"
+	)
+	_destroy_controller(controller)
+
+
+func _test_disabled_action_reason_and_worker_follow() -> void:
+	var controller: Act1TestTubeController = _create_controller(
+		Vector2(1280, 720)
+	)
+	var cover_button: Button = controller.get_node("%CoverButton") as Button
+	var feedback_label: Label = controller.get_node(
+		"%ActionFeedbackLabel"
+	) as Label
+	_expect_true(
+		cover_button.disabled and not cover_button.tooltip_text.is_empty(),
+		"a disabled preparation action exposes a reason"
+	)
+	cover_button.mouse_entered.emit()
+	_expect_true(
+		feedback_label.visible
+			and feedback_label.text.begins_with("•"),
+		"hovering a disabled action repeats its reason near the action dock"
+	)
+	(controller.get_node("%StartObservationButton") as Button).pressed.emit()
+	_expect_true(
+		not cover_button.disabled and cover_button.tooltip_text.is_empty(),
+		"an enabled action does not retain a stale disabled reason"
+	)
+
+	var view: Act1TestTubeView = controller.get_node(
+		"%Act1TestTubeView"
+	) as Act1TestTubeView
+	var snapshot: GameSnapshot = controller.get_latest_snapshot()
+	_expect_true(
+		not snapshot.colony.ants.is_empty(),
+		"worker-follow fixture has a stable brood entity"
+	)
+	if snapshot.colony.ants.is_empty():
+		_destroy_controller(controller)
+		return
+	var worker: AntSnapshot = snapshot.colony.ants[0]
+	worker.life_stage = AntModel.LifeStage.WORKER
+	worker.zone_id = &"test_tube_nest"
+	_expect_true(
+		view.apply_snapshot(snapshot),
+		"worker-follow fixture remains snapshot-only"
+	)
+	controller._on_worker_selected(worker.entity_id)
+	var follow_button: Button = controller.get_node(
+		"%InspectFollowButton"
+	) as Button
+	_expect_true(
+		follow_button.visible and not follow_button.disabled,
+		"worker inspection exposes an optional follow action"
+	)
+	var tick_before: int = controller.get_simulation_tick()
+	var revision_before: int = snapshot.layout.revision
+	follow_button.button_pressed = true
+	follow_button.pressed.emit()
+	_expect_int(
+		view.get_followed_worker_id(),
+		worker.entity_id,
+		"follow action keeps the stable worker ID"
+	)
+	view.get_layout_view().pan_by(Vector2(84.0, -46.0))
+	view.set_interpolation_alpha(0.5)
+	_expect_vector_near(
+		view.get_ant_view(worker.entity_id).position,
+		view.get_layout_view().size * 0.5,
+		0.51,
+		"follow camera recenters the selected worker from snapshot motion"
+	)
+	_expect_int(
+		controller.get_simulation_tick(),
+		tick_before,
+		"worker follow does not advance simulation"
+	)
+	_expect_int(
+		controller.get_latest_snapshot().layout.revision,
+		revision_before,
+		"worker follow does not mutate layout authority"
+	)
+
+	view.set_visuals_paused(true)
+	view.get_layout_view().pan_by(Vector2(-52.0, 31.0))
+	var paused_offset: Vector2 = view.get_layout_camera_offset()
+	view.set_interpolation_alpha(1.0)
+	_expect_vector_near(
+		view.get_layout_camera_offset(),
+		paused_offset,
+		0.001,
+		"paused visuals freeze automatic follow correction"
+	)
+	view.set_visuals_paused(false)
+	var wheel: InputEventMouseButton = InputEventMouseButton.new()
+	wheel.button_index = MOUSE_BUTTON_WHEEL_UP
+	wheel.pressed = true
+	view._gui_input(wheel)
+	_expect_int(
+		view.get_followed_worker_id(),
+		-1,
+		"manual camera input stops worker follow"
+	)
+	view.set_followed_worker_id(worker.entity_id)
+	view.zoom_layout_in()
+	_expect_int(
+		view.get_followed_worker_id(),
+		-1,
+		"camera toolbar operations stop worker follow"
+	)
+	view.set_followed_worker_id(worker.entity_id)
+	view.set_layout_mode(true)
+	_expect_int(
+		view.get_followed_worker_id(),
+		-1,
+		"entering layout editing stops worker follow"
 	)
 	_destroy_controller(controller)
 

@@ -290,6 +290,14 @@ custom_minimum_size = Vector2(0, 34)
 layout_mode = 2
 text = "Focus selected"
 
+[node name="InspectFollowButton" type="Button" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent/InspectPanel/InspectContent"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+toggle_mode = true
+text = "Follow worker"
+
 [node name="ToolBar" type="PanelContainer" parent="Main"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 76)
@@ -465,7 +473,6 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.77, 0.86, 0.78, 1)
 theme_override_font_sizes/font_size = 14
 text = "✓ Action ready"
-autowrap_mode = 2
 
 [node name="PreparationGate" type="Control" parent="."]
 unique_name_in_owner = true

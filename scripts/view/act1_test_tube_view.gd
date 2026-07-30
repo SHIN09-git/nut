@@ -52,6 +52,7 @@ var _interpolation_alpha: float = 1.0
 var _visuals_paused: bool = false
 var _reduced_motion: bool = false
 var _selected_worker_id: int = -1
+var _followed_worker_id: int = -1
 var _camera_dragging: bool = false
 var _camera_drag_anchor: Vector2 = Vector2.ZERO
 
@@ -114,6 +115,7 @@ func _gui_input(event: InputEvent) -> void:
 			mouse_event.button_index == MOUSE_BUTTON_WHEEL_UP
 			and mouse_event.pressed
 		):
+			set_followed_worker_id(-1)
 			_facility_layout_view.zoom_in()
 			accept_event()
 			return
@@ -121,6 +123,7 @@ func _gui_input(event: InputEvent) -> void:
 			mouse_event.button_index == MOUSE_BUTTON_WHEEL_DOWN
 			and mouse_event.pressed
 		):
+			set_followed_worker_id(-1)
 			_facility_layout_view.zoom_out()
 			accept_event()
 			return
@@ -128,6 +131,8 @@ func _gui_input(event: InputEvent) -> void:
 			MOUSE_BUTTON_MIDDLE,
 			MOUSE_BUTTON_RIGHT,
 		]:
+			if mouse_event.pressed:
+				set_followed_worker_id(-1)
 			_camera_dragging = mouse_event.pressed
 			_camera_drag_anchor = mouse_event.position
 			accept_event()
@@ -167,11 +172,13 @@ func _handle_observation_click(
 		local_position
 	)
 	if facility_id >= 0:
+		set_followed_worker_id(-1)
 		set_selected_worker_id(-1)
 		if focus_selection:
 			_facility_layout_view.focus_facility(facility_id)
 		return
 	set_selected_worker_id(-1)
+	set_followed_worker_id(-1)
 	worker_selection_requested.emit(-1)
 
 
@@ -231,6 +238,7 @@ func apply_snapshot(snapshot: GameSnapshot) -> bool:
 	_queen_view.set_simulation_tick(snapshot.simulation_tick)
 	_apply_selection()
 	_layout_projection()
+	_update_follow_camera()
 	queue_redraw()
 	return true
 
@@ -293,6 +301,7 @@ func reset_projection() -> void:
 	_current_queen_position = Vector2.ZERO
 	_interpolation_alpha = 1.0
 	_selected_worker_id = -1
+	_followed_worker_id = -1
 	_world_overlay.reset_projection()
 	_layout_projection()
 	queue_redraw()
@@ -307,6 +316,7 @@ func set_interpolation_alpha(value: float) -> void:
 		else clampf(value, 0.0, 1.0) if is_finite(value) else 0.0
 	)
 	_layout_projection()
+	_update_follow_camera()
 	queue_redraw()
 
 
@@ -345,6 +355,24 @@ func get_selected_worker_id() -> int:
 	return _selected_worker_id
 
 
+func set_followed_worker_id(entity_id: int) -> bool:
+	_followed_worker_id = (
+		entity_id if _is_selectable_worker(entity_id) else -1
+	)
+	return _followed_worker_id == entity_id
+
+
+func get_followed_worker_id() -> int:
+	return _followed_worker_id
+
+
+func is_following_selected_worker() -> bool:
+	return (
+		_selected_worker_id >= 0
+		and _followed_worker_id == _selected_worker_id
+	)
+
+
 func get_ant_view(entity_id: int) -> AntView:
 	return _ant_views.get(entity_id)
 
@@ -359,6 +387,8 @@ func get_queen_view() -> QueenView:
 
 func set_layout_mode(value: bool) -> void:
 	_camera_dragging = false
+	if value:
+		set_followed_worker_id(-1)
 	_facility_layout_view.set_editing_enabled(value)
 
 
@@ -402,6 +432,21 @@ func focus_selected_object() -> bool:
 	)
 
 
+func _update_follow_camera() -> void:
+	if _visuals_paused or _followed_worker_id < 0:
+		return
+	if not _is_selectable_worker(_followed_worker_id):
+		_followed_worker_id = -1
+		return
+	var delta: Vector2 = (
+		_facility_layout_view.size * 0.5
+		- _get_display_position(_followed_worker_id)
+	)
+	if delta.length_squared() <= 0.25:
+		return
+	_facility_layout_view.pan_by(delta)
+
+
 func get_layout_placement_cue() -> int:
 	return _facility_layout_view.get_placement_cue()
 
@@ -415,14 +460,17 @@ func request_remove_selected_facility() -> bool:
 
 
 func zoom_layout_in() -> void:
+	set_followed_worker_id(-1)
 	_facility_layout_view.zoom_in()
 
 
 func zoom_layout_out() -> void:
+	set_followed_worker_id(-1)
 	_facility_layout_view.zoom_out()
 
 
 func reset_layout_camera() -> void:
+	set_followed_worker_id(-1)
 	_facility_layout_view.reset_camera()
 
 

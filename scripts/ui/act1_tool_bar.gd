@@ -35,6 +35,8 @@ signal zoom_in_requested
 @onready var layout_controls: ScrollContainer = %LayoutRowScroll
 @onready var prototype_label: Label = %PrototypeLabel
 
+var _disabled_reasons: Dictionary[Button, String] = {}
+
 
 func _ready() -> void:
 	cover_button.pressed.connect(cover_requested.emit)
@@ -56,6 +58,13 @@ func _ready() -> void:
 	zoom_out_button.pressed.connect(zoom_out_requested.emit)
 	reset_camera_button.pressed.connect(camera_reset_requested.emit)
 	zoom_in_button.pressed.connect(zoom_in_requested.emit)
+	for button: Button in _reason_buttons():
+		button.mouse_entered.connect(
+			_show_button_reason.bind(button)
+		)
+		button.focus_entered.connect(
+			_show_button_reason.bind(button)
+		)
 
 
 func set_copy(
@@ -106,6 +115,45 @@ func set_feedback(
 		if is_error else Color(0.68, 0.9, 0.72)
 	)
 	action_feedback_label.visible = true
+
+
+func set_disabled_reason(button: Button, reason: String) -> void:
+	if button == null:
+		return
+	_disabled_reasons[button] = reason
+	button.tooltip_text = reason if button.disabled else ""
+
+
+func set_hint(message: String) -> void:
+	action_feedback_label.text = "• %s" % message
+	action_feedback_label.modulate = Color(0.77, 0.86, 0.78)
+	action_feedback_label.visible = not message.is_empty()
+
+
+func _show_button_reason(button: Button) -> void:
+	if button == null or not button.disabled:
+		return
+	var reason: String = _disabled_reasons.get(button, "")
+	if not reason.is_empty():
+		set_hint(reason)
+
+
+func _reason_buttons() -> Array[Button]:
+	return [
+		cover_button,
+		sugar_button,
+		protein_button,
+		clean_waste_button,
+		layout_button,
+		place_button,
+		rotate_button,
+		remove_button,
+		gate_button,
+		zoom_out_button,
+		reset_camera_button,
+		zoom_in_button,
+		magnifier_button,
+	]
 
 
 func focus_primary_action() -> void:
