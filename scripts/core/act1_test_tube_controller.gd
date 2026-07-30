@@ -201,6 +201,7 @@ func _connect_controls() -> void:
 	)
 	_tool_bar.zoom_in_requested.connect(_habitat_view.zoom_layout_in)
 	_sidebar.journal_requested.connect(_open_journal)
+	_sidebar.focus_requested.connect(_on_focus_requested)
 	_journal_panel.close_requested.connect(_close_journal)
 	_journal_panel.inference_requested.connect(
 		_on_inference_requested
@@ -473,10 +474,16 @@ func _on_magnifier_pressed() -> void:
 
 func _on_worker_selected(entity_id: int) -> void:
 	_habitat_view.set_selected_worker_id(entity_id)
-	_magnifier_active = true
-	_sidebar.set_inspector_visible(true)
+	if entity_id >= 0:
+		_magnifier_active = true
+		_sidebar.set_inspector_visible(true)
 	_update_inspector()
 	_update_controls()
+
+
+func _on_focus_requested() -> void:
+	if _habitat_view.focus_selected_object():
+		_sidebar.set_guidance_text(tr("R19_FOCUS_FEEDBACK"))
 
 
 func _open_journal() -> void:
@@ -938,6 +945,7 @@ func _get_selected_gate_connection(
 func _update_inspector() -> void:
 	if _latest_snapshot == null:
 		return
+	_sidebar.set_inspector_focus_available(false)
 	var selected_id: int = _habitat_view.get_selected_worker_id()
 	if selected_id >= 0:
 		var worker: AntSnapshot = _latest_snapshot.colony.find_ant(
@@ -952,6 +960,7 @@ func _update_inspector() -> void:
 					_carried_item_text(worker),
 				]
 			)
+			_sidebar.set_inspector_focus_available(true)
 			return
 	var selected_facility_id: int = _habitat_view.get_selected_facility_id()
 	if (
@@ -976,6 +985,7 @@ func _update_inspector() -> void:
 					),
 				]
 			)
+			_sidebar.set_inspector_focus_available(true)
 			return
 	var counts: Dictionary[int, int] = {
 		AntModel.LifeStage.EGG: 0,
@@ -1597,7 +1607,8 @@ func _refresh_copy() -> void:
 		tr("ACT1_OBJECTIVE_HEADING"),
 		tr("ACT1_EVIDENCE_HEADING"),
 		tr("CAMPAIGN_JOURNAL_OPEN"),
-		tr("R19_INSPECTOR_HEADING")
+		tr("R19_INSPECTOR_HEADING"),
+		tr("R19_FOCUS_SELECTION")
 	)
 	_tool_bar.set_copy(
 		tr("ACT1_TOOL_COVER"),

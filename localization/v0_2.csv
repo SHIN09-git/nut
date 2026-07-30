@@ -411,3 +411,5 @@
 "R19_LIGHT_EXPOSED","光照明显","Exposed to light","R19"
 "R19_POLLUTION_PRESENT","可见污染","Visible pollution","R19"
 "R19_POLLUTION_CLEAR","环境整洁","Clear environment","R19"
+"R19_FOCUS_SELECTION","聚焦所选对象","Focus selected","R19"
+"R19_FOCUS_FEEDBACK","镜头已聚焦到所选对象。","Camera focused on the selected object.","R19"

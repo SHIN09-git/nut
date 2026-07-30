@@ -17,6 +17,7 @@ func run(scene_root: Node) -> void:
 	_scene_root = scene_root
 	_test_component_and_theme_boundaries()
 	_test_contextual_hud_and_inspector()
+	_test_direct_world_interaction()
 	_test_real_controls_complete_both_chapters()
 	_test_chapter_five_real_layout_and_migration_path()
 	_test_help_overlay_focus_and_pause()
@@ -188,6 +189,108 @@ func _test_contextual_hud_and_inspector() -> void:
 			),
 			"worker inspector follows the selected stable entity ID"
 		)
+	_destroy_controller(controller)
+
+
+func _test_direct_world_interaction() -> void:
+	var controller: Act1TestTubeController = _create_controller(
+		Vector2(1280, 720)
+	)
+	(controller.get_node("%StartObservationButton") as Button).pressed.emit()
+	_settle_container_layout(controller)
+	var view: Act1TestTubeView = controller.get_node(
+		"%Act1TestTubeView"
+	) as Act1TestTubeView
+	var layout_view: FacilityLayoutView = view.get_layout_view()
+	var snapshot_before: GameSnapshot = controller.get_latest_snapshot()
+	var tick_before: int = snapshot_before.simulation_tick
+	var revision_before: int = snapshot_before.layout.revision
+	var facility_rect: Rect2 = layout_view.project_facility_rect(1)
+	var click: InputEventMouseButton = InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	click.position = facility_rect.get_center()
+	view._gui_input(click)
+	_expect_true(
+		not view.is_layout_mode()
+			and view.get_selected_facility_id() == 1,
+		"ordinary world click selects a stable facility without editing"
+	)
+	_expect_true(
+		(controller.get_node("%InspectPanel") as Control).visible
+			and (controller.get_node("%InspectFocusButton") as Button).visible,
+		"direct selection opens an actionable snapshot inspector"
+	)
+	_expect_int(
+		controller.get_latest_snapshot().simulation_tick,
+		tick_before,
+		"direct selection does not advance simulation"
+	)
+	_expect_int(
+		controller.get_latest_snapshot().layout.revision,
+		revision_before,
+		"direct selection does not mutate layout authority"
+	)
+
+	var zoom_before: float = view.get_layout_camera_zoom()
+	var wheel: InputEventMouseButton = InputEventMouseButton.new()
+	wheel.button_index = MOUSE_BUTTON_WHEEL_UP
+	wheel.pressed = true
+	view._gui_input(wheel)
+	_expect_true(
+		view.get_layout_camera_zoom() > zoom_before,
+		"ordinary mouse wheel zooms the shared world"
+	)
+	var offset_before: Vector2 = view.get_layout_camera_offset()
+	var drag_start: InputEventMouseButton = InputEventMouseButton.new()
+	drag_start.button_index = MOUSE_BUTTON_MIDDLE
+	drag_start.pressed = true
+	drag_start.position = Vector2(400.0, 260.0)
+	view._gui_input(drag_start)
+	var drag_motion: InputEventMouseMotion = InputEventMouseMotion.new()
+	drag_motion.position = Vector2(445.0, 290.0)
+	view._gui_input(drag_motion)
+	var drag_end: InputEventMouseButton = InputEventMouseButton.new()
+	drag_end.button_index = MOUSE_BUTTON_MIDDLE
+	drag_end.pressed = false
+	drag_end.position = drag_motion.position
+	view._gui_input(drag_end)
+	_expect_true(
+		view.get_layout_camera_offset() != offset_before,
+		"ordinary middle drag pans the shared world"
+	)
+	(controller.get_node("%InspectFocusButton") as Button).pressed.emit()
+	_expect_vector_near(
+		layout_view.project_facility_rect(1).get_center(),
+		layout_view.size * 0.5,
+		0.001,
+		"inspector focus recenters the selected facility"
+	)
+	_expect_int(
+		controller.get_latest_snapshot().simulation_tick,
+		tick_before,
+		"camera operations do not advance simulation"
+	)
+	_expect_int(
+		controller.get_latest_snapshot().layout.revision,
+		revision_before,
+		"camera operations do not mutate layout authority"
+	)
+
+	var empty_click: InputEventMouseButton = InputEventMouseButton.new()
+	empty_click.button_index = MOUSE_BUTTON_LEFT
+	empty_click.pressed = true
+	empty_click.position = Vector2(4.0, 4.0)
+	view._gui_input(empty_click)
+	_expect_int(
+		view.get_selected_facility_id(),
+		-1,
+		"clicking empty world space clears facility selection"
+	)
+	_expect_true(
+		not (controller.get_node("%InspectFocusButton") as Button).visible,
+		"colony summary does not offer a false focus target"
+	)
 	_destroy_controller(controller)
 
 

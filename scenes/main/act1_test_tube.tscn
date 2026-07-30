@@ -283,6 +283,13 @@ layout_mode = 2
 text = "Inspect"
 autowrap_mode = 2
 
+[node name="InspectFocusButton" type="Button" parent="Main/Body/SidePanel/SideMargin/SideScroll/SideContent/InspectPanel/InspectContent"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+text = "Focus selected"
+
 [node name="ToolBar" type="PanelContainer" parent="Main"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 76)

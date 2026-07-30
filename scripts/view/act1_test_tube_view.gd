@@ -52,6 +52,8 @@ var _interpolation_alpha: float = 1.0
 var _visuals_paused: bool = false
 var _reduced_motion: bool = false
 var _selected_worker_id: int = -1
+var _camera_dragging: bool = false
+var _camera_drag_anchor: Vector2 = Vector2.ZERO
 
 @onready var _entity_layer: Node2D = %EntityLayer
 @onready var _queen_view: QueenView = %QueenView
@@ -104,18 +106,73 @@ func _notification(what: int) -> void:
 
 
 func _gui_input(event: InputEvent) -> void:
+	if is_layout_mode():
+		return
 	var mouse_event: InputEventMouseButton = event as InputEventMouseButton
-	if (
-		mouse_event == null
-		or not mouse_event.pressed
-		or mouse_event.button_index != MOUSE_BUTTON_LEFT
-	):
+	if mouse_event != null:
+		if (
+			mouse_event.button_index == MOUSE_BUTTON_WHEEL_UP
+			and mouse_event.pressed
+		):
+			_facility_layout_view.zoom_in()
+			accept_event()
+			return
+		if (
+			mouse_event.button_index == MOUSE_BUTTON_WHEEL_DOWN
+			and mouse_event.pressed
+		):
+			_facility_layout_view.zoom_out()
+			accept_event()
+			return
+		if mouse_event.button_index in [
+			MOUSE_BUTTON_MIDDLE,
+			MOUSE_BUTTON_RIGHT,
+		]:
+			_camera_dragging = mouse_event.pressed
+			_camera_drag_anchor = mouse_event.position
+			accept_event()
+			return
+		if (
+			mouse_event.button_index == MOUSE_BUTTON_LEFT
+			and mouse_event.pressed
+		):
+			_handle_observation_click(
+				mouse_event.position,
+				mouse_event.double_click
+			)
+			accept_event()
+			return
+	var motion: InputEventMouseMotion = event as InputEventMouseMotion
+	if motion == null or not _camera_dragging:
 		return
-	var worker_id: int = _find_worker_at(mouse_event.position)
-	if worker_id < 0:
-		return
-	worker_selection_requested.emit(worker_id)
+	_facility_layout_view.pan_by(
+		motion.position - _camera_drag_anchor
+	)
+	_camera_drag_anchor = motion.position
 	accept_event()
+
+
+func _handle_observation_click(
+	local_position: Vector2,
+	focus_selection: bool
+) -> void:
+	var worker_id: int = _find_worker_at(local_position)
+	if worker_id >= 0:
+		_facility_layout_view.set_selected_facility_id(-1)
+		worker_selection_requested.emit(worker_id)
+		if focus_selection:
+			focus_worker(worker_id)
+		return
+	var facility_id: int = _facility_layout_view.select_facility_at(
+		local_position
+	)
+	if facility_id >= 0:
+		set_selected_worker_id(-1)
+		if focus_selection:
+			_facility_layout_view.focus_facility(facility_id)
+		return
+	set_selected_worker_id(-1)
+	worker_selection_requested.emit(-1)
 
 
 func apply_snapshot(snapshot: GameSnapshot) -> bool:
@@ -301,6 +358,7 @@ func get_queen_view() -> QueenView:
 
 
 func set_layout_mode(value: bool) -> void:
+	_camera_dragging = false
 	_facility_layout_view.set_editing_enabled(value)
 
 
@@ -324,6 +382,24 @@ func handle_layout_keyboard_action(keycode: Key) -> bool:
 
 func get_selected_facility_id() -> int:
 	return _facility_layout_view.get_selected_facility_id()
+
+
+func focus_worker(entity_id: int) -> bool:
+	if not _is_selectable_worker(entity_id):
+		return false
+	return _facility_layout_view.focus_view_position(
+		_get_display_position(entity_id)
+	)
+
+
+func focus_selected_object() -> bool:
+	if _selected_worker_id >= 0:
+		return focus_worker(_selected_worker_id)
+	var facility_id: int = get_selected_facility_id()
+	return (
+		facility_id >= 0
+		and _facility_layout_view.focus_facility(facility_id)
+	)
 
 
 func get_layout_placement_cue() -> int:

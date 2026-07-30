@@ -84,7 +84,6 @@ var _placement_slot: Vector2i = Vector2i.ZERO
 var _placement_orientation: int = 0
 var _dragging: bool = false
 var _drag_anchor: Vector2 = Vector2.ZERO
-var _facility_hit_rects: Dictionary[int, Rect2] = {}
 
 
 func _ready() -> void:
@@ -212,6 +211,54 @@ func get_placement_cue() -> PlacementCue:
 
 func get_selected_facility_id() -> int:
 	return _selected_facility_id
+
+
+func set_selected_facility_id(facility_id: int) -> bool:
+	if facility_id >= 0 and (
+		_snapshot == null
+		or _snapshot.get_facility(facility_id) == null
+	):
+		return false
+	_set_selected_facility(facility_id)
+	queue_redraw()
+	return _selected_facility_id == facility_id
+
+
+func find_facility_at(local_position: Vector2) -> int:
+	if (
+		_snapshot == null
+		or not local_position.is_finite()
+		or not is_finite(_camera_zoom)
+		or _camera_zoom <= 0.0
+	):
+		return -1
+	var world_position: Vector2 = (
+		(local_position - _grid_origin()) / _camera_zoom
+	)
+	return _spatial_projection.find_top_facility_at(
+		_snapshot,
+		world_position
+	)
+
+
+func select_facility_at(local_position: Vector2) -> int:
+	var facility_id: int = find_facility_at(local_position)
+	set_selected_facility_id(facility_id)
+	return facility_id
+
+
+func focus_view_position(local_position: Vector2) -> bool:
+	if not local_position.is_finite():
+		return false
+	pan_by(size * 0.5 - local_position)
+	return true
+
+
+func focus_facility(facility_id: int) -> bool:
+	var facility_rect: Rect2 = project_facility_rect(facility_id)
+	if facility_rect.size.x <= 0.0 or facility_rect.size.y <= 0.0:
+		return false
+	return focus_view_position(facility_rect.get_center())
 
 
 func get_camera_zoom() -> float:
@@ -417,17 +464,7 @@ func _handle_primary_click(local_position: Vector2) -> void:
 		_submit_current_placement()
 		queue_redraw()
 		return
-	var selected_id: int = -1
-	var stable_ids: Array[int] = []
-	stable_ids.assign(_facility_hit_rects.keys())
-	stable_ids.sort()
-	stable_ids.reverse()
-	for facility_id: int in stable_ids:
-		if _facility_hit_rects[facility_id].has_point(local_position):
-			selected_id = facility_id
-			break
-	_set_selected_facility(selected_id)
-	queue_redraw()
+	select_facility_at(local_position)
 
 
 func _move_cursor_or_camera(direction: Vector2i) -> bool:
@@ -585,7 +622,6 @@ func _clamp_camera_offset() -> void:
 func _draw() -> void:
 	if _snapshot == null:
 		return
-	_facility_hit_rects.clear()
 	if _editing_enabled:
 		draw_rect(
 			Rect2(Vector2.ZERO, size),
@@ -648,7 +684,6 @@ func _draw_facility(facility: FacilitySnapshot) -> void:
 	)
 	var inset: float = (10.0 if is_overlay else 4.0) * _camera_zoom
 	rect = rect.grow(-inset)
-	_facility_hit_rects[facility.facility_id] = rect
 	var selected: bool = facility.facility_id == _selected_facility_id
 	draw_rect(
 		Rect2(
