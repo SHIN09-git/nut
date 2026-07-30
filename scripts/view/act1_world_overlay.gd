@@ -4,8 +4,6 @@ extends Control
 const SUGAR_COLOR: Color = Color(0.95, 0.72, 0.28, 0.96)
 const SUGAR_GLOW: Color = Color(1.0, 0.86, 0.48, 0.30)
 const CARE_GLOW: Color = Color(0.91, 0.78, 0.48, 0.22)
-const WASTE_COLOR: Color = Color(0.48, 0.30, 0.14, 0.96)
-const WASTE_GLOW: Color = Color(0.70, 0.48, 0.22, 0.26)
 const SCOUT_GLOW: Color = Color(0.42, 0.76, 0.67, 0.30)
 const MIGRATION_GLOW: Color = Color(0.93, 0.66, 0.30, 0.28)
 const POLLUTION_COLOR: Color = Color(0.48, 0.34, 0.18, 0.66)
@@ -126,15 +124,6 @@ func _draw_worker_activity() -> void:
 			)
 		)
 		if (
-			ant.foraging_task != null
-			and ant.foraging_task.carried_portions > 0
-		):
-			_draw_carried_cue(
-				worker_position + Vector2(7.0, -13.0),
-				SUGAR_GLOW,
-				SUGAR_COLOR
-			)
-		if (
 			ant.feeding_task != null
 			and ant.feeding_task.state
 				!= BroodFeedingTaskModel.State.IDLE
@@ -148,15 +137,6 @@ func _draw_worker_activity() -> void:
 				CARE_GLOW,
 				3.0,
 				true
-			)
-		if (
-			ant.waste_cleanup_task != null
-			and ant.waste_cleanup_task.carried_amount > 0.0
-		):
-			_draw_carried_cue(
-				worker_position + Vector2(8.0, -13.0),
-				WASTE_GLOW,
-				WASTE_COLOR
 			)
 		if (
 			ant.scout_task != null
@@ -187,15 +167,6 @@ func _draw_worker_activity() -> void:
 					2.0,
 					true
 				)
-
-
-func _draw_carried_cue(
-	position: Vector2,
-	glow: Color,
-	fill: Color
-) -> void:
-	draw_circle(position, 9.0, glow)
-	draw_circle(position, 4.5, fill)
 
 
 func _draw_activity_ring(

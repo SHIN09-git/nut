@@ -779,10 +779,16 @@ func _layout_projection() -> void:
 			_interpolation_alpha
 		)
 	)
-	if _queen_view != null:
-		_queen_view.set_habitat_position(queen_position)
+	if _latest_snapshot == null or _latest_snapshot.colony == null:
+		if _queen_view != null:
+			_queen_view.set_habitat_position(queen_position)
+		if _world_overlay != null:
+			_world_overlay.set_display_positions(
+				display_positions,
+				queen_position
+			)
+		return
 	for entity_id: int in _ant_views:
-		var view: AntView = _ant_views[entity_id]
 		var current: Vector2 = _current_positions.get(
 			entity_id,
 			Vector2.ZERO
@@ -793,6 +799,74 @@ func _layout_projection() -> void:
 			_interpolation_alpha
 		)
 		display_positions[entity_id] = display_position
+	for ant: AntSnapshot in _latest_snapshot.colony.ants:
+		if ant.life_stage != AntModel.LifeStage.WORKER:
+			continue
+		var view: AntView = _ant_views.get(ant.entity_id)
+		if view == null:
+			continue
+		var current: Vector2 = _current_positions.get(
+			ant.entity_id,
+			display_positions.get(ant.entity_id, Vector2.ZERO)
+		)
+		var previous: Vector2 = _previous_positions.get(
+			ant.entity_id,
+			current
+		)
+		view.set_behavior_pose(
+			_get_worker_behavior_pose(ant),
+			_get_worker_facing_direction(
+				ant,
+				previous,
+				current,
+				display_positions
+			),
+			_get_worker_animation_phase()
+		)
+	for ant: AntSnapshot in _latest_snapshot.colony.ants:
+		if (
+			ant.life_stage == AntModel.LifeStage.WORKER
+			or ant.carrier_ant_id < 0
+			or not display_positions.has(ant.carrier_ant_id)
+		):
+			continue
+		var carrier_view: AntView = _ant_views.get(ant.carrier_ant_id)
+		var facing: float = (
+			carrier_view.get_facing_sign()
+			if carrier_view != null
+			else 1.0
+		)
+		display_positions[ant.entity_id] = (
+			display_positions[ant.carrier_ant_id]
+			+ Vector2(13.0 * facing, -12.0)
+		)
+	if (
+		_latest_snapshot.colony.queen_carrier_ant_id >= 0
+		and display_positions.has(
+			_latest_snapshot.colony.queen_carrier_ant_id
+		)
+	):
+		var queen_carrier: AntView = _ant_views.get(
+			_latest_snapshot.colony.queen_carrier_ant_id
+		)
+		var queen_facing: float = (
+			queen_carrier.get_facing_sign()
+			if queen_carrier != null
+			else 1.0
+		)
+		queen_position = (
+			display_positions[
+				_latest_snapshot.colony.queen_carrier_ant_id
+			] + Vector2(20.0 * queen_facing, -24.0)
+		)
+	if _queen_view != null:
+		_queen_view.set_habitat_position(queen_position)
+	for entity_id: int in _ant_views:
+		var view: AntView = _ant_views[entity_id]
+		var display_position: Vector2 = display_positions.get(
+			entity_id,
+			Vector2.ZERO
+		)
 		view.set_slot_position(display_position)
 		view.z_index = (
 			6
@@ -804,6 +878,123 @@ func _layout_projection() -> void:
 			display_positions,
 			queen_position
 		)
+
+
+func _get_worker_behavior_pose(
+	worker: AntSnapshot
+) -> AntView.BehaviorPose:
+	if (
+		worker.waste_cleanup_task != null
+		and worker.waste_cleanup_task.state
+			!= WasteCleanupTaskModel.State.IDLE
+	):
+		if worker.waste_cleanup_task.carried_amount > 0.0:
+			return AntView.BehaviorPose.CARRYING_WASTE
+		if worker.waste_cleanup_task.state in [
+			WasteCleanupTaskModel.State.MOVING_TO_WASTE,
+			WasteCleanupTaskModel.State.CARRYING_TO_TRAY,
+		]:
+			return AntView.BehaviorPose.WALKING
+	if (
+		worker.scout_task != null
+		and worker.scout_task.state != ScoutTaskModel.State.IDLE
+	):
+		if worker.scout_task.state == ScoutTaskModel.State.OBSERVING:
+			return AntView.BehaviorPose.OBSERVING
+		return AntView.BehaviorPose.WALKING
+	if (
+		worker.migration_task != null
+		and worker.migration_task.state != MigrationTaskModel.State.IDLE
+	):
+		match worker.migration_task.state:
+			MigrationTaskModel.State.MOVING_TO_MEMBER:
+				return AntView.BehaviorPose.WALKING
+			MigrationTaskModel.State.PICKING_UP, \
+			MigrationTaskModel.State.DROPPING:
+				return AntView.BehaviorPose.HANDLING_BROOD
+			MigrationTaskModel.State.CARRYING_TO_ZONE:
+				return AntView.BehaviorPose.CARRYING_BROOD
+	if (
+		worker.feeding_task != null
+		and worker.feeding_task.state != BroodFeedingTaskModel.State.IDLE
+	):
+		return (
+			AntView.BehaviorPose.WALKING
+			if worker.feeding_task.state
+				== BroodFeedingTaskModel.State.MOVING_TO_BROOD
+			else AntView.BehaviorPose.FEEDING_BROOD
+		)
+	if (
+		worker.foraging_task != null
+		and worker.foraging_task.state != ForagingTaskSnapshot.State.IDLE
+	):
+		match worker.foraging_task.state:
+			ForagingTaskSnapshot.State.MOVING_TO_FOOD:
+				return AntView.BehaviorPose.WALKING
+			ForagingTaskSnapshot.State.COLLECTING:
+				return AntView.BehaviorPose.COLLECTING_FOOD
+			ForagingTaskSnapshot.State.RETURNING_TO_NEST:
+				return (
+					AntView.BehaviorPose.CARRYING_FOOD
+					if worker.foraging_task.carried_portions > 0
+					else AntView.BehaviorPose.WALKING
+				)
+			ForagingTaskSnapshot.State.SHARING:
+				return AntView.BehaviorPose.SHARING_FOOD
+	if worker.worker_task_state != WorkerTaskModel.State.IDLE:
+		match worker.worker_task_state:
+			WorkerTaskModel.State.MOVING_TO_BROOD:
+				return AntView.BehaviorPose.WALKING
+			WorkerTaskModel.State.PICKING_UP, \
+			WorkerTaskModel.State.DROPPING:
+				return AntView.BehaviorPose.HANDLING_BROOD
+			WorkerTaskModel.State.CARRYING_TO_ZONE:
+				return AntView.BehaviorPose.CARRYING_BROOD
+	return AntView.BehaviorPose.IDLE
+
+
+func _get_worker_facing_direction(
+	worker: AntSnapshot,
+	previous: Vector2,
+	current: Vector2,
+	display_positions: Dictionary[int, Vector2]
+) -> float:
+	var movement: Vector2 = current - previous
+	if absf(movement.x) > 0.05:
+		return movement.x
+	if (
+		worker.feeding_task != null
+		and worker.feeding_task.target_brood_id >= 0
+		and display_positions.has(worker.feeding_task.target_brood_id)
+	):
+		return (
+			display_positions[worker.feeding_task.target_brood_id].x
+			- current.x
+		)
+	if (
+		worker.foraging_task != null
+		and worker.foraging_task.state == ForagingTaskSnapshot.State.COLLECTING
+		and _latest_snapshot != null
+	):
+		return (
+			_get_food_position(
+				worker.foraging_task.target_food_source_id,
+				_latest_snapshot
+			).x - current.x
+		)
+	return 0.0
+
+
+func _get_worker_animation_phase() -> float:
+	if _latest_snapshot == null:
+		return 0.0
+	return fposmod(
+		(
+			float(_latest_snapshot.simulation_tick)
+			+ _interpolation_alpha
+		) / AntView.WALK_CYCLE_TICKS,
+		1.0
+	)
 
 
 func _get_brood_position(entity_id: int) -> Vector2:

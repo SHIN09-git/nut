@@ -16,7 +16,7 @@
 | 稳定资产 ID | 仓库位置 | 用途 | 完成条件 |
 | --- | --- | --- | --- |
 | `r14_title_observation_desk` | `assets/production/backgrounds/title_observation_desk.png` | 标题、档案和设置外壳背景 | 16:9 双分辨率裁切安全；菜单文字保持清晰 |
-| `r14_ant_lifecycle_procedural` | `scripts/view/ant_view.gd` | 卵、幼虫、蛹、工蚁 | 四阶段轮廓、明暗和比例均可独立辨认 |
+| `r14_ant_lifecycle_procedural` | `scripts/view/ant_view.gd` | 卵、幼虫、蛹、工蚁与 R20-A 行为姿态 | 四阶段轮廓、明暗和比例可独立辨认；工蚁朝向、步态、携带和护理提示仍为同一代码内原创节点绘制 |
 | `r14_queen_procedural` | `scripts/view/queen_view.gd` | 蚁后 | 腹、胸、头、足、触角和工蚁尺寸差异清晰 |
 | `r14_act1_environment_procedural` | `scripts/view/act1_test_tube_view.gd` | 试管、玻璃、棉、水、基质、凝水和污染 | 不遮挡实体；环境状态仍由快照驱动 |
 | `r14_facility_set_procedural` | `scripts/view/facility_layout_view.gd` | 十二类目录设施与连接件 | 每类具有独立轮廓和材质符号；旋转仍可读 |

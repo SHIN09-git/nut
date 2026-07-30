@@ -14,7 +14,27 @@ const LIMB_COLOR: Color = Color(0.29, 0.14, 0.067, 1.0)
 const EYE_COLOR: Color = Color(0.95, 0.73, 0.32, 1.0)
 const SHADOW_COLOR: Color = Color(0.0, 0.0, 0.0, 0.26)
 const SELECTION_OUTLINE: Color = Color(0.88, 0.76, 0.46, 0.74)
+const SUGAR_COLOR: Color = Color(0.95, 0.72, 0.28, 1.0)
+const SUGAR_GLOW: Color = Color(1.0, 0.86, 0.48, 0.30)
+const FOOD_SHARE_COLOR: Color = Color(0.96, 0.82, 0.46, 0.92)
+const BROOD_CARE_COLOR: Color = Color(0.91, 0.78, 0.48, 0.84)
+const WASTE_COLOR: Color = Color(0.48, 0.30, 0.14, 1.0)
+const OBSERVE_COLOR: Color = Color(0.42, 0.76, 0.67, 0.78)
 const TRANSITION_DURATION_SECONDS: float = 0.38
+const WALK_CYCLE_TICKS: float = 8.0
+
+enum BehaviorPose {
+	IDLE,
+	WALKING,
+	COLLECTING_FOOD,
+	CARRYING_FOOD,
+	SHARING_FOOD,
+	FEEDING_BROOD,
+	HANDLING_BROOD,
+	CARRYING_BROOD,
+	CARRYING_WASTE,
+	OBSERVING,
+}
 
 var entity_id: int = -1
 var life_stage: AntModel.LifeStage = AntModel.LifeStage.EGG
@@ -25,6 +45,9 @@ var _slot_position: Vector2 = Vector2.ZERO
 var _selected: bool = false
 var _reduced_motion: bool = false
 var _low_detail: bool = false
+var _behavior_pose: BehaviorPose = BehaviorPose.IDLE
+var _facing_sign: float = 1.0
+var _animation_phase: float = 0.0
 
 
 func configure(snapshot: AntSnapshot, slot_position: Vector2) -> bool:
@@ -85,6 +108,8 @@ func set_reduced_motion(value: bool) -> void:
 	_reduced_motion = value
 	if _reduced_motion:
 		_finish_transition_animation()
+		_animation_phase = 0.0
+	queue_redraw()
 
 
 func set_low_detail(value: bool) -> void:
@@ -96,6 +121,45 @@ func set_low_detail(value: bool) -> void:
 
 func is_low_detail() -> bool:
 	return _low_detail
+
+
+func set_behavior_pose(
+	pose: BehaviorPose,
+	facing_direction: float,
+	animation_phase: float
+) -> void:
+	var next_facing: float = _facing_sign
+	if absf(facing_direction) > 0.001:
+		next_facing = -1.0 if facing_direction < 0.0 else 1.0
+	var next_phase: float = (
+		0.0
+		if _reduced_motion
+		else fposmod(animation_phase, 1.0)
+			if is_finite(animation_phase)
+			else 0.0
+	)
+	if (
+		_behavior_pose == pose
+		and is_equal_approx(_facing_sign, next_facing)
+		and is_equal_approx(_animation_phase, next_phase)
+	):
+		return
+	_behavior_pose = pose
+	_facing_sign = next_facing
+	_animation_phase = next_phase
+	queue_redraw()
+
+
+func get_behavior_pose() -> BehaviorPose:
+	return _behavior_pose
+
+
+func get_facing_sign() -> float:
+	return _facing_sign
+
+
+func get_animation_phase() -> float:
+	return _animation_phase
 
 
 func get_entity_id() -> int:
@@ -135,6 +199,25 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
+	if life_stage == AntModel.LifeStage.WORKER:
+		if _selected:
+			_draw_selection_outline()
+		var bob: float = (
+			sin(_animation_phase * TAU) * 1.35
+			if _is_locomotion_pose() and not _reduced_motion
+			else 0.0
+		)
+		draw_set_transform(
+			Vector2(0.0, bob),
+			0.0,
+			Vector2(_facing_sign, 1.0)
+		)
+		if _low_detail:
+			_draw_low_detail()
+		else:
+			_draw_worker()
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		return
 	if _low_detail:
 		_draw_low_detail()
 		return
@@ -145,10 +228,6 @@ func _draw() -> void:
 			_draw_larva()
 		AntModel.LifeStage.PUPA:
 			_draw_pupa()
-		AntModel.LifeStage.WORKER:
-			if _selected:
-				_draw_selection_outline()
-			_draw_worker()
 
 
 func _draw_low_detail() -> void:
@@ -183,8 +262,7 @@ func _draw_low_detail() -> void:
 			)
 			draw_circle(Vector2(6.2, -1.0), 2.8, BROOD_LIGHT)
 		AntModel.LifeStage.WORKER:
-			if _selected:
-				_draw_selection_outline()
+			var stride: float = _get_stride()
 			for leg_end: Vector2 in [
 				Vector2(-10.0, -10.0),
 				Vector2(1.0, -13.0),
@@ -195,7 +273,7 @@ func _draw_low_detail() -> void:
 			]:
 				draw_line(
 					Vector2(2.0, 0.0),
-					leg_end,
+					leg_end + Vector2(stride, 0.0),
 					LIMB_COLOR,
 					1.6,
 					true
@@ -229,6 +307,7 @@ func _draw_low_detail() -> void:
 				1.4,
 				true
 			)
+			_draw_behavior_cue()
 
 
 func _start_transition_animation() -> void:
@@ -331,6 +410,7 @@ func _draw_pupa() -> void:
 func _draw_worker() -> void:
 	_draw_ellipse(Vector2(-6.0, 3.5), Vector2(9.0, 5.6), SHADOW_COLOR)
 	_draw_ellipse(Vector2(4.0, 3.2), Vector2(10.0, 4.8), SHADOW_COLOR)
+	var stride: float = _get_stride()
 	var leg_pairs: Array[PackedVector2Array] = [
 		PackedVector2Array([Vector2(-1.0, -4.0), Vector2(-6.0, -11.0), Vector2(-12.0, -12.0)]),
 		PackedVector2Array([Vector2(3.0, -4.0), Vector2(3.0, -12.0), Vector2(8.0, -15.0)]),
@@ -339,7 +419,11 @@ func _draw_worker() -> void:
 		PackedVector2Array([Vector2(3.0, 4.0), Vector2(3.0, 12.0), Vector2(8.0, 15.0)]),
 		PackedVector2Array([Vector2(6.0, 2.0), Vector2(12.0, 9.0), Vector2(17.0, 9.0)]),
 	]
-	for leg: PackedVector2Array in leg_pairs:
+	for index: int in leg_pairs.size():
+		var leg: PackedVector2Array = leg_pairs[index].duplicate()
+		var direction: float = 1.0 if index % 2 == 0 else -1.0
+		leg[1].x += stride * direction * 0.55
+		leg[2].x += stride * direction
 		draw_polyline(leg, WORKER_OUTLINE, 3.0, true)
 		draw_polyline(leg, LIMB_COLOR, 1.55, true)
 
@@ -371,6 +455,127 @@ func _draw_worker() -> void:
 		draw_polyline(antenna, LIMB_COLOR, 1.2, true)
 	draw_circle(Vector2(12.0, -2.4), 1.4, WORKER_OUTLINE)
 	draw_circle(Vector2(12.2, -2.6), 0.75, EYE_COLOR)
+	_draw_behavior_cue()
+
+
+func _draw_behavior_cue() -> void:
+	match _behavior_pose:
+		BehaviorPose.COLLECTING_FOOD:
+			_draw_mandibles(Vector2(18.0, 1.0), true)
+			draw_circle(Vector2(23.0, 7.0), 8.0, SUGAR_GLOW)
+			draw_circle(Vector2(23.0, 7.0), 4.5, SUGAR_COLOR)
+		BehaviorPose.CARRYING_FOOD:
+			_draw_mandibles(Vector2(18.0, -1.0), false)
+			draw_circle(Vector2(22.0, -6.0), 9.0, SUGAR_GLOW)
+			draw_circle(Vector2(22.0, -6.0), 5.0, SUGAR_COLOR)
+			draw_circle(Vector2(20.5, -7.5), 1.4, Color.WHITE)
+		BehaviorPose.SHARING_FOOD:
+			_draw_mandibles(Vector2(18.0, 0.0), false)
+			draw_circle(Vector2(22.0, 0.0), 5.0, SUGAR_COLOR)
+			draw_circle(Vector2(29.0, 0.0), 3.4, FOOD_SHARE_COLOR)
+			draw_line(
+				Vector2(23.0, 0.0),
+				Vector2(30.0, 0.0),
+				FOOD_SHARE_COLOR,
+				2.0,
+				true
+			)
+		BehaviorPose.FEEDING_BROOD:
+			_draw_mandibles(Vector2(18.0, 2.0), false)
+			draw_circle(Vector2(22.0, 5.0), 4.0, BROOD_CARE_COLOR)
+			draw_arc(
+				Vector2(24.0, 5.0),
+				8.0,
+				PI * 0.76,
+				PI * 1.28,
+				10,
+				BROOD_CARE_COLOR,
+				2.0,
+				true
+			)
+		BehaviorPose.HANDLING_BROOD:
+			_draw_mandibles(Vector2(18.0, -1.0), true)
+			draw_arc(
+				Vector2(20.0, -6.0),
+				8.0,
+				PI * 0.12,
+				PI * 0.88,
+				10,
+				BROOD_CARE_COLOR,
+				2.2,
+				true
+			)
+		BehaviorPose.CARRYING_BROOD:
+			_draw_mandibles(Vector2(18.0, -2.0), false)
+			draw_line(
+				Vector2(18.0, -5.0),
+				Vector2(14.0, -11.0),
+				BROOD_CARE_COLOR,
+				2.2,
+				true
+			)
+		BehaviorPose.CARRYING_WASTE:
+			_draw_mandibles(Vector2(18.0, -1.0), false)
+			draw_circle(Vector2(22.0, -5.0), 7.5, Color(0.70, 0.48, 0.22, 0.24))
+			draw_circle(Vector2(22.0, -5.0), 4.6, WASTE_COLOR)
+		BehaviorPose.OBSERVING:
+			draw_arc(
+				Vector2(18.0, -4.0),
+				11.0,
+				-PI * 0.60,
+				PI * 0.12,
+				12,
+				OBSERVE_COLOR,
+				2.0,
+				true
+			)
+
+
+func _draw_mandibles(anchor: Vector2, open: bool) -> void:
+	var spread: float = 5.5 if open else 3.0
+	draw_line(
+		anchor,
+		anchor + Vector2(6.0, -spread),
+		WORKER_OUTLINE,
+		2.6,
+		true
+	)
+	draw_line(
+		anchor,
+		anchor + Vector2(6.0, spread),
+		WORKER_OUTLINE,
+		2.6,
+		true
+	)
+	draw_line(
+		anchor,
+		anchor + Vector2(5.5, -spread),
+		LIMB_COLOR,
+		1.2,
+		true
+	)
+	draw_line(
+		anchor,
+		anchor + Vector2(5.5, spread),
+		LIMB_COLOR,
+		1.2,
+		true
+	)
+
+
+func _get_stride() -> float:
+	if _reduced_motion or not _is_locomotion_pose():
+		return 0.0
+	return sin(_animation_phase * TAU) * 4.0
+
+
+func _is_locomotion_pose() -> bool:
+	return _behavior_pose in [
+		BehaviorPose.WALKING,
+		BehaviorPose.CARRYING_FOOD,
+		BehaviorPose.CARRYING_BROOD,
+		BehaviorPose.CARRYING_WASTE,
+	]
 
 
 func _draw_selection_outline() -> void:

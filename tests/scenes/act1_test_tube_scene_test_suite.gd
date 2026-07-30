@@ -19,6 +19,7 @@ func run(scene_root: Node) -> void:
 	_test_contextual_hud_and_inspector()
 	_test_direct_world_interaction()
 	_test_disabled_action_reason_and_worker_follow()
+	_test_worker_behavior_pose_projection()
 	_test_real_controls_complete_both_chapters()
 	_test_chapter_five_real_layout_and_migration_path()
 	_test_help_overlay_focus_and_pause()
@@ -406,6 +407,91 @@ func _test_disabled_action_reason_and_worker_follow() -> void:
 		view.get_followed_worker_id(),
 		-1,
 		"entering layout editing stops worker follow"
+	)
+	_destroy_controller(controller)
+
+
+func _test_worker_behavior_pose_projection() -> void:
+	var controller: Act1TestTubeController = _create_controller(
+		Vector2(1280, 720)
+	)
+	var view: Act1TestTubeView = controller.get_node(
+		"%Act1TestTubeView"
+	) as Act1TestTubeView
+	var snapshot: GameSnapshot = controller.get_latest_snapshot()
+	_expect_true(
+		not snapshot.colony.ants.is_empty(),
+		"behavior-pose fixture has a stable colony entity"
+	)
+	if snapshot.colony.ants.is_empty():
+		_destroy_controller(controller)
+		return
+	var worker: AntSnapshot = snapshot.colony.ants[0]
+	worker.life_stage = AntModel.LifeStage.WORKER
+	worker.zone_id = &"test_tube_nest"
+	worker.foraging_task = ForagingTaskSnapshot.new(
+		ForagingTaskSnapshot.State.RETURNING_TO_NEST,
+		1,
+		&"micro_feeding_port",
+		&"test_tube_nest",
+		&"test_tube_nest",
+		[&"micro_feeding_port", &"test_tube_nest"],
+		1,
+		4,
+		10
+	)
+	_expect_true(
+		view.apply_snapshot(snapshot),
+		"foraging carry pose accepts a copied snapshot"
+	)
+	var worker_view: AntView = view.get_ant_view(worker.entity_id)
+	_expect_true(
+		worker_view != null,
+		"foraging carry pose keeps the stable worker view"
+	)
+	if worker_view == null:
+		_destroy_controller(controller)
+		return
+	_expect_int(
+		worker_view.get_behavior_pose(),
+		AntView.BehaviorPose.CARRYING_FOOD,
+		"carried sugar authority maps to the food-carry posture"
+	)
+
+	worker.foraging_task = ForagingTaskSnapshot.new()
+	worker.feeding_task = BroodFeedingTaskSnapshot.new(
+		BroodFeedingTaskModel.State.FEEDING,
+		2,
+		&"test_tube_nest",
+		&"test_tube_nest",
+		[&"test_tube_nest"],
+		2,
+		8
+	)
+	_expect_true(
+		view.apply_snapshot(snapshot),
+		"brood-feeding pose accepts a copied snapshot"
+	)
+	_expect_int(
+		worker_view.get_behavior_pose(),
+		AntView.BehaviorPose.FEEDING_BROOD,
+		"feeding authority maps to the brood-care posture"
+	)
+
+	var tick_before: int = controller.get_simulation_tick()
+	var signature_before: String = (
+		SimulationSnapshotSignature.canonical_game_snapshot(snapshot)
+	)
+	view.set_interpolation_alpha(0.75)
+	_expect_int(
+		controller.get_simulation_tick(),
+		tick_before,
+		"behavior animation does not advance simulation"
+	)
+	_expect_true(
+		SimulationSnapshotSignature.canonical_game_snapshot(snapshot)
+			== signature_before,
+		"behavior animation does not mutate its source snapshot"
 	)
 	_destroy_controller(controller)
 
