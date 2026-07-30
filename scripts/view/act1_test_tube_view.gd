@@ -303,6 +303,7 @@ func reset_projection() -> void:
 	_selected_worker_id = -1
 	_followed_worker_id = -1
 	_world_overlay.reset_projection()
+	_facility_layout_view.invalidate_projection_cache()
 	_layout_projection()
 	queue_redraw()
 
@@ -523,12 +524,9 @@ func _update_endpoints(snapshot: GameSnapshot) -> void:
 	if snapshot.simulation_tick > _latest_snapshot.simulation_tick:
 		_previous_snapshot = _latest_snapshot
 		_latest_snapshot = snapshot
-		_previous_positions = _calculate_positions(_previous_snapshot)
+		_previous_positions = _current_positions.duplicate()
 		_current_positions = _calculate_positions(_latest_snapshot)
-		_previous_queen_position = _calculate_queen_position(
-			_previous_snapshot,
-			_previous_positions
-		)
+		_previous_queen_position = _current_queen_position
 		_current_queen_position = _calculate_queen_position(
 			_latest_snapshot,
 			_current_positions

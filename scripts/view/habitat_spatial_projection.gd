@@ -141,6 +141,94 @@ func find_zone_anchor(
 	var facility: FacilitySnapshot = _find_zone_facility(layout, zone_id)
 	if facility == null:
 		return null
+	return _facility_zone_anchor(facility, zone_id)
+
+
+func build_logical_zone_anchor_index(
+	layout: HabitatLayoutSnapshot,
+	zones: Array[HabitatZoneSnapshot]
+) -> Dictionary[StringName, Vector2]:
+	var anchors: Dictionary[StringName, Vector2] = {}
+	if layout == null or not is_ready():
+		return anchors
+	var selected_layers: Dictionary[StringName, int] = {}
+	var ordered_facilities: Array[FacilitySnapshot] = []
+	ordered_facilities.assign(layout.facilities)
+	ordered_facilities.sort_custom(
+		func(
+			first: FacilitySnapshot,
+			second: FacilitySnapshot
+		) -> bool:
+			if first.placement_layer != second.placement_layer:
+				return first.placement_layer < second.placement_layer
+			return first.facility_id < second.facility_id
+	)
+	for facility: FacilitySnapshot in ordered_facilities:
+		if facility == null or not facility.available:
+			continue
+		for zone_id: StringName in [
+			facility.zone_id,
+			facility.secondary_zone_id,
+		]:
+			if zone_id.is_empty():
+				continue
+			var existing_layer: int = selected_layers.get(
+				zone_id,
+				-1
+			)
+			if (
+				existing_layer == FacilityData.PlacementLayer.BASE
+				or (
+					existing_layer >= 0
+					and facility.placement_layer
+						!= FacilityData.PlacementLayer.BASE
+				)
+			):
+				continue
+			anchors[zone_id] = _facility_zone_anchor(
+				facility,
+				zone_id
+			)
+			selected_layers[zone_id] = facility.placement_layer
+	var ordered_zones: Array[HabitatZoneSnapshot] = []
+	ordered_zones.assign(zones)
+	ordered_zones.sort_custom(
+		func(
+			first: HabitatZoneSnapshot,
+			second: HabitatZoneSnapshot
+		) -> bool:
+			if first == null:
+				return second != null
+			if second == null:
+				return false
+			return String(first.zone_id) < String(second.zone_id)
+	)
+	for zone: HabitatZoneSnapshot in ordered_zones:
+		if (
+			zone == null
+			or zone.zone_id.is_empty()
+			or anchors.has(zone.zone_id)
+		):
+			continue
+		var connected_ids: Array[StringName] = []
+		connected_ids.assign(zone.connected_zone_ids)
+		connected_ids.sort()
+		var combined: Vector2 = Vector2.ZERO
+		var anchor_count: int = 0
+		for connected_zone_id: StringName in connected_ids:
+			if not anchors.has(connected_zone_id):
+				continue
+			combined += anchors[connected_zone_id]
+			anchor_count += 1
+		if anchor_count > 0:
+			anchors[zone.zone_id] = combined / float(anchor_count)
+	return anchors
+
+
+func _facility_zone_anchor(
+	facility: FacilitySnapshot,
+	zone_id: StringName
+) -> Vector2:
 	var rect: Rect2 = facility_rect(facility)
 	if (
 		facility.secondary_zone_id.is_empty()

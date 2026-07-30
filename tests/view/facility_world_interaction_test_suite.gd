@@ -36,6 +36,24 @@ func run(scene_root: Node) -> void:
 	)
 	snapshot.facilities.assign([overlay, base])
 	_expect_true(view.apply_snapshot(snapshot), "world fixture applies")
+	var zones: Array[HabitatZoneSnapshot] = [
+		HabitatZoneSnapshot.new(
+			&"base_zone",
+			0.5,
+			[],
+			true
+		),
+	]
+	view.apply_zone_topology(zones)
+	var zone_before: Vector2 = view.project_zone_position(&"base_zone")
+	zones[0].humidity = 0.8
+	view.apply_zone_topology(zones)
+	_expect_vector_near(
+		view.project_zone_position(&"base_zone"),
+		zone_before,
+		0.001,
+		"environment-only snapshots reuse stable layout anchors"
+	)
 	_expect_int(
 		view.mouse_filter,
 		Control.MOUSE_FILTER_IGNORE,
@@ -59,6 +77,20 @@ func run(scene_root: Node) -> void:
 		view.find_facility_at(shared_center),
 		overlay.facility_id,
 		"hit result ignores snapshot array order"
+	)
+	base.slot = Vector2i(2, 1)
+	overlay.slot = base.slot
+	snapshot.revision += 1
+	_expect_true(
+		view.apply_snapshot(snapshot),
+		"layout revision change reapplies"
+	)
+	view.apply_zone_topology(zones)
+	_expect_true(
+		not view.project_zone_position(&"base_zone").is_equal_approx(
+			zone_before
+		),
+		"layout revision invalidates the cached zone anchor"
 	)
 
 	var selected_ids: Array[int] = []

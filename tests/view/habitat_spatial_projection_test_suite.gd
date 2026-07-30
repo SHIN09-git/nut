@@ -347,7 +347,26 @@ func _test_logical_passage_uses_connected_facility_anchors() -> void:
 		Vector2(325.0, 50.0),
 		"unrepresented passage projects to its connected facilities"
 	)
+	var anchor_index: Dictionary[StringName, Vector2] = (
+		projection.build_logical_zone_anchor_index(layout, zones)
+	)
+	_expect_true(
+		anchor_index.has(&"passage"),
+		"bulk anchor index includes unrepresented logical passages"
+	)
+	if anchor_index.has(&"passage"):
+		_expect_vector(
+			anchor_index[&"passage"],
+			Vector2(325.0, 50.0),
+			"bulk anchor index matches direct passage projection"
+		)
 	zones[1].connected_zone_ids.reverse()
+	layout.facilities.reverse()
+	zones.reverse()
+	anchor_index = projection.build_logical_zone_anchor_index(
+		layout,
+		zones
+	)
 	_expect_vector(
 		projection.find_logical_zone_anchor(
 			layout,
@@ -357,6 +376,16 @@ func _test_logical_passage_uses_connected_facility_anchors() -> void:
 		Vector2(325.0, 50.0),
 		"passage projection ignores topology array order"
 	)
+	_expect_true(
+		anchor_index.has(&"passage"),
+		"reordered bulk anchor index keeps the passage"
+	)
+	if anchor_index.has(&"passage"):
+		_expect_vector(
+			anchor_index[&"passage"],
+			Vector2(325.0, 50.0),
+			"bulk anchor index ignores facility and topology order"
+		)
 	_expect_true(
 		projection.find_logical_zone_anchor(
 			layout,

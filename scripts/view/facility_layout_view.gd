@@ -75,6 +75,10 @@ var _zone_snapshots: Array[HabitatZoneSnapshot] = []
 var _spatial_projection: HabitatSpatialProjection = (
 	HabitatSpatialProjection.new()
 )
+var _zone_anchor_cache: Dictionary[StringName, Vector2] = {}
+var _zone_anchor_cache_revision: int = -1
+var _zone_anchor_cache_grid_size: Vector2i = Vector2i.ZERO
+var _zone_anchor_cache_ready: bool = false
 var _camera_zoom: float = 1.0
 var _camera_offset: Vector2 = Vector2.ZERO
 var _editing_enabled: bool = false
@@ -105,6 +109,11 @@ func _notification(what: int) -> void:
 func apply_snapshot(snapshot: HabitatLayoutSnapshot) -> bool:
 	if snapshot == null or not snapshot.active:
 		return false
+	var layout_projection_changed: bool = (
+		not _zone_anchor_cache_ready
+		or snapshot.revision != _zone_anchor_cache_revision
+		or snapshot.grid_size != _zone_anchor_cache_grid_size
+	)
 	if not _spatial_projection.configure(
 		snapshot.grid_size,
 		Rect2(
@@ -115,6 +124,8 @@ func apply_snapshot(snapshot: HabitatLayoutSnapshot) -> bool:
 	):
 		return false
 	_snapshot = snapshot
+	if layout_projection_changed:
+		_invalidate_zone_anchor_cache()
 	if _snapshot.get_facility(_selected_facility_id) == null:
 		_set_selected_facility(-1)
 	if (
@@ -128,7 +139,13 @@ func apply_snapshot(snapshot: HabitatLayoutSnapshot) -> bool:
 
 func apply_zone_topology(zones: Array[HabitatZoneSnapshot]) -> void:
 	_zone_snapshots.assign(zones)
+	if not _zone_anchor_cache_ready:
+		_rebuild_zone_anchor_cache()
 	queue_redraw()
+
+
+func invalidate_projection_cache() -> void:
+	_invalidate_zone_anchor_cache()
 
 
 func set_editing_enabled(value: bool) -> void:
@@ -569,12 +586,9 @@ func project_zone_position(
 ) -> Vector2:
 	if _snapshot == null:
 		return size * 0.5
-	var anchor: Variant = _spatial_projection.find_logical_zone_anchor(
-		_snapshot,
-		_zone_snapshots,
-		zone_id
-	)
-	if not anchor is Vector2:
+	if not _zone_anchor_cache_ready:
+		_rebuild_zone_anchor_cache()
+	if not _zone_anchor_cache.has(zone_id):
 		return size * 0.5
 	var offset: Vector2 = Vector2.ZERO
 	if entity_id > 0:
@@ -587,7 +601,28 @@ func project_zone_position(
 				) - 1
 			) * 10.0
 		)
-	return _world_to_view(anchor as Vector2) + offset
+	return _world_to_view(_zone_anchor_cache[zone_id]) + offset
+
+
+func _invalidate_zone_anchor_cache() -> void:
+	_zone_anchor_cache.clear()
+	_zone_anchor_cache_revision = -1
+	_zone_anchor_cache_grid_size = Vector2i.ZERO
+	_zone_anchor_cache_ready = false
+
+
+func _rebuild_zone_anchor_cache() -> void:
+	if _snapshot == null:
+		return
+	_zone_anchor_cache = (
+		_spatial_projection.build_logical_zone_anchor_index(
+			_snapshot,
+			_zone_snapshots
+		)
+	)
+	_zone_anchor_cache_revision = _snapshot.revision
+	_zone_anchor_cache_grid_size = _snapshot.grid_size
+	_zone_anchor_cache_ready = true
 
 
 func project_facility_rect(facility_id: int) -> Rect2:

@@ -12,6 +12,8 @@ R17 为后续完整档案试玩补上本机有效时长证据：档案在“开�
 
 R20-A 增加快照驱动的工蚁行为姿态：行走朝向、步态、采集、携带糖液、分享、喂食幼体、处理／搬运幼体、搬运废物和观察均由现有任务状态投影到同一个稳定 `AntView`。它不新增模拟行为，也不使用独立 Tween 伪造任务；减少动效会冻结步态，但保留携带与护理线索。
 
+R20-B 将最大规模统一世界的重复显示投影改为按布局 revision 缓存区域锚点，并复用上一 Tick 已计算的实体端点。它不改变模拟、任务、存档或节奏参数；30 万 Tick 的 80 工蚁／180 幼体验证中，视图采样平均约 2.38 ms、P95 约 2.74 ms，未出现超过 7 ms 的视图样本。完整记录见 `docs/validation/r20_view_projection_001.md`。
+
 ## 当前功能
 
 - 新档案进入 `scenes/main/act1_test_tube.tscn`；场景始终使用同一个 0.1 秒固定 Tick 时钟和同一份权威群落状态。
@@ -199,7 +201,7 @@ New-Item -ItemType Directory -Force -Path '.\builds\windows'
 - 物种与节奏参数均未经科学审校；本轮文本终校不构成物种级科学审校。
 - 正式原创视觉与音频已经登记；仍未加入 Steam、第三方插件或商店发布授权。
 
-v0.1 发布基线见 `docs/validation/v0.1_baseline_001.md`；M2 身份验证见 `docs/validation/worker_identity_001.md`；M3 糖水验证见 `docs/validation/sugar_foraging_001.md`；M4 连续体验验证见 `docs/validation/v0_2_combined_001.md`；R0-A／R0-B 与 M5 记录位于 `docs/validation/`；R1～R15 的技术验证分别见同目录的 `v1_r1_…` 至 `v1_r15_…` 记录；R16 最终性能、Windows 包、显示矩阵与哈希见 `docs/validation/v1_r16_beta_candidate_001.md`；R17 有效时长与存档迁移见 `docs/validation/v1_r17_playtime_evidence_001.md`，R17 Windows 候选与哈希见 `docs/validation/v1_r17_windows_candidate_001.md`。
+v0.1 发布基线见 `docs/validation/v0.1_baseline_001.md`；M2 身份验证见 `docs/validation/worker_identity_001.md`；M3 糖水验证见 `docs/validation/sugar_foraging_001.md`；M4 连续体验验证见 `docs/validation/v0_2_combined_001.md`；R0-A／R0-B 与 M5 记录位于 `docs/validation/`；R1～R15 的技术验证分别见同目录的 `v1_r1_…` 至 `v1_r15_…` 记录；R16 最终性能、Windows 包、显示矩阵与哈希见 `docs/validation/v1_r16_beta_candidate_001.md`；R17 有效时长与存档迁移见 `docs/validation/v1_r17_playtime_evidence_001.md`，R17 Windows 候选与哈希见 `docs/validation/v1_r17_windows_candidate_001.md`；R20 行为姿态与显示投影性能见 `docs/validation/r20_behavior_animation_001.md` 和 `docs/validation/r20_view_projection_001.md`。
 
 3～4 小时完整独立游戏的章节、设施、音画、验证与发行路线见 `CODEX_V1_MASTER_PLAN.md`；当前权威存档 schema 见 `docs/architecture/SAVE_SCHEMA_R12.md`，外层有效时长格式见 `docs/architecture/SAVE_ENVELOPE_V2.md`，R11／R10／R9／R8／R7／R6／R5／R4／R2 文档保留为历史基线。计划状态不替代外部玩家证据；当前可运行事实仍以本 README、`GDD.md` 和 `ARCHITECTURE.md` 为准。
 
