@@ -22,6 +22,12 @@ R20-E 让幼体按实际预订、携带所有权和任务进度显示拾取、�
 
 R20-F 让同一首工节点从蛹变为工蚁时先展开腿与触角，再轻微恢复到稳定姿态；暂停冻结该显示过渡，减少动效直接显示完整轮廓，16×不会跳过或重播。验证见 `docs/validation/r20_worker_emergence_pose_001.md`。
 
+R20 行为辨认 Windows 候选已从游戏载荷提交
+`3db35e8b29b5642b3fb573e23ff9d784f565519b` 冻结；ZIP SHA-256 为
+`1d7c274748c048fcc972d09a85f380496a2fbceb59594f86b99bfcd1c4294432`。
+无说明协议、空白逐项表和汇总模板位于 `docs/playtest/`。候选可用于收集
+首批 5 名有效参与者证据，但没有真人数据时 R20 Gate 仍是 `INCOMPLETE`。
+
 ## 当前功能
 
 - 新档案进入 `scenes/main/act1_test_tube.tscn`；场景始终使用同一个 0.1 秒固定 Tick 时钟和同一份权威群落状态。
@@ -206,13 +212,14 @@ New-Item -ItemType Directory -Force -Path '.\builds\windows'
 - 最终美术、音频、文本与无障碍版本仍缺少 R16 要求的 10 个首次完整档案，因此 3～4 小时中位时长、完成率和最终理解度 Gate 同样保持 `INCOMPLETE`；本机自动化和窗口验证不能替代这些外部数据。
 - 新建档案现可持续记录有效墙钟时长和章节拆分，供未来冻结试玩直接导出证据；现有旧档只能从 R17 起累计并带历史缺口标记。计时能力本身不等于 180～240 分钟 Gate 已通过。
 - R17 Windows 候选已冻结为 `builds/ColonyUnderGlass_v1.0_beta_r17_68c533e_windows_x86_64.zip`（SHA-256 `f72ac74a367463429ea7c195cd96ba4e5f0d292e06b314c6b3832ad1d941e1bd`）；`builds/` 保持忽略，不进入 Git。该包可用于后续完整档案外测，但包的存在不等于外部 Gate 通过。
+- R20 行为辨认候选已冻结为 `builds/ColonyUnderGlass_R20_behavior_candidate_3db35e8_windows_x86_64.zip`（SHA-256 `1d7c274748c048fcc972d09a85f380496a2fbceb59594f86b99bfcd1c4294432`）；它只冻结当前 R20 载荷与盲测流程，不包含参与者数据，也不等于行为辨认 Gate 通过。
 - 正式 Act 1 已覆盖单后护理、第一工蚁、首次糖液、小型觅食区、蛋白育幼、废物清理、环境管理、完整核心迁巢和稳定群落总结，共六章并具有明确档案结局。
 - 温度没有区别于湿度的独立闭环证据，继续延期。
 - 工蚁名称和个人行动记录仍属于旧组合观察的会话注释；显示设置独立跨程序保存。
 - 物种与节奏参数均未经科学审校；本轮文本终校不构成物种级科学审校。
 - 正式原创视觉与音频已经登记；仍未加入 Steam、第三方插件或商店发布授权。
 
-v0.1 发布基线见 `docs/validation/v0.1_baseline_001.md`；M2 身份验证见 `docs/validation/worker_identity_001.md`；M3 糖水验证见 `docs/validation/sugar_foraging_001.md`；M4 连续体验验证见 `docs/validation/v0_2_combined_001.md`；R0-A／R0-B 与 M5 记录位于 `docs/validation/`；R1～R15 的技术验证分别见同目录的 `v1_r1_…` 至 `v1_r15_…` 记录；R16 最终性能、Windows 包、显示矩阵与哈希见 `docs/validation/v1_r16_beta_candidate_001.md`；R17 有效时长与存档迁移见 `docs/validation/v1_r17_playtime_evidence_001.md`，R17 Windows 候选与哈希见 `docs/validation/v1_r17_windows_candidate_001.md`；R20 行为姿态、显示投影性能和设施节点边界分别见 `docs/validation/r20_behavior_animation_001.md`、`docs/validation/r20_view_projection_001.md` 和 `docs/validation/r20_facility_view_001.md`。
+v0.1 发布基线见 `docs/validation/v0.1_baseline_001.md`；M2 身份验证见 `docs/validation/worker_identity_001.md`；M3 糖水验证见 `docs/validation/sugar_foraging_001.md`；M4 连续体验验证见 `docs/validation/v0_2_combined_001.md`；R0-A／R0-B 与 M5 记录位于 `docs/validation/`；R1～R15 的技术验证分别见同目录的 `v1_r1_…` 至 `v1_r15_…` 记录；R16 最终性能、Windows 包、显示矩阵与哈希见 `docs/validation/v1_r16_beta_candidate_001.md`；R17 有效时长与存档迁移见 `docs/validation/v1_r17_playtime_evidence_001.md`，R17 Windows 候选与哈希见 `docs/validation/v1_r17_windows_candidate_001.md`；R20 行为姿态、显示投影性能、设施节点边界和冻结外测候选分别见 `docs/validation/r20_behavior_animation_001.md`、`docs/validation/r20_view_projection_001.md`、`docs/validation/r20_facility_view_001.md` 与 `docs/validation/r20_behavior_recognition_candidate_001.md`。
 
 3～4 小时完整独立游戏的章节、设施、音画、验证与发行路线见 `CODEX_V1_MASTER_PLAN.md`；当前权威存档 schema 见 `docs/architecture/SAVE_SCHEMA_R12.md`，外层有效时长格式见 `docs/architecture/SAVE_ENVELOPE_V2.md`，R11／R10／R9／R8／R7／R6／R5／R4／R2 文档保留为历史基线。计划状态不替代外部玩家证据；当前可运行事实仍以本 README、`GDD.md` 和 `ARCHITECTURE.md` 为准。
 
