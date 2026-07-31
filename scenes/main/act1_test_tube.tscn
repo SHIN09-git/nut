@@ -1,4 +1,4 @@
-[gd_scene load_steps=18 format=3]
+[gd_scene load_steps=19 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/act1_test_tube_controller.gd" id="1_controller"]
 [ext_resource type="PackedScene" path="res://scenes/habitat/act1_test_tube_habitat.tscn" id="2_habitat"]
@@ -14,6 +14,7 @@
 [ext_resource type="Script" path="res://scripts/ui/act1_completion_panel.gd" id="12_completion"]
 [ext_resource type="Script" path="res://scripts/ui/act1_help_panel.gd" id="13_help"]
 [ext_resource type="Script" path="res://scripts/ui/act1_pause_menu.gd" id="14_pause"]
+[ext_resource type="Script" path="res://scripts/view/worker_observation_panel.gd" id="15_worker_panel"]
 
 [sub_resource type="StyleBoxFlat" id="Style_panel"]
 bg_color = Color(0.044, 0.061, 0.056, 0.96)
@@ -357,10 +358,16 @@ layout_mode = 2
 toggle_mode = true
 text = "Inspect with magnifier"
 
+[node name="SugarPlacementOption" type="OptionButton" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRowScroll/ToolRow"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(168, 42)
+layout_mode = 2
+
 [node name="SugarButton" type="Button" parent="Main/ToolBar/ToolMargin/ToolContent/ToolRowScroll/ToolRow"]
 unique_name_in_owner = true
 visible = false
-custom_minimum_size = Vector2(158, 42)
+custom_minimum_size = Vector2(136, 42)
 layout_mode = 2
 text = "Place sugar water at the feeding port"
 
@@ -614,6 +621,7 @@ theme_override_colors/font_color = Color(0.65, 0.78, 0.70, 1)
 text = "Collecting evidence"
 
 [node name="Scroll" type="ScrollContainer" parent="JournalPanel/Center/Panel/Margin/Content"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
@@ -623,6 +631,170 @@ custom_minimum_size = Vector2(690, 0)
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 10
+
+[node name="ExperimentSection" type="VBoxContainer" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="QuestionHeading" type="Label" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.84, 0.61, 1)
+text = "Current question"
+
+[node name="JournalQuestionLabel" type="Label" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "What will change after the intervention?"
+autowrap_mode = 2
+
+[node name="PredictionHeading" type="Label" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.84, 0.61, 1)
+text = "Prediction before intervention"
+
+[node name="JournalPredictionStatusLabel" type="Label" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Record a prediction before using the habitat tool."
+autowrap_mode = 2
+
+[node name="PredictionButton1" type="Button" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(690, 44)
+layout_mode = 2
+text = "Prediction one"
+autowrap_mode = 2
+
+[node name="PredictionButton2" type="Button" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(690, 44)
+layout_mode = 2
+text = "Prediction two"
+autowrap_mode = 2
+
+[node name="PredictionButton3" type="Button" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(690, 44)
+layout_mode = 2
+text = "Prediction three"
+autowrap_mode = 2
+
+[node name="ComparisonHeading" type="Label" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.84, 0.61, 1)
+text = "Before / now"
+
+[node name="JournalComparisonLabel" type="Label" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Record a prediction to capture the baseline."
+autowrap_mode = 2
+
+[node name="TimelineHeading" type="Label" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.94, 0.84, 0.61, 1)
+text = "Event timeline"
+
+[node name="JournalTimelineLabel" type="Label" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "No experiment events recorded yet."
+autowrap_mode = 2
+
+[node name="JournalWorkerObservationPanel" type="PanelContainer" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(690, 180)
+layout_mode = 2
+theme_override_styles/panel = ExtResource("6_card")
+script = ExtResource("15_worker_panel")
+
+[node name="WorkerMargin" type="MarginContainer" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection/JournalWorkerObservationPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 10
+
+[node name="WorkerContent" type="HBoxContainer" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection/JournalWorkerObservationPanel/WorkerMargin"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="WorkerSummary" type="VBoxContainer" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection/JournalWorkerObservationPanel/WorkerMargin/WorkerContent"]
+custom_minimum_size = Vector2(310, 0)
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="WorkerObservationHeading" type="Label" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection/JournalWorkerObservationPanel/WorkerMargin/WorkerContent/WorkerSummary"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
+text = "Individual observation"
+
+[node name="WorkerPromptLabel" type="Label" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection/JournalWorkerObservationPanel/WorkerMargin/WorkerContent/WorkerSummary"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "The first worker has not emerged."
+autowrap_mode = 2
+
+[node name="SelectedWorkerContent" type="VBoxContainer" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection/JournalWorkerObservationPanel/WorkerMargin/WorkerContent/WorkerSummary"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="WorkerDisplayNameLabel" type="Label" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection/JournalWorkerObservationPanel/WorkerMargin/WorkerContent/WorkerSummary/SelectedWorkerContent"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.89, 0.83, 0.66, 1)
+text = "Unnamed worker"
+
+[node name="WorkerCurrentBehaviorLabel" type="Label" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection/JournalWorkerObservationPanel/WorkerMargin/WorkerContent/WorkerSummary/SelectedWorkerContent"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Resting"
+
+[node name="NamingRow" type="HBoxContainer" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection/JournalWorkerObservationPanel/WorkerMargin/WorkerContent/WorkerSummary/SelectedWorkerContent"]
+layout_mode = 2
+theme_override_constants/separation = 7
+
+[node name="WorkerNameEdit" type="LineEdit" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection/JournalWorkerObservationPanel/WorkerMargin/WorkerContent/WorkerSummary/SelectedWorkerContent/NamingRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(210, 34)
+layout_mode = 2
+size_flags_horizontal = 3
+max_length = 16
+
+[node name="WorkerNameButton" type="Button" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection/JournalWorkerObservationPanel/WorkerMargin/WorkerContent/WorkerSummary/SelectedWorkerContent/NamingRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(80, 34)
+layout_mode = 2
+text = "Save"
+
+[node name="WorkerDivider" type="VSeparator" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection/JournalWorkerObservationPanel/WorkerMargin/WorkerContent"]
+layout_mode = 2
+
+[node name="WorkerHistory" type="VBoxContainer" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection/JournalWorkerObservationPanel/WorkerMargin/WorkerContent"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 5
+
+[node name="HistoryHeading" type="Label" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection/JournalWorkerObservationPanel/WorkerMargin/WorkerContent/WorkerHistory"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.91, 0.84, 0.65, 1)
+text = "Recent actions"
+
+[node name="WorkerHistoryLabel" type="Label" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent/ExperimentSection/JournalWorkerObservationPanel/WorkerMargin/WorkerContent/WorkerHistory"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "No actions recorded."
+autowrap_mode = 2
 
 [node name="JournalObjectiveLabel" type="Label" parent="JournalPanel/Center/Panel/Margin/Content/Scroll/ScrollContent"]
 unique_name_in_owner = true

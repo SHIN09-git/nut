@@ -316,8 +316,19 @@ func _test_disabled_action_reason_and_worker_follow() -> void:
 	)
 	(controller.get_node("%StartObservationButton") as Button).pressed.emit()
 	_expect_true(
+		cover_button.disabled and not cover_button.tooltip_text.is_empty(),
+		"the founding intervention waits for a recorded prediction"
+	)
+	_expect_true(
+		_record_prediction(
+			controller,
+			Act1ExperimentState.PREDICTION_CARE_INCREASES
+		),
+		"the real journal records the founding prediction"
+	)
+	_expect_true(
 		not cover_button.disabled and cover_button.tooltip_text.is_empty(),
-		"an enabled action does not retain a stale disabled reason"
+		"a prediction unlocks the action without a stale disabled reason"
 	)
 
 	var view: Act1TestTubeView = controller.get_node(
@@ -609,6 +620,17 @@ func _test_real_controls_complete_both_chapters() -> void:
 		"%Speed16xButton"
 	) as Button
 	start.pressed.emit()
+	_expect_true(
+		cover.disabled,
+		"real UI requires a prediction before the cover intervention"
+	)
+	_expect_true(
+		_record_prediction(
+			controller,
+			Act1ExperimentState.PREDICTION_CARE_INCREASES
+		),
+		"real UI records a pre-cover prediction"
+	)
 	_expect_true(not cover.disabled, "real UI exposes the cover facility")
 
 	var before_cover: GameSnapshot = controller.get_latest_snapshot()
@@ -692,6 +714,11 @@ func _test_real_controls_complete_both_chapters() -> void:
 		),
 		"real path reaches first-worker emergence and sugar placement"
 	)
+	_expect_int(
+		controller.get_simulation_clock().get_speed_multiplier(),
+		SimulationClock.NORMAL_SPEED,
+		"first-worker emergence automatically restores 1x observation"
+	)
 	_expect_true(
 		view.get_ant_view(1) == first_pupa_view,
 		"the first pupa becomes a worker on the same AntView instance"
@@ -705,10 +732,55 @@ func _test_real_controls_complete_both_chapters() -> void:
 		0.0,
 		"same-frame 16x snapshots do not skip display-time emergence"
 	)
+	_expect_true(
+		sugar.disabled,
+		"the sugar intervention also waits for a prediction"
+	)
+	journal.pressed.emit()
+	_expect_int(
+		(
+			controller.get_node(
+				"JournalPanel/Center/Panel/Margin/Content/Scroll"
+			) as ScrollContainer
+		).scroll_vertical,
+		0,
+		"a new experiment chapter opens the journal at its question"
+	)
+	var worker_prediction: Button = _find_prediction_button(
+		controller,
+		Act1ExperimentState.PREDICTION_WORKER_SHARES
+	)
+	_expect_true(
+		worker_prediction != null and not worker_prediction.disabled,
+		"Chapter 2 journal exposes the worker prediction choices"
+	)
+	if worker_prediction != null:
+		worker_prediction.pressed.emit()
+	var worker_name_edit: LineEdit = controller.get_node(
+		"%WorkerNameEdit"
+	) as LineEdit
+	worker_name_edit.text = "Amber"
+	(controller.get_node("%WorkerNameButton") as Button).pressed.emit()
+	_expect_true(
+		(controller.get_node("%WorkerDisplayNameLabel") as Label).text
+			== "Amber",
+		"the first worker keeps its optional session name"
+	)
+	close_journal.pressed.emit()
 	speed_1x.pressed.emit()
 	_expect_true(
 		sugar.visible and not sugar.disabled,
 		"micro feeding-port sugar action is visible and enabled"
+	)
+	var placement_option: OptionButton = controller.get_node(
+		"%SugarPlacementOption"
+	) as OptionButton
+	_expect_true(
+		_select_option_metadata(
+			placement_option,
+			HabitatScenarioConfig.SUGAR_PLACEMENT_NEAR_NEST
+		),
+		"real UI selects the near-nest sugar trade-off"
 	)
 	var sugar_before: int = (
 		controller.get_latest_snapshot()
@@ -718,6 +790,12 @@ func _test_real_controls_complete_both_chapters() -> void:
 	_expect_true(
 		controller.get_latest_snapshot().nutrition.sugar_action_pending,
 		"sugar button queues one high-level action"
+	)
+	_expect_true(
+		controller.get_latest_snapshot().scenario
+			.selected_placement_choice_id
+			== HabitatScenarioConfig.SUGAR_PLACEMENT_NEAR_NEST,
+		"pending snapshot retains the selected high-level location"
 	)
 	_expect_int(
 		controller.get_latest_snapshot()
@@ -731,6 +809,13 @@ func _test_real_controls_complete_both_chapters() -> void:
 			.nutrition.total_sugar_portions_supplied,
 		sugar_before + 1,
 		"next Tick uses the frozen one-portion sugar action"
+	)
+	_expect_true(
+		_has_event(
+			controller.get_latest_snapshot(),
+			ObservationEvent.Type.FEEDING_DISTURBANCE_OCCURRED
+		),
+		"near-nest placement records its care disturbance"
 	)
 	_expect_true(
 		_process_until(
@@ -1898,6 +1983,60 @@ func _find_inference_button(
 		if StringName(button.get_meta(&"inference_id", &"")) == inference_id:
 			return button
 	return null
+
+
+func _find_prediction_button(
+	controller: Act1TestTubeController,
+	prediction_id: StringName
+) -> Button:
+	for button_path: String in [
+		"%PredictionButton1",
+		"%PredictionButton2",
+		"%PredictionButton3",
+	]:
+		var button: Button = controller.get_node(button_path) as Button
+		if StringName(
+			button.get_meta(&"prediction_id", &"")
+		) == prediction_id:
+			return button
+	return null
+
+
+func _record_prediction(
+	controller: Act1TestTubeController,
+	prediction_id: StringName
+) -> bool:
+	(controller.get_node("%JournalButton") as Button).pressed.emit()
+	var button: Button = _find_prediction_button(
+		controller,
+		prediction_id
+	)
+	if button == null or button.disabled:
+		return false
+	button.pressed.emit()
+	(controller.get_node("%JournalCloseButton") as Button).pressed.emit()
+	return true
+
+
+func _select_option_metadata(
+	option: OptionButton,
+	metadata: StringName
+) -> bool:
+	for index: int in option.item_count:
+		if StringName(option.get_item_metadata(index)) == metadata:
+			option.select(index)
+			return true
+	return false
+
+
+func _has_event(
+	snapshot: GameSnapshot,
+	event_type: ObservationEvent.Type
+) -> bool:
+	for event: ObservationEvent in snapshot.observations.events:
+		if event.event_type == event_type:
+			return true
+	return false
 
 
 func _process_until(

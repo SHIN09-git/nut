@@ -41,6 +41,28 @@ func apply_light_cover(state: ColonyState) -> bool:
 	return true
 
 
+func apply_feeding_disturbance(
+	state: ColonyState,
+	source_zone_id: StringName
+) -> bool:
+	if (
+		not is_ready()
+		or state == null
+		or state.act1_state == null
+		or source_zone_id.is_empty()
+	):
+		return false
+	_reset_care_cycle(state.act1_state)
+	state.record_observation_event(
+		ObservationEvent.Type.FEEDING_DISTURBANCE_OCCURRED,
+		ColonyState.QUEEN_ENTITY_ID,
+		ObservationEvent.NO_ENTITY_ID,
+		source_zone_id,
+		_habitat_config.nest_zone_id
+	)
+	return true
+
+
 func advance(state: ColonyState) -> void:
 	if not is_ready() or state == null or state.act1_state == null:
 		return

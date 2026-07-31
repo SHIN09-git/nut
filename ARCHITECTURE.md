@@ -1,8 +1,8 @@
 # 《玻璃蚁国》技术架构
 
-> 文档版本：3.1｜更新日期：2026-07-31
+> 文档版本：3.2｜更新日期：2026-07-31
 >
-> 本文描述当前 R20 正式 Act 1 六章、统一栖息地世界、对象检查、纯显示镜头与快照驱动工蚁姿态、显示投影缓存、生产音画与双语文本、档案有效游玩时长、稳定群落结局、UX／无障碍收口与双室模块化迁巢、版本化存档和档案设置外壳，以及仍保留的旧组合与独立调试／验证路径。
+> 本文描述当前 R21 正式 Act 1 六章、第 1～2 章实验记录、冻结糖液位置取舍、统一栖息地世界、对象检查、纯显示镜头与快照驱动工蚁姿态、显示投影缓存、生产音画与双语文本、档案有效游玩时长、稳定群落结局、UX／无障碍收口与双室模块化迁巢、版本化存档和档案设置外壳，以及仍保留的旧组合与独立调试／验证路径。
 
 ## 1. 固定技术决定
 
@@ -25,6 +25,7 @@
 | 区域环境 | 湿度、光照、污染均为 0～1 权威值；开放连接上的污染传播按稳定顺序确定性计算 |
 | 群落工作 | 废物清理、区域侦察、群落迁移使用三个专用显式状态机；与搬运、觅食、喂食互斥 |
 | 栖息地世界与镜头 | 普通观察与布局编辑共用 `HabitatSpatialProjection`；支持选择、聚焦与所选工蚁跟随，手动镜头会停止跟随；镜头不进入模拟或存档 |
+| 第 1～2 章实验记录 | 会话内预测、干预前基线、前后对照、事件时间线和首工注释；不改变任务权威，不进入存档 |
 | 存档核心 | `r12.authority.v10` 权威状态、SaveEnvelope v2 档案计时、规范化 JSON、版本／清单／checksum 校验、双室／终章报告权威、主档／备份恢复和单向迁移 |
 | 测试 | 项目自建 headless runner，无第三方插件 |
 
@@ -37,13 +38,14 @@ PreparationGate（应用层，Tick 0）
     ↓
 Act1TestTubeController
     ├── 遮光套按钮 → submit_apply_light_cover_action()
-    ├── 糖液按钮 → submit_place_sugar_action()
+    ├── 糖液按钮 → submit_place_sugar_action(choice_id)
     ├── 蛋白按钮 → submit_place_protein_action()
     ├── 清理按钮 → submit_clean_waste_tray_action(facility_id)
     ├── 手册推论按钮 → submit_campaign_inference_action(inference_id)
     └── 布局操作 → submit_place/rotate/remove_facility_action(...)
                     submit_set_gate_open_action(connection_id, open)
-                          （推论／设施使用稳定逻辑 ID，不携带效果量）
+                          （推论／糖液落点／设施使用稳定逻辑 ID，
+                            不携带效果量或任意区域 ID）
     ↓
 ColonySimulation._pending_commands
     ↓ 先验证 Tick 连续，再按提交顺序消费
@@ -78,7 +80,7 @@ GameSnapshot
             └── 开发调试构建中的 F3 DebugPanel
 ```
 
-提交命令时不会直接修改权威状态。控制器在提交成功后立即重新取同 Tick 快照，所以 UI 可以先看到遮光、糖液或推论的待处理状态；命令效果只会在下一合法固定 Tick 出现。`ColonySimulation` 在消费命令前拒绝非连续 Tick，因此错误推进不会丢失已提交输入。
+提交命令时不会直接修改权威状态。控制器在提交成功后立即重新取同 Tick 快照，所以 UI 可以先看到遮光、糖液或推论的待处理状态；命令效果只会在下一合法固定 Tick 出现。R21 的糖液选择只接受冻结配置发布的 `feeding_port` 或 `near_nest` 高层 ID，模拟再把它解析为稳定区域；UI 不能传入区域 ID、路程或扰动量。`ColonySimulation` 在消费命令前拒绝非连续 Tick，因此错误推进不会丢失已提交输入。
 
 准备门是 `Act1TestTubeController` 的应用层状态，不属于 `ColonyState`、命令队列或 `Act1State`。门内 `SimulationClock` 保持 Tick 0、1×和暂停，View 插值系数固定为 0，蚁后与蚂蚁视觉暂停；开始按钮只解除这些暂停。首工的生命周期边界仍由冻结 Resource 和模拟 Tick 决定。重开先创建全新模拟会话，再回到同一个准备门。
 
@@ -88,7 +90,7 @@ Act 1 会话从开始到六章完成始终持有同一个 `SimulationClock`、�
 
 - 推进 `SimulationClock`。
 - 协调 Tick 0 准备门，并在开始前冻结时钟、插值和视觉。
-- 把遮光、糖液和蛋白 UI 操作转换成无参数高层模拟命令。
+- 把遮光和蛋白 UI 操作转换成无参数高层模拟命令；把糖液 UI 选择转换成冻结白名单中的高层落点 ID。
 - 把设施类型、逻辑槽位、方向、稳定设施／连接 ID 转换成现有布局高层命令；不提供权威效果量。
 - 把观察手册选项转换成带稳定推论 ID 的高层模拟命令；UI 文案不是权威输入。
 - 每个成功固定 Tick 后创建并交付一份 `GameSnapshot`。
@@ -101,6 +103,8 @@ Act 1 会话从开始到六章完成始终持有同一个 `SimulationClock`、�
 控制器不能访问私有 `ColonyState`，也不创建或逐只管理蚂蚁视觉节点。放大镜是纯显示辅助；它不写入模拟。
 
 `DemoSettingsState` 保存分辨率、全屏、语言、UI 缩放、减少动效、主音量，以及帮助／观察手册／模块布局三个入口的无冲突快捷键。固定布局编辑键不参与重映射，避免与方向、确认和焦点导航冲突。应用外壳把设置独立持久化并与当前游戏控制器共享；它不读取或修改 `ColonyState`，也不进入 `GameSnapshot`。打开暂停、帮助或手册只暂停 `SimulationClock` 并冻结 View 插值；关闭帮助会恢复打开前的暂停状态和焦点。显示、语言、动效、音量和快捷键切换不会推进 Tick、消费命令或改变模拟快照。
+
+R21 的 `Act1ExperimentState` 与 `PlayerAnnotationState` 由当前 `Act1TestTubeController` 会话拥有。前者按第 1～2 章保存不可覆盖的预测、干预前计数和选择时 Tick；后者保存首工的可选名称与从复制事件派生的最近历史。两者都不持有 `ColonyState`、不参与任务选择、不写入 `GameSnapshot` 或 SaveEnvelope。加载已经越过遮光／糖液干预点的旧档时，控制器从权威快照判定现有进度，不用缺失的会话预测倒退门控。
 
 旧 `CombinedObservationController`、独立湿度和糖水入口继续遵守相同边界：
 
@@ -157,6 +161,7 @@ data/habitats/act1_test_tube.tres
 - `BroodCareConfig` 保存幼体舒适湿度、最小改善、决策间隔、拾取／移动／放下时长和区域停留冷却。
 - `HabitatScenarioData.zones` 是包含 2～3 个稳定区域 ID 的强类型数组。
 - `HabitatScenarioConfig` 保存切片初始实体、区域、连接、环境值与对应场景的高层动作参数。
+- 正式 Act 1 的 `HabitatScenarioConfig` 以冻结拓扑解析 R21 糖液位置：`feeding_port` 指向配置的喂食区，`near_nest` 指向连接巢室与喂食区的唯一中间区域；不满足唯一拓扑或任意选择 ID 会被拒绝。
 - `ForagingConfig` 保存发现、去程、采集、返程和分享时长。
 - `ScenarioSequenceConfig` 保存首工晚期蛹的初始阶段年龄，以及首工羽化和湿度响应两张观察卡 ID。
 - `FoundingCareConfig` 保存蚁后休息、靠近幼体、护理与蛹观察的节奏、首工晚期蛹的初始阶段年龄，以及 Act 1 四类观察卡 ID。
@@ -646,6 +651,14 @@ R20-F 不增加羽化模拟事件或独立动画时间轴。`AntView.apply_snaps
 后续相同工蚁快照直接返回，不重置显示计时，因此一个 16×帧中跨过多个
 模拟 Tick 仍保留一次完整显示过渡。暂停阻止显示计时推进，减少动效立即采用
 最终轮廓。该状态可从相邻快照重建，不进入模拟、事件、存档或生命周期权威。
+
+R21 的观察手册把同一份 `CampaignSnapshot`、`Act1Snapshot`、营养／觅食
+快照和结构化 `ObservationEvent` 投影为问题、会话预测、干预前／当前对照与
+相对时间线。`ForagingScenarioSnapshot` 只读发布合法糖液选择 ID 和已应用
+选择 ID；控制器据此配置 `OptionButton`，不会读取源 Resource 或自行计算
+区域。近巢扰动的圆环只读取已复制事件和当前模拟 Tick，暂停时不会自行推进。
+关键事件自动降速发生在控制器接收新快照之后，只把后续时钟倍率设为 1×，
+不会重放、跳过或修改产生该事件的 Tick。
 
 `ChapterArtView` 只把 `CampaignSnapshot.chapter` 映射为六个代码内原创标记；`ObservationReportSealView` 是不读取模拟的静态结局印记。两者不能完成章节或生成报告。标题背景由 `TextureRect` 读取 `assets/production/` 中已登记文件；主题缩放从场景生产主题复制后修改，不再用空主题覆盖按钮和焦点材质。
 

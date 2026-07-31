@@ -7,6 +7,8 @@ const CARE_GLOW: Color = Color(0.91, 0.78, 0.48, 0.22)
 const SCOUT_GLOW: Color = Color(0.42, 0.76, 0.67, 0.30)
 const MIGRATION_GLOW: Color = Color(0.93, 0.66, 0.30, 0.28)
 const POLLUTION_COLOR: Color = Color(0.48, 0.34, 0.18, 0.66)
+const DISTURBANCE_COLOR: Color = Color(0.96, 0.56, 0.24, 0.72)
+const DISTURBANCE_VISIBLE_TICKS: int = 20
 
 var _snapshot: GameSnapshot
 var _layout_view: FacilityLayoutView
@@ -60,6 +62,7 @@ func _draw() -> void:
 		return
 	_draw_pollution_clues()
 	_draw_food_sources()
+	_draw_recent_feeding_disturbance()
 	_draw_worker_activity()
 	if (
 		_snapshot.act1.queen_care != null
@@ -67,6 +70,38 @@ func _draw() -> void:
 			== Act1State.QueenCareState.BROOD_CARE
 	):
 		draw_circle(_queen_position, 46.0, CARE_GLOW)
+
+
+func _draw_recent_feeding_disturbance() -> void:
+	if _snapshot.observations == null:
+		return
+	var latest_tick: int = -1
+	for event: ObservationEvent in _snapshot.observations.events:
+		if (
+			event.event_type
+			== ObservationEvent.Type.FEEDING_DISTURBANCE_OCCURRED
+		):
+			latest_tick = maxi(latest_tick, event.tick)
+	if latest_tick < 0:
+		return
+	var elapsed_ticks: int = _snapshot.simulation_tick - latest_tick
+	if elapsed_ticks < 0 or elapsed_ticks >= DISTURBANCE_VISIBLE_TICKS:
+		return
+	var progress: float = (
+		float(elapsed_ticks) / float(DISTURBANCE_VISIBLE_TICKS)
+	)
+	var color: Color = DISTURBANCE_COLOR
+	color.a *= 1.0 - progress
+	draw_arc(
+		_queen_position,
+		42.0 + progress * 30.0,
+		0.0,
+		TAU,
+		32,
+		color,
+		4.0,
+		true
+	)
 
 
 func _draw_pollution_clues() -> void:

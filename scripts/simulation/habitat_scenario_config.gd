@@ -1,6 +1,9 @@
 class_name HabitatScenarioConfig
 extends RefCounted
 
+const SUGAR_PLACEMENT_FEEDING_PORT: StringName = &"feeding_port"
+const SUGAR_PLACEMENT_NEAR_NEST: StringName = &"near_nest"
+
 var scenario_id: StringName
 var scenario_kind: HabitatScenarioData.ScenarioKind
 var zones: Array[HabitatZoneState] = []
@@ -167,3 +170,53 @@ func supports_sugar_foraging() -> bool:
 		or is_nutrition_growth()
 		or is_act1_test_tube()
 	)
+
+
+func get_sugar_placement_choice_ids() -> Array[StringName]:
+	if is_act1_test_tube():
+		return [
+			SUGAR_PLACEMENT_FEEDING_PORT,
+			SUGAR_PLACEMENT_NEAR_NEST,
+		]
+	return [SUGAR_PLACEMENT_FEEDING_PORT]
+
+
+func resolve_sugar_placement_zone_id(
+	choice_id: StringName
+) -> StringName:
+	if (
+		choice_id.is_empty()
+		or choice_id == SUGAR_PLACEMENT_FEEDING_PORT
+	):
+		return sugar_placement_zone_id
+	if (
+		is_act1_test_tube()
+		and choice_id == SUGAR_PLACEMENT_NEAR_NEST
+	):
+		return _get_act1_intermediate_zone_id()
+	return &""
+
+
+func get_sugar_placement_choice_id_for_zone(
+	zone_id: StringName
+) -> StringName:
+	if (
+		is_act1_test_tube()
+		and zone_id == _get_act1_intermediate_zone_id()
+	):
+		return SUGAR_PLACEMENT_NEAR_NEST
+	if zone_id == sugar_placement_zone_id:
+		return SUGAR_PLACEMENT_FEEDING_PORT
+	return &""
+
+
+func _get_act1_intermediate_zone_id() -> StringName:
+	if not is_act1_test_tube():
+		return &""
+	for zone: HabitatZoneState in zones:
+		if (
+			zone.zone_id != nest_zone_id
+			and zone.zone_id != sugar_placement_zone_id
+		):
+			return zone.zone_id
+	return &""

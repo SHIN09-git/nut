@@ -220,10 +220,15 @@ func submit_water_action() -> bool:
 	return true
 
 
-func submit_place_sugar_action() -> bool:
-	if not _is_place_sugar_action_available():
+func submit_place_sugar_action(
+	placement_choice_id: StringName = &""
+) -> bool:
+	if not _is_place_sugar_action_available(placement_choice_id):
 		return false
-	_queue_pending_command(PendingCommandType.PLACE_SUGAR_ACTION)
+	_queue_pending_command(
+		PendingCommandType.PLACE_SUGAR_ACTION,
+		placement_choice_id
+	)
 	return true
 
 
@@ -717,7 +722,9 @@ func create_game_snapshot() -> GameSnapshot:
 			phase,
 			_is_place_sugar_action_available(),
 			place_action_pending,
-			1 if _state.total_sugar_portions_placed > 0 else 0
+			1 if _state.total_sugar_portions_placed > 0 else 0,
+			_get_available_sugar_placement_choice_ids(),
+			_get_selected_sugar_placement_choice_id()
 		)
 	)
 	var sequence_snapshot: ScenarioSequenceSnapshot
@@ -966,15 +973,7 @@ func _apply_pending_commands() -> void:
 			PendingCommandType.WATER_ACTION:
 				_apply_water_action()
 			PendingCommandType.PLACE_SUGAR_ACTION:
-				if _foraging_system != null:
-					_foraging_system.apply_sugar_placement(
-						_state,
-						_find_food_station_zone_id(
-							FoodSourceState.FoodType.SUGAR_WATER,
-							_habitat_config.sugar_placement_zone_id
-						),
-						_habitat_config.sugar_portions
-					)
+				_apply_sugar_command(command)
 			PendingCommandType.PLACE_PROTEIN_ACTION:
 				if _foraging_system != null:
 					_foraging_system.apply_protein_placement(
@@ -1017,6 +1016,55 @@ func _apply_pending_commands() -> void:
 						_state,
 						command.argument_entity_id
 					)
+
+
+func _apply_sugar_command(command: PendingSimulationCommand) -> void:
+	if (
+		command == null
+		or _foraging_system == null
+		or not _is_sugar_placement_choice_available(command.argument_id)
+	):
+		return
+	var configured_zone_id: StringName = (
+		_habitat_config.resolve_sugar_placement_zone_id(
+			command.argument_id
+		)
+	)
+	var placement_zone_id: StringName = (
+		configured_zone_id
+		if (
+			command.argument_id
+			== HabitatScenarioConfig.SUGAR_PLACEMENT_NEAR_NEST
+		)
+		else _find_food_station_zone_id(
+			FoodSourceState.FoodType.SUGAR_WATER,
+			configured_zone_id
+		)
+	)
+	var source: FoodSourceState = _foraging_system.apply_sugar_placement(
+		_state,
+		placement_zone_id,
+		_habitat_config.sugar_portions
+	)
+	if source == null:
+		return
+	if _habitat_config.is_act1_test_tube():
+		_state.record_observation_event(
+			ObservationEvent.Type.SUGAR_PLACED,
+			ObservationEvent.NO_ENTITY_ID,
+			source.entity_id,
+			&"",
+			placement_zone_id
+		)
+	if (
+		command.argument_id
+			== HabitatScenarioConfig.SUGAR_PLACEMENT_NEAR_NEST
+		and _founding_care_system != null
+	):
+		_founding_care_system.apply_feeding_disturbance(
+			_state,
+			placement_zone_id
+		)
 
 
 func _apply_water_action() -> void:
@@ -1200,10 +1248,15 @@ func _is_water_action_available() -> bool:
 	return target_zone != null and target_zone.available
 
 
-func _is_place_sugar_action_available() -> bool:
+func _is_place_sugar_action_available(
+	placement_choice_id: StringName = &""
+) -> bool:
 	if (
 		not _supports_sugar_foraging()
 		or _foraging_system == null
+		or not _is_sugar_placement_choice_available(
+			placement_choice_id
+		)
 		or (
 			_scenario_director != null
 			and not _scenario_director.is_foraging_phase_active(_state)
@@ -1235,13 +1288,79 @@ func _is_place_sugar_action_available() -> bool:
 		)
 	):
 		return false
+	var configured_zone_id: StringName = (
+		_habitat_config.resolve_sugar_placement_zone_id(
+			placement_choice_id
+		)
+	)
 	var placement_zone: HabitatZoneState = _state.get_zone(
-		_find_food_station_zone_id(
+		configured_zone_id
+		if (
+			placement_choice_id
+			== HabitatScenarioConfig.SUGAR_PLACEMENT_NEAR_NEST
+		)
+		else _find_food_station_zone_id(
 			FoodSourceState.FoodType.SUGAR_WATER,
-			_habitat_config.sugar_placement_zone_id
+			configured_zone_id
 		)
 	)
 	return placement_zone != null and placement_zone.available
+
+
+func _is_sugar_placement_choice_available(
+	placement_choice_id: StringName
+) -> bool:
+	if _habitat_config == null:
+		return false
+	if (
+		placement_choice_id.is_empty()
+		or placement_choice_id
+			== HabitatScenarioConfig.SUGAR_PLACEMENT_FEEDING_PORT
+	):
+		return true
+	return (
+		placement_choice_id
+			== HabitatScenarioConfig.SUGAR_PLACEMENT_NEAR_NEST
+		and _habitat_config.is_act1_test_tube()
+		and _state.campaign_state != null
+		and _state.campaign_state.chapter
+			== CampaignState.Chapter.ACT1_FIRST_WORKERS
+		and not _habitat_config.resolve_sugar_placement_zone_id(
+			placement_choice_id
+		).is_empty()
+	)
+
+
+func _get_available_sugar_placement_choice_ids() -> Array[StringName]:
+	if (
+		_habitat_config != null
+		and _habitat_config.is_act1_test_tube()
+		and _state.campaign_state != null
+		and _state.campaign_state.chapter
+			== CampaignState.Chapter.ACT1_FIRST_WORKERS
+	):
+		return _habitat_config.get_sugar_placement_choice_ids()
+	return [HabitatScenarioConfig.SUGAR_PLACEMENT_FEEDING_PORT]
+
+
+func _get_selected_sugar_placement_choice_id() -> StringName:
+	for command: PendingSimulationCommand in _pending_commands:
+		if (
+			command.command_type
+			== PendingCommandType.PLACE_SUGAR_ACTION
+		):
+			return (
+				HabitatScenarioConfig.SUGAR_PLACEMENT_FEEDING_PORT
+				if command.argument_id.is_empty()
+				else command.argument_id
+			)
+	for source: FoodSourceState in _state.food_sources:
+		if source.food_type != FoodSourceState.FoodType.SUGAR_WATER:
+			continue
+		return _habitat_config.get_sugar_placement_choice_id_for_zone(
+			source.zone_id
+		)
+	return &""
 
 
 func _is_place_protein_action_available() -> bool:

@@ -3007,7 +3007,7 @@ static func _decode_event(value: Variant) -> Dictionary:
 		or int(value["tick"]) < 0
 		or int(value["event_type"]) < ObservationEvent.Type.RELOCATION_STARTED
 		or int(value["event_type"])
-			> ObservationEvent.Type.FINAL_REPORT_GENERATED
+			> ObservationEvent.Type.FEEDING_DISTURBANCE_OCCURRED
 		or typeof(value["source_zone_id"]) != TYPE_STRING
 		or typeof(value["target_zone_id"]) != TYPE_STRING
 	):
@@ -3566,9 +3566,11 @@ static func _has_valid_pending_commands(
 					return false
 			ColonySimulation.PendingCommandType.PLACE_SUGAR_ACTION:
 				if (
-					not command.argument_id.is_empty()
-					or not _has_neutral_extended_arguments(command)
-					or not _can_restore_sugar_command(simulation)
+					not _has_neutral_extended_arguments(command)
+					or not _can_restore_sugar_command(
+						simulation,
+						command.argument_id
+					)
 				):
 					return false
 			ColonySimulation.PendingCommandType.CONTINUE_OBSERVATION_ACTION:
@@ -3759,10 +3761,14 @@ static func _can_restore_water_command(
 
 
 static func _can_restore_sugar_command(
-	simulation: ColonySimulation
+	simulation: ColonySimulation,
+	placement_choice_id: StringName
 ) -> bool:
 	if (
 		not simulation._supports_sugar_foraging()
+		or not simulation._is_sugar_placement_choice_available(
+			placement_choice_id
+		)
 		or (
 			simulation._habitat_config.is_act1_test_tube()
 			and (
@@ -3791,10 +3797,20 @@ static func _can_restore_sugar_command(
 		)
 	):
 		return false
+	var configured_zone_id: StringName = (
+		simulation._habitat_config.resolve_sugar_placement_zone_id(
+			placement_choice_id
+		)
+	)
 	var zone: HabitatZoneState = simulation._state.get_zone(
-		simulation._find_food_station_zone_id(
+		configured_zone_id
+		if (
+			placement_choice_id
+			== HabitatScenarioConfig.SUGAR_PLACEMENT_NEAR_NEST
+		)
+		else simulation._find_food_station_zone_id(
 			FoodSourceState.FoodType.SUGAR_WATER,
-			simulation._habitat_config.sugar_placement_zone_id
+			configured_zone_id
 		)
 	)
 	return zone != null and zone.available

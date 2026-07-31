@@ -210,6 +210,10 @@ func _describe_event(event_type: ObservationEvent.Type) -> String:
 			return tr("EVENT_FORAGING_CANCELLED")
 		ObservationEvent.Type.FIRST_WORKER_EMERGED:
 			return tr("EVENT_FIRST_WORKER")
+		ObservationEvent.Type.BROOD_FEEDING_STARTED:
+			return tr("R21_EVENT_BROOD_FEEDING_STARTED")
+		ObservationEvent.Type.BROOD_FED:
+			return tr("R21_EVENT_BROOD_FED")
 		ObservationEvent.Type.IDENTITY_OBSERVATION_COMPLETED:
 			return tr("EVENT_IDENTITY_COMPLETE")
 		ObservationEvent.Type.OBSERVATION_SESSION_COMPLETED:

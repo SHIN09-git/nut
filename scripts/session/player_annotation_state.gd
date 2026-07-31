@@ -65,14 +65,19 @@ func clear_selection() -> void:
 func set_selected_worker_name(raw_name: String) -> bool:
 	if _selected_worker_entity_id < 0:
 		return false
+	return set_worker_name(_selected_worker_entity_id, raw_name)
 
+
+func set_worker_name(entity_id: int, raw_name: String) -> bool:
+	if entity_id < 0 or not _present_worker_ids.has(entity_id):
+		return false
 	var normalized_name: String = raw_name.strip_edges()
 	if normalized_name.length() > MAX_WORKER_NAME_LENGTH:
 		normalized_name = normalized_name.substr(0, MAX_WORKER_NAME_LENGTH)
 	if normalized_name.is_empty():
-		_worker_names.erase(_selected_worker_entity_id)
+		_worker_names.erase(entity_id)
 	else:
-		_worker_names[_selected_worker_entity_id] = normalized_name
+		_worker_names[entity_id] = normalized_name
 	return true
 
 

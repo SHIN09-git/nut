@@ -34,6 +34,9 @@ var _help_return_focus: Control
 var _magnifier_active: bool = false
 var _completion_dismissed: bool = false
 var _fatal_error: String = ""
+var _experiment_state: Act1ExperimentState = Act1ExperimentState.new()
+var _annotation_state: PlayerAnnotationState = PlayerAnnotationState.new()
+var _last_auto_slow_event_id: int = -1
 var _selected_facility_type_id: StringName = (
 	CampaignState.FACILITY_SMALL_FORAGING_BOX
 )
@@ -207,6 +210,12 @@ func _connect_controls() -> void:
 	_journal_panel.inference_requested.connect(
 		_on_inference_requested
 	)
+	_journal_panel.prediction_requested.connect(
+		_on_prediction_requested
+	)
+	_journal_panel.first_worker_name_requested.connect(
+		_on_first_worker_name_requested
+	)
 	_completion_panel.continue_requested.connect(
 		_on_continue_freeplay_pressed
 	)
@@ -239,6 +248,9 @@ func _connect_controls() -> void:
 
 
 func _initialize_session() -> void:
+	_experiment_state.reset_session()
+	_annotation_state.reset_session()
+	_last_auto_slow_event_id = -1
 	_simulation_clock = SimulationClock.new()
 	_colony_simulation = ColonySimulation.new(
 		species_data_source,
@@ -285,6 +297,8 @@ func _apply_snapshot() -> void:
 	):
 		_set_fatal_error(tr("ERROR_INCOMPLETE_SNAPSHOT"))
 		return
+	_annotation_state.reconcile(_latest_snapshot.colony)
+	_apply_key_event_slowdown()
 	_update_main_panel()
 	_update_journal()
 	_update_controls()
@@ -327,6 +341,9 @@ func _on_start_pressed() -> void:
 
 
 func _on_cover_pressed() -> void:
+	if _is_current_intervention_gated():
+		_open_journal()
+		return
 	if _colony_simulation.submit_apply_light_cover_action():
 		_apply_snapshot()
 		_sidebar.set_guidance_text(
@@ -336,7 +353,12 @@ func _on_cover_pressed() -> void:
 
 
 func _on_sugar_pressed() -> void:
-	if _colony_simulation.submit_place_sugar_action():
+	if _is_current_intervention_gated():
+		_open_journal()
+		return
+	if _colony_simulation.submit_place_sugar_action(
+		_tool_bar.get_sugar_placement_choice_id()
+	):
 		_apply_snapshot()
 		_sidebar.set_guidance_text(
 			tr("ACT1_FEEDBACK_SUGAR_PENDING")
@@ -481,12 +503,48 @@ func _on_worker_selected(entity_id: int) -> void:
 	)
 	_habitat_view.set_selected_worker_id(entity_id)
 	if entity_id >= 0:
+		_annotation_state.select_worker(
+			entity_id,
+			_latest_snapshot.colony
+		)
 		if was_following:
 			_habitat_view.set_followed_worker_id(entity_id)
 		_magnifier_active = true
 		_sidebar.set_inspector_visible(true)
 	_update_inspector()
 	_update_controls()
+
+
+func _on_prediction_requested(prediction_id: StringName) -> void:
+	if (
+		_latest_snapshot == null
+		or _latest_snapshot.campaign == null
+		or not _experiment_state.record_prediction(
+			_latest_snapshot.campaign.chapter,
+			prediction_id,
+			_latest_snapshot
+		)
+	):
+		return
+	_update_main_panel()
+	_update_journal()
+	_update_controls()
+	_tool_bar.set_hint("")
+	presentation_audio_cue_requested.emit(&"ui_confirm")
+
+
+func _on_first_worker_name_requested(text: String) -> void:
+	if (
+		_latest_snapshot == null
+		or _latest_snapshot.act1 == null
+		or not _annotation_state.set_worker_name(
+			_latest_snapshot.act1.first_worker_entity_id,
+			text
+		)
+	):
+		return
+	_update_journal()
+	presentation_audio_cue_requested.emit(&"ui_confirm")
 
 
 func _on_focus_requested() -> void:
@@ -599,6 +657,44 @@ func _set_speed(multiplier: int) -> void:
 	if _simulation_clock.set_speed_multiplier(multiplier):
 		_update_controls()
 		_update_debug()
+
+
+func _apply_key_event_slowdown() -> void:
+	if (
+		_latest_snapshot == null
+		or _latest_snapshot.observations == null
+		or _simulation_clock == null
+	):
+		return
+	var newest_event_id: int = 0
+	var should_slow: bool = false
+	for event: ObservationEvent in _latest_snapshot.observations.events:
+		newest_event_id = maxi(newest_event_id, event.event_id)
+		if (
+			_last_auto_slow_event_id >= 0
+			and event.event_id > _last_auto_slow_event_id
+			and event.event_type in [
+				ObservationEvent.Type.FIRST_WORKER_EMERGED,
+				ObservationEvent.Type.SUGAR_COLLECTED,
+				ObservationEvent.Type.SUGAR_SHARED,
+				ObservationEvent.Type.CAMPAIGN_CHAPTER_COMPLETED,
+			]
+		):
+			should_slow = true
+	if _last_auto_slow_event_id < 0:
+		_last_auto_slow_event_id = newest_event_id
+		return
+	_last_auto_slow_event_id = maxi(
+		_last_auto_slow_event_id,
+		newest_event_id
+	)
+	if (
+		should_slow
+		and not _simulation_clock.is_paused()
+		and _simulation_clock.get_speed_multiplier() > 1
+	):
+		_simulation_clock.set_speed_multiplier(1)
+		_tool_bar.set_feedback(tr("R21_AUTO_SLOW_FEEDBACK"), false)
 
 
 func _update_main_panel() -> void:
@@ -719,6 +815,54 @@ func _update_journal() -> void:
 		campaign.inference_action_available,
 		campaign.inference_action_pending
 	)
+	var experiment_active: bool = campaign.chapter in [
+		CampaignState.Chapter.ACT1_FOUNDING,
+		CampaignState.Chapter.ACT1_FIRST_WORKERS,
+	]
+	var prediction_ids: Array[StringName] = []
+	if experiment_active:
+		prediction_ids = _experiment_state.get_prediction_ids(
+			campaign.chapter
+		)
+	var prediction_labels: Array[String] = []
+	for prediction_id: StringName in prediction_ids:
+		prediction_labels.append(_prediction_text(prediction_id))
+	var recorded_prediction_id: StringName = (
+		_experiment_state.get_prediction(campaign.chapter)
+	)
+	var first_worker: AntSnapshot
+	var first_worker_events: Array[ObservationEvent] = []
+	var first_worker_name: String = ""
+	if (
+		campaign.chapter == CampaignState.Chapter.ACT1_FIRST_WORKERS
+		and _latest_snapshot.act1.first_worker_entity_id >= 0
+	):
+		first_worker = _latest_snapshot.colony.find_ant(
+			_latest_snapshot.act1.first_worker_entity_id
+		)
+		if first_worker != null:
+			first_worker_events = _annotation_state.get_recent_events(
+				first_worker.entity_id
+			)
+			first_worker_name = _annotation_state.get_worker_name(
+				first_worker.entity_id
+			)
+	_journal_panel.set_experiment_content(
+		experiment_active,
+		_experiment_question(campaign.chapter),
+		prediction_ids,
+		prediction_labels,
+		recorded_prediction_id,
+		_prediction_status_text(
+			campaign.chapter,
+			recorded_prediction_id
+		),
+		_experiment_comparison_text(campaign.chapter),
+		_experiment_timeline_text(campaign.chapter),
+		first_worker,
+		first_worker_name,
+		first_worker_events
+	)
 
 
 func _update_controls() -> void:
@@ -732,8 +876,11 @@ func _update_controls() -> void:
 		or not _fatal_error.is_empty()
 	)
 	var care: QueenCareSnapshot = _latest_snapshot.act1.queen_care
+	var intervention_gated: bool = _is_current_intervention_gated()
 	_tool_bar.cover_button.disabled = (
-		blocked or not care.light_cover_action_available
+		blocked
+		or intervention_gated
+		or not care.light_cover_action_available
 	)
 	_tool_bar.cover_button.text = (
 		tr("ACT1_TOOL_COVER_APPLIED")
@@ -747,8 +894,31 @@ func _update_controls() -> void:
 			CampaignState.FACILITY_MICRO_FEEDING_PORT
 		)
 	)
+	var sugar_choice_visible: bool = (
+		_tool_bar.sugar_button.visible
+		and _latest_snapshot.campaign.chapter
+			== CampaignState.Chapter.ACT1_FIRST_WORKERS
+	)
+	_tool_bar.sugar_placement_option.visible = sugar_choice_visible
+	var sugar_choice_ids: Array[StringName] = (
+		_latest_snapshot.scenario.available_placement_choice_ids
+	)
+	var sugar_choice_labels: Array[String] = []
+	for choice_id: StringName in sugar_choice_ids:
+		sugar_choice_labels.append(_sugar_placement_choice_text(choice_id))
+	_tool_bar.set_sugar_placement_choices(
+		sugar_choice_ids,
+		sugar_choice_labels,
+		_latest_snapshot.scenario.selected_placement_choice_id
+	)
 	_tool_bar.sugar_button.disabled = (
-		blocked or not _latest_snapshot.nutrition.sugar_action_available
+		blocked
+		or intervention_gated
+		or not _latest_snapshot.nutrition.sugar_action_available
+	)
+	_tool_bar.sugar_placement_option.disabled = (
+		not sugar_choice_visible
+		or _tool_bar.sugar_button.disabled
 	)
 	_tool_bar.protein_button.visible = (
 		_latest_snapshot.campaign.has_unlocked_facility(
@@ -898,6 +1068,8 @@ func _update_disabled_reasons(
 			if care.light_cover_action_pending
 			else "R19_REASON_ALREADY_APPLIED"
 				if care.light_cover_applied
+				else "R21_REASON_PREDICTION_REQUIRED"
+					if _is_current_intervention_gated()
 				else "R19_REASON_BLOCKED"
 					if blocked
 					else "R19_REASON_ACTION_UNAVAILABLE"
@@ -908,6 +1080,8 @@ func _update_disabled_reasons(
 		(
 			"R19_REASON_PENDING"
 			if _latest_snapshot.nutrition.sugar_action_pending
+			else "R21_REASON_PREDICTION_REQUIRED"
+				if _is_current_intervention_gated()
 			else "R19_REASON_BLOCKED"
 				if blocked
 				else "R19_REASON_ACTION_UNAVAILABLE"
@@ -1397,6 +1571,11 @@ func _objective_text(campaign: CampaignSnapshot) -> String:
 
 
 func _current_observation_text(campaign: CampaignSnapshot) -> String:
+	if campaign.chapter in [
+		CampaignState.Chapter.ACT1_FOUNDING,
+		CampaignState.Chapter.ACT1_FIRST_WORKERS,
+	]:
+		return _experiment_question(campaign.chapter)
 	var lines: PackedStringArray = _objective_text(campaign).split("\n")
 	for line: String in lines:
 		if line.begins_with("○"):
@@ -1404,6 +1583,158 @@ func _current_observation_text(campaign: CampaignSnapshot) -> String:
 	if campaign.status == CampaignState.Status.AWAITING_INFERENCE:
 		return tr("ACT1_GUIDANCE_INFERENCE")
 	return _guidance_text(campaign)
+
+
+func _is_current_intervention_gated() -> bool:
+	return (
+		_latest_snapshot != null
+		and _latest_snapshot.campaign != null
+		and _experiment_state.should_gate_intervention(
+			_latest_snapshot.campaign.chapter,
+			_latest_snapshot
+		)
+	)
+
+
+func _experiment_question(chapter: int) -> String:
+	match chapter:
+		CampaignState.Chapter.ACT1_FOUNDING:
+			return tr("R21_QUESTION_FOUNDING")
+		CampaignState.Chapter.ACT1_FIRST_WORKERS:
+			return tr("R21_QUESTION_WORKERS")
+	return ""
+
+
+func _prediction_text(prediction_id: StringName) -> String:
+	match prediction_id:
+		Act1ExperimentState.PREDICTION_CARE_INCREASES:
+			return tr("R21_PREDICTION_CARE_INCREASES")
+		Act1ExperimentState.PREDICTION_NO_VISIBLE_CHANGE:
+			return tr("R21_PREDICTION_NO_CHANGE")
+		Act1ExperimentState.PREDICTION_QUEEN_MOVES_AWAY:
+			return tr("R21_PREDICTION_QUEEN_AWAY")
+		Act1ExperimentState.PREDICTION_WORKER_SHARES:
+			return tr("R21_PREDICTION_WORKER_SHARES")
+		Act1ExperimentState.PREDICTION_WORKER_STAYS:
+			return tr("R21_PREDICTION_WORKER_STAYS")
+		Act1ExperimentState.PREDICTION_DIRECT_CONTROL_REQUIRED:
+			return tr("R21_PREDICTION_DIRECT_CONTROL")
+	return ""
+
+
+func _prediction_status_text(
+	chapter: int,
+	prediction_id: StringName
+) -> String:
+	if prediction_id.is_empty():
+		return tr("R21_PREDICTION_PROMPT")
+	return tr("R21_PREDICTION_RECORDED") % (
+		_prediction_text(prediction_id)
+	)
+
+
+func _experiment_comparison_text(chapter: int) -> String:
+	if not _experiment_state.has_prediction(chapter):
+		return tr("R21_COMPARISON_AWAITING")
+	match chapter:
+		CampaignState.Chapter.ACT1_FOUNDING:
+			var care: QueenCareSnapshot = _latest_snapshot.act1.queen_care
+			var cover_state: String = (
+				tr("R21_COVER_INSTALLED")
+				if care.light_cover_applied
+				else tr("R21_COVER_PENDING")
+					if care.light_cover_action_pending
+					else tr("R21_COVER_ABSENT")
+			)
+			return tr("R21_COMPARISON_FOUNDING") % [
+				_experiment_state.get_baseline_care_count(chapter),
+				care.completed_care_count,
+				cover_state,
+			]
+		CampaignState.Chapter.ACT1_FIRST_WORKERS:
+			var placement_text: String = (
+				tr("R21_PLACEMENT_NOT_YET")
+				if _latest_snapshot.scenario
+					.selected_placement_choice_id.is_empty()
+				else _sugar_placement_choice_text(
+					_latest_snapshot.scenario
+						.selected_placement_choice_id
+				)
+			)
+			return tr("R21_COMPARISON_WORKERS") % [
+				_experiment_state.get_baseline_sugar_count(chapter),
+				_latest_snapshot.scenario.place_action_count,
+				placement_text,
+				_latest_snapshot.nutrition.completed_feeding_count,
+			]
+	return tr("R21_COMPARISON_AWAITING")
+
+
+func _experiment_timeline_text(_chapter: int) -> String:
+	if (
+		_latest_snapshot == null
+		or _latest_snapshot.observations == null
+	):
+		return tr("R21_TIMELINE_EMPTY")
+	var lines: PackedStringArray = []
+	for event: ObservationEvent in _latest_snapshot.observations.events:
+		var event_text: String = _experiment_event_text(event)
+		if event_text.is_empty():
+			continue
+		lines.append(
+			"%s  %s" % [
+				_format_observation_time(event.tick),
+				event_text,
+			]
+		)
+	while lines.size() > 6:
+		lines.remove_at(0)
+	return (
+		tr("R21_TIMELINE_EMPTY")
+		if lines.is_empty()
+		else "\n".join(lines)
+	)
+
+
+func _experiment_event_text(event: ObservationEvent) -> String:
+	match event.event_type:
+		ObservationEvent.Type.LIGHT_COVER_APPLIED:
+			return tr("R21_EVENT_COVER")
+		ObservationEvent.Type.QUEEN_BROOD_CARE_COMPLETED:
+			return tr("R21_EVENT_QUEEN_CARE")
+		ObservationEvent.Type.FIRST_PUPA_OBSERVED:
+			return tr("R21_EVENT_PUPA")
+		ObservationEvent.Type.FIRST_WORKER_EMERGED:
+			return tr("R21_EVENT_FIRST_WORKER")
+		ObservationEvent.Type.SUGAR_PLACED:
+			return tr("R21_EVENT_SUGAR_PLACED") % (
+				_sugar_placement_choice_text(
+					_latest_snapshot.scenario
+						.selected_placement_choice_id
+				)
+			)
+		ObservationEvent.Type.FEEDING_DISTURBANCE_OCCURRED:
+			return tr("R21_EVENT_DISTURBANCE")
+		ObservationEvent.Type.FOOD_SEEK_STARTED:
+			return tr("R21_EVENT_FOOD_SEEK")
+		ObservationEvent.Type.SUGAR_COLLECTED:
+			return tr("R21_EVENT_SUGAR_COLLECTED")
+		ObservationEvent.Type.SUGAR_SHARED:
+			return tr("R21_EVENT_SUGAR_SHARED")
+		ObservationEvent.Type.BROOD_FED:
+			return tr("R21_EVENT_BROOD_FED")
+		ObservationEvent.Type.CAMPAIGN_CHAPTER_COMPLETED:
+			return tr("R21_EVENT_CHAPTER_COMPLETE")
+	return ""
+
+
+func _sugar_placement_choice_text(choice_id: StringName) -> String:
+	match choice_id:
+		HabitatScenarioConfig.SUGAR_PLACEMENT_NEAR_NEST:
+			return tr("R21_SUGAR_NEAR")
+		HabitatScenarioConfig.SUGAR_PLACEMENT_FEEDING_PORT:
+			return tr("R21_SUGAR_FAR")
+	return tr("R21_PLACEMENT_NOT_YET")
 
 
 func _evidence_text(campaign: CampaignSnapshot) -> String:
@@ -1527,6 +1858,8 @@ func _guidance_text(campaign: CampaignSnapshot) -> String:
 		return tr("ACT1_GUIDANCE_COMPLETE")
 	if campaign.status == CampaignState.Status.AWAITING_INFERENCE:
 		return tr("ACT1_GUIDANCE_INFERENCE")
+	if _is_current_intervention_gated():
+		return tr("R21_GUIDANCE_RECORD_PREDICTION")
 	if campaign.chapter == CampaignState.Chapter.ACT1_FOUNDING:
 		if not _latest_snapshot.act1.queen_care.light_cover_applied:
 			return tr("ACT1_GUIDANCE_COVER")
@@ -1808,6 +2141,12 @@ func _refresh_copy() -> void:
 		tr("CAMPAIGN_JOURNAL_HEADING"),
 		tr("CAMPAIGN_JOURNAL_CLOSE")
 	)
+	_journal_panel.set_experiment_copy(
+		tr("R21_QUESTION_HEADING"),
+		tr("R21_PREDICTION_HEADING"),
+		tr("R21_COMPARISON_HEADING"),
+		tr("R21_TIMELINE_HEADING")
+	)
 	_completion_panel.set_copy(
 		tr("ACT1_COMPLETION_HEADING"),
 		(
@@ -1913,6 +2252,10 @@ func start_new_profile() -> bool:
 	_completion_dismissed = false
 	_habitat_view.reset_projection()
 	_habitat_view.set_layout_mode(false)
+	_experiment_state.reset_session()
+	_annotation_state.reset_session()
+	_last_auto_slow_event_id = -1
+	_latest_snapshot = null
 	_apply_snapshot()
 	_simulation_clock.set_paused(true)
 	_enter_preparation_gate()
@@ -1950,6 +2293,10 @@ func restore_loaded_session(
 	_help_return_focus = null
 	_habitat_view.set_layout_mode(false)
 	_completion_dismissed = false
+	_experiment_state.reset_session()
+	_annotation_state.reset_session()
+	_last_auto_slow_event_id = -1
+	_latest_snapshot = null
 	_habitat_view.reset_projection()
 	_apply_snapshot()
 	if not _fatal_error.is_empty():

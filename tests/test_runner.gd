@@ -27,6 +27,9 @@ const NutritionGrowthTestSuiteScript: Script = preload(
 const Act1TestTubeTestSuiteScript: Script = preload(
 	"res://tests/simulation/act1_test_tube_test_suite.gd"
 )
+const R21PlayabilityTestSuiteScript: Script = preload(
+	"res://tests/simulation/r21_playability_test_suite.gd"
+)
 const FacilityLayoutTestSuiteScript: Script = preload(
 	"res://tests/simulation/facility_layout_test_suite.gd"
 )
@@ -156,6 +159,7 @@ func _run_all_tests() -> void:
 	_run_campaign_journal_test_suite()
 	_run_nutrition_growth_test_suite()
 	_run_act1_test_tube_test_suite()
+	_run_r21_playability_test_suite()
 	_run_facility_layout_test_suite()
 	_run_facility_environment_test_suite()
 	_run_colony_work_test_suite()
@@ -428,6 +432,17 @@ func _run_production_assets_test_suite() -> void:
 		ProductionAssetsTestSuiteScript.new()
 	)
 	suite.run(root)
+	_collect_suite_results(
+		suite.get_assertion_count(),
+		suite.get_failure_count()
+	)
+
+
+func _run_r21_playability_test_suite() -> void:
+	var suite: R21PlayabilityTestSuite = (
+		R21PlayabilityTestSuiteScript.new()
+	)
+	suite.run()
 	_collect_suite_results(
 		suite.get_assertion_count(),
 		suite.get_failure_count()

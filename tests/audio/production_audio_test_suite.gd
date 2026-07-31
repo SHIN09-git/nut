@@ -140,6 +140,9 @@ func _test_gameplay_cues_reinforce_visible_actions(scene_root: Node) -> void:
 	_expect_true(game != null, "new profile exposes the Act 1 controller")
 	if game != null:
 		(game.get_node("%StartObservationButton") as Button).pressed.emit()
+		(game.get_node("%JournalButton") as Button).pressed.emit()
+		(game.get_node("%PredictionButton1") as Button).pressed.emit()
+		(game.get_node("%JournalCloseButton") as Button).pressed.emit()
 		(game.get_node("%CoverButton") as Button).pressed.emit()
 		_expect_true(
 			effects.stream

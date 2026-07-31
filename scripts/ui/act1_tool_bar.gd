@@ -18,6 +18,7 @@ signal zoom_in_requested
 
 @onready var cover_button: Button = %CoverButton
 @onready var magnifier_button: Button = %MagnifierButton
+@onready var sugar_placement_option: OptionButton = %SugarPlacementOption
 @onready var sugar_button: Button = %SugarButton
 @onready var protein_button: Button = %ProteinButton
 @onready var clean_waste_button: Button = %CleanWasteButton
@@ -91,6 +92,43 @@ func set_copy(
 	gate_button.text = gate_text
 	reset_camera_button.text = reset_camera_text
 	prototype_label.text = prototype_notice_text
+
+
+func set_sugar_placement_choices(
+	choice_ids: Array[StringName],
+	choice_labels: Array[String],
+	selected_choice_id: StringName = &""
+) -> void:
+	var previous_choice_id: StringName = get_sugar_placement_choice_id()
+	sugar_placement_option.clear()
+	for index: int in choice_ids.size():
+		sugar_placement_option.add_item(choice_labels[index])
+		sugar_placement_option.set_item_metadata(index, choice_ids[index])
+	var target_choice_id: StringName = (
+		selected_choice_id
+		if not selected_choice_id.is_empty()
+		else previous_choice_id
+	)
+	for index: int in sugar_placement_option.item_count:
+		if StringName(
+			sugar_placement_option.get_item_metadata(index)
+		) == target_choice_id:
+			sugar_placement_option.select(index)
+			return
+	if sugar_placement_option.item_count > 0:
+		sugar_placement_option.select(0)
+
+
+func get_sugar_placement_choice_id() -> StringName:
+	var selected_index: int = sugar_placement_option.selected
+	if (
+		selected_index < 0
+		or selected_index >= sugar_placement_option.item_count
+	):
+		return &""
+	return StringName(
+		sugar_placement_option.get_item_metadata(selected_index)
+	)
 
 
 func set_layout_enabled(value: bool) -> void:
