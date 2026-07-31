@@ -223,6 +223,7 @@ New-Item -ItemType Directory -Force -Path '.\builds\windows'
 - R17 Windows 候选已冻结为 `builds/ColonyUnderGlass_v1.0_beta_r17_68c533e_windows_x86_64.zip`（SHA-256 `f72ac74a367463429ea7c195cd96ba4e5f0d292e06b314c6b3832ad1d941e1bd`）；`builds/` 保持忽略，不进入 Git。该包可用于后续完整档案外测，但包的存在不等于外部 Gate 通过。
 - R20 行为辨认候选已冻结为 `builds/ColonyUnderGlass_R20_behavior_candidate_3db35e8_windows_x86_64.zip`（SHA-256 `1d7c274748c048fcc972d09a85f380496a2fbceb59594f86b99bfcd1c4294432`）；它只冻结当前 R20 载荷与盲测流程，不包含参与者数据，也不等于行为辨认 Gate 通过。
 - 用户已豁免 R20 行为辨认 Gate 作为进入 R21 的前置条件，但 R20 状态仍是 `INCOMPLETE`。R21 的首次接触可玩性 Gate 也没有真人数据，完成本机候选不能自动授权进入 R22。
+- R21 第 1～2 章候选已冻结为 `builds/ColonyUnderGlass_R21_playability_candidate_8fc25b9_windows_x86_64.zip`（SHA-256 `59558c5b9bc88ad30434b623064ea0bec696817a38e58bee30568d048ac0b03d`）；逐人数据模板保持空白，候选存在不等于 R21 Gate 通过。
 - 正式 Act 1 已覆盖单后护理、第一工蚁、首次糖液、小型觅食区、蛋白育幼、废物清理、环境管理、完整核心迁巢和稳定群落总结，共六章并具有明确档案结局。
 - 温度没有区别于湿度的独立闭环证据，继续延期。
 - 工蚁名称和个人行动记录属于会话注释；正式 Act 1 的 R21 手册现在也可为首工设置会话内名称，但不会写入权威存档。显示设置独立跨程序保存。
