@@ -10,6 +10,7 @@ func run(scene_root: Node) -> void:
 	_scene_root = scene_root
 	_test_pose_facing_and_phase_are_view_only()
 	_test_reduced_motion_keeps_static_pose_semantics()
+	_test_brood_motion_is_tick_and_identity_driven()
 
 
 func get_assertion_count() -> int:
@@ -81,6 +82,48 @@ func _test_reduced_motion_keeps_static_pose_semantics() -> void:
 	_destroy_ant(ant)
 
 
+func _test_brood_motion_is_tick_and_identity_driven() -> void:
+	var first: AntView = _create_brood_view(11)
+	var second: AntView = _create_brood_view(12)
+	first.set_simulation_tick(25)
+	second.set_simulation_tick(25)
+	var first_phase: float = first.get_brood_animation_phase()
+	_expect_true(
+		not is_equal_approx(
+			first_phase,
+			second.get_brood_animation_phase()
+		),
+		"stable entity ID offsets brood motion without randomness"
+	)
+	first.set_simulation_tick(25)
+	_expect_float(
+		first.get_brood_animation_phase(),
+		first_phase,
+		"reapplying the same Tick keeps brood motion deterministic"
+	)
+	first.set_simulation_tick(26)
+	_expect_true(
+		not is_equal_approx(
+			first.get_brood_animation_phase(),
+			first_phase
+		),
+		"advancing the fixed Tick advances the brood pose"
+	)
+	first.set_reduced_motion(true)
+	_expect_float(
+		first.get_brood_animation_phase(),
+		0.0,
+		"reduced motion freezes brood at its neutral pose"
+	)
+	_expect_int(
+		first.get_life_stage(),
+		AntModel.LifeStage.LARVA,
+		"brood presentation never changes lifecycle authority"
+	)
+	_destroy_ant(first)
+	_destroy_ant(second)
+
+
 func _create_worker_view(entity_id: int) -> AntView:
 	var ant: AntView = AntView.new()
 	_scene_root.add_child(ant)
@@ -94,6 +137,22 @@ func _create_worker_view(entity_id: int) -> AntView:
 	)
 	if not ant.configure(snapshot, Vector2(40.0, 40.0)):
 		_record_failure("worker animation fixture configures", "true", "false")
+	return ant
+
+
+func _create_brood_view(entity_id: int) -> AntView:
+	var ant: AntView = AntView.new()
+	_scene_root.add_child(ant)
+	var snapshot: AntSnapshot = AntSnapshot.new(
+		entity_id,
+		AntModel.LifeStage.LARVA,
+		0,
+		0,
+		0,
+		&"test_tube_nest"
+	)
+	if not ant.configure(snapshot, Vector2(40.0, 40.0)):
+		_record_failure("brood animation fixture configures", "true", "false")
 	return ant
 
 
@@ -118,6 +177,13 @@ func _expect_float(
 	if is_equal_approx(actual, expected):
 		return
 	_record_failure(message, str(expected), str(actual))
+
+
+func _expect_true(actual: bool, message: String) -> void:
+	_assertion_count += 1
+	if actual:
+		return
+	_record_failure(message, "true", "false")
 
 
 func _record_failure(

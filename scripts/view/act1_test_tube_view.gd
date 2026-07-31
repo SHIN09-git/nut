@@ -224,6 +224,7 @@ func apply_snapshot(snapshot: GameSnapshot) -> bool:
 			return false
 		else:
 			view.set_low_detail(low_detail)
+		view.set_simulation_tick(snapshot.simulation_tick)
 	var removed_ids: Array[int] = []
 	for entity_id: int in _ant_views:
 		if not present_ids.has(entity_id):
@@ -858,6 +859,11 @@ func _layout_projection() -> void:
 			] + Vector2(20.0 * queen_facing, -24.0)
 		)
 	if _queen_view != null:
+		_queen_view.set_behavior_pose(
+			_get_queen_behavior_pose(),
+			_get_queen_facing_direction(display_positions),
+			_get_queen_animation_phase()
+		)
 		_queen_view.set_habitat_position(queen_position)
 	for entity_id: int in _ant_views:
 		var view: AntView = _ant_views[entity_id]
@@ -991,6 +997,61 @@ func _get_worker_animation_phase() -> float:
 			float(_latest_snapshot.simulation_tick)
 			+ _interpolation_alpha
 		) / AntView.WALK_CYCLE_TICKS,
+		1.0
+	)
+
+
+func _get_queen_behavior_pose() -> QueenView.BehaviorPose:
+	if _latest_snapshot == null:
+		return QueenView.BehaviorPose.IDLE
+	if _latest_snapshot.colony.queen_carrier_ant_id >= 0:
+		return QueenView.BehaviorPose.CARRIED
+	match _latest_snapshot.act1.queen_care.care_state:
+		Act1State.QueenCareState.GATHERING:
+			return QueenView.BehaviorPose.GATHERING_BROOD
+		Act1State.QueenCareState.BROOD_CARE:
+			return QueenView.BehaviorPose.CARING_FOR_BROOD
+	if (
+		_current_queen_position - _previous_queen_position
+	).length_squared() > 0.0025:
+		return QueenView.BehaviorPose.MOVING
+	return QueenView.BehaviorPose.IDLE
+
+
+func _get_queen_facing_direction(
+	display_positions: Dictionary[int, Vector2]
+) -> float:
+	if _latest_snapshot == null:
+		return 0.0
+	var carrier_id: int = _latest_snapshot.colony.queen_carrier_ant_id
+	if carrier_id >= 0:
+		var carrier_view: AntView = _ant_views.get(carrier_id)
+		return carrier_view.get_facing_sign() if carrier_view != null else 0.0
+	var movement_x: float = (
+		_current_queen_position.x - _previous_queen_position.x
+	)
+	if absf(movement_x) > 0.05:
+		return movement_x
+	var care: QueenCareSnapshot = _latest_snapshot.act1.queen_care
+	if (
+		care.target_brood_id >= 0
+		and display_positions.has(care.target_brood_id)
+	):
+		return (
+			display_positions[care.target_brood_id].x
+			- _current_queen_position.x
+		)
+	return 0.0
+
+
+func _get_queen_animation_phase() -> float:
+	if _latest_snapshot == null:
+		return 0.0
+	return fposmod(
+		(
+			float(_latest_snapshot.simulation_tick)
+			+ _interpolation_alpha
+		) / QueenView.WALK_CYCLE_TICKS,
 		1.0
 	)
 

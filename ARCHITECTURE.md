@@ -552,6 +552,7 @@ SaveEnvelope 外层格式 v2 保存 `profile_playtime` 并让 checksum 覆盖它
 - 首工从蛹转换为工蚁时沿用相同实体 ID，因此对已有 `AntView` 应用新阶段快照，不替换节点。
 - 根据 `ForagingTaskSnapshot`、`BroodFeedingTaskSnapshot` 与三个 R9 工作任务快照的逻辑路线和进度计算工蚁位置；迁移成员跟随快照中的实际搬运者，蚁后位置由护理或迁巢快照决定，不使用与模拟脱节的 Tween。
 - R20-A 把同一批复制任务状态映射为 `AntView.BehaviorPose`。朝向来自相邻 Tick 的显示端点，步态相位来自 `simulation_tick + interpolation_alpha`；采集、携带糖液、分享、喂食、处理／搬运幼体、搬运废物和观察提示都属于原节点的程序化绘制，不创建第二套任务或携带所有权。
+- R20-D 把 `Act1Snapshot.queen_care`、`ColonySnapshot.queen_carrier_ant_id` 和相邻显示端点映射为 `QueenView.BehaviorPose`；幼体相位只由固定 Tick、生命周期阶段和稳定实体 ID 计算。姿态、朝向和相位都是可重建的 View 状态，不进入快照、存档或命令边界。
 - 相邻 Tick 间使用同一个 `SimulationClock` 的插值系数，暂停时冻结；同 Tick 快照只更新状态，不轮换插值端点。
 - 减少动效启用时，蚁后待机摆动、AntView 阶段脉冲和工蚁步态相位停止，位置直接投影当前快照端点；静态朝向、携带物和护理语义仍保留，模拟 Tick 和任务结果不变。
 - 重复快照不创建重复节点；重开时 `reset_projection()` 清除旧端点、实体映射和临时选择。
@@ -620,6 +621,14 @@ R20-C 让 `FacilityLayoutView` 按稳定设施 ID 维护
 `FacilityPlacementPreviewView` 是单实例编辑预览，只接收投影矩形、合法性
 和显示缩放。设施节点与预览都忽略鼠标，命中和玩家意图仍由
 `FacilityLayoutView` 按纯空间投影解析，不能直接修改布局状态。
+
+R20-D 不建立通用动画图、Tween 或新的模拟状态。`Act1TestTubeView` 只从
+现有 `QueenCareSnapshot`、蚁后携带者 ID、相邻蚁后端点和幼体快照设置
+有限 `QueenView.BehaviorPose`、朝向与归一化相位；被搬运姿态优先于本地
+护理姿态。`AntView` 对卵、幼虫和蛹应用由 `simulation_tick` 与稳定
+`entity_id` 派生的微小程序化变换，同 Tick 重放结果相同。暂停时控制器不再
+推进 Tick 或插值，减少动效把蚁后和幼体相位归零但保留护理、被搬运和生命
+阶段轮廓。显示输入不改变实体 ID、生命周期、所有权、任务、快照或存档。
 
 `ChapterArtView` 只把 `CampaignSnapshot.chapter` 映射为六个代码内原创标记；`ObservationReportSealView` 是不读取模拟的静态结局印记。两者不能完成章节或生成报告。标题背景由 `TextureRect` 读取 `assets/production/` 中已登记文件；主题缩放从场景生产主题复制后修改，不再用空主题覆盖按钮和焦点材质。
 

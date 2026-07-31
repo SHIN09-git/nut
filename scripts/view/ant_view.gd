@@ -22,6 +22,7 @@ const WASTE_COLOR: Color = Color(0.48, 0.30, 0.14, 1.0)
 const OBSERVE_COLOR: Color = Color(0.42, 0.76, 0.67, 0.78)
 const TRANSITION_DURATION_SECONDS: float = 0.38
 const WALK_CYCLE_TICKS: float = 8.0
+const BROOD_CYCLE_TICKS: float = 40.0
 
 enum BehaviorPose {
 	IDLE,
@@ -48,6 +49,8 @@ var _low_detail: bool = false
 var _behavior_pose: BehaviorPose = BehaviorPose.IDLE
 var _facing_sign: float = 1.0
 var _animation_phase: float = 0.0
+var _simulation_tick: int = 0
+var _draw_transform: Transform2D = Transform2D.IDENTITY
 
 
 func configure(snapshot: AntSnapshot, slot_position: Vector2) -> bool:
@@ -123,6 +126,15 @@ func is_low_detail() -> bool:
 	return _low_detail
 
 
+func set_simulation_tick(simulation_tick: int) -> void:
+	var next_tick: int = maxi(simulation_tick, 0)
+	if _simulation_tick == next_tick:
+		return
+	_simulation_tick = next_tick
+	if life_stage != AntModel.LifeStage.WORKER:
+		queue_redraw()
+
+
 func set_behavior_pose(
 	pose: BehaviorPose,
 	facing_direction: float,
@@ -162,6 +174,18 @@ func get_animation_phase() -> float:
 	return _animation_phase
 
 
+func get_brood_animation_phase() -> float:
+	if _reduced_motion or life_stage == AntModel.LifeStage.WORKER:
+		return 0.0
+	return fposmod(
+		(
+			float(_simulation_tick)
+			+ float(posmod(entity_id * 7, int(BROOD_CYCLE_TICKS)))
+		) / BROOD_CYCLE_TICKS,
+		1.0
+	)
+
+
 func get_entity_id() -> int:
 	return entity_id
 
@@ -199,6 +223,7 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
+	_draw_transform = Transform2D.IDENTITY
 	if life_stage == AntModel.LifeStage.WORKER:
 		if _selected:
 			_draw_selection_outline()
@@ -207,20 +232,51 @@ func _draw() -> void:
 			if _is_locomotion_pose() and not _reduced_motion
 			else 0.0
 		)
-		draw_set_transform(
-			Vector2(0.0, bob),
+		_draw_transform = Transform2D(
 			0.0,
-			Vector2(_facing_sign, 1.0)
+			Vector2(_facing_sign, 1.0),
+			0.0,
+			Vector2(0.0, bob)
 		)
+		draw_set_transform_matrix(_draw_transform)
 		if _low_detail:
 			_draw_low_detail()
 		else:
 			_draw_worker()
-		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		draw_set_transform_matrix(Transform2D.IDENTITY)
 		return
 	if _low_detail:
 		_draw_low_detail()
 		return
+	var brood_phase: float = get_brood_animation_phase() * TAU
+	var brood_scale: Vector2 = Vector2.ONE
+	var brood_rotation: float = 0.0
+	var brood_offset: Vector2 = Vector2.ZERO
+	match life_stage:
+		AntModel.LifeStage.EGG:
+			brood_offset.y = sin(brood_phase) * 0.45
+			brood_scale = Vector2(
+				1.0 + sin(brood_phase) * 0.012,
+				1.0 - sin(brood_phase) * 0.008
+			)
+		AntModel.LifeStage.LARVA:
+			brood_rotation = sin(brood_phase) * 0.045
+			brood_scale = Vector2(
+				1.0 + sin(brood_phase) * 0.025,
+				1.0 - sin(brood_phase) * 0.018
+			)
+		AntModel.LifeStage.PUPA:
+			brood_scale = Vector2(
+				1.0 + sin(brood_phase) * 0.016,
+				1.0 - sin(brood_phase) * 0.010
+			)
+	_draw_transform = Transform2D(
+		brood_rotation,
+		brood_scale,
+		0.0,
+		brood_offset
+	)
+	draw_set_transform_matrix(_draw_transform)
 	match life_stage:
 		AntModel.LifeStage.EGG:
 			_draw_egg()
@@ -228,6 +284,7 @@ func _draw() -> void:
 			_draw_larva()
 		AntModel.LifeStage.PUPA:
 			_draw_pupa()
+	draw_set_transform_matrix(Transform2D.IDENTITY)
 
 
 func _draw_low_detail() -> void:
@@ -592,6 +649,9 @@ func _draw_selection_outline() -> void:
 
 
 func _draw_ellipse(center: Vector2, radii: Vector2, color: Color) -> void:
-	draw_set_transform(center, 0.0, radii)
+	draw_set_transform_matrix(
+		_draw_transform
+		* Transform2D(0.0, radii, 0.0, center)
+	)
 	draw_circle(Vector2.ZERO, 1.0, color)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	draw_set_transform_matrix(_draw_transform)

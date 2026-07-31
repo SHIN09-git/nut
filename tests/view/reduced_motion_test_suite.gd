@@ -9,6 +9,7 @@ var _scene_root: Node
 func run(scene_root: Node) -> void:
 	_scene_root = scene_root
 	_test_queen_idle_motion_can_be_disabled()
+	_test_queen_pose_semantics_survive_reduced_motion()
 	_test_ant_transition_finishes_without_motion()
 
 
@@ -40,6 +41,51 @@ func _test_queen_idle_motion_can_be_disabled() -> void:
 		queen.position,
 		Vector2(100.0, 100.0),
 		"later Ticks remain still when reduced motion is active"
+	)
+	_scene_root.remove_child(queen)
+	queen.free()
+
+
+func _test_queen_pose_semantics_survive_reduced_motion() -> void:
+	var queen: QueenView = QueenView.new()
+	_scene_root.add_child(queen)
+	queen.set_entity_id(77)
+	queen.set_habitat_position(Vector2(80.0, 60.0))
+	queen.set_behavior_pose(
+		QueenView.BehaviorPose.CARING_FOR_BROOD,
+		-8.0,
+		0.35
+	)
+	_expect_int(
+		queen.get_behavior_pose(),
+		QueenView.BehaviorPose.CARING_FOR_BROOD,
+		"queen care posture is explicit presentation state"
+	)
+	_expect_float(
+		queen.get_facing_sign(),
+		-1.0,
+		"queen faces the authoritative care target"
+	)
+	queen.set_reduced_motion(true)
+	_expect_int(
+		queen.get_behavior_pose(),
+		QueenView.BehaviorPose.CARING_FOR_BROOD,
+		"reduced motion preserves queen care semantics"
+	)
+	_expect_float(
+		queen.get_animation_phase(),
+		0.0,
+		"reduced motion freezes the queen cycle"
+	)
+	_expect_vector2(
+		queen.position,
+		Vector2(80.0, 60.0),
+		"non-idle queen pose does not add decorative bobbing"
+	)
+	_expect_int(
+		queen.entity_id,
+		77,
+		"presentation pose preserves queen stable identity"
 	)
 	_scene_root.remove_child(queen)
 	queen.free()
@@ -100,6 +146,13 @@ func _expect_vector2(actual: Vector2, expected: Vector2, message: String) -> voi
 func _expect_float(actual: float, expected: float, message: String) -> void:
 	_assertion_count += 1
 	if is_equal_approx(actual, expected):
+		return
+	_record_failure(message, str(expected), str(actual))
+
+
+func _expect_int(actual: int, expected: int, message: String) -> void:
+	_assertion_count += 1
+	if actual == expected:
 		return
 	_record_failure(message, str(expected), str(actual))
 

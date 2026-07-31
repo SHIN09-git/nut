@@ -478,6 +478,53 @@ func _test_worker_behavior_pose_projection() -> void:
 		"feeding authority maps to the brood-care posture"
 	)
 
+	var queen_view: QueenView = view.get_queen_view()
+	var care_target_id: int = -1
+	for candidate: AntSnapshot in snapshot.colony.ants:
+		if candidate.life_stage != AntModel.LifeStage.WORKER:
+			care_target_id = candidate.entity_id
+			break
+	_expect_true(
+		care_target_id >= 0,
+		"queen posture fixture keeps a real brood target"
+	)
+	snapshot.act1.queen_care.light_cover_applied = true
+	snapshot.act1.queen_care.target_brood_id = care_target_id
+	snapshot.act1.queen_care.care_state = (
+		Act1State.QueenCareState.GATHERING
+	)
+	_expect_true(
+		view.apply_snapshot(snapshot),
+		"queen gathering pose accepts a copied snapshot"
+	)
+	_expect_int(
+		queen_view.get_behavior_pose(),
+		QueenView.BehaviorPose.GATHERING_BROOD,
+		"queen care authority maps to the gathering posture"
+	)
+	snapshot.act1.queen_care.care_state = (
+		Act1State.QueenCareState.BROOD_CARE
+	)
+	_expect_true(
+		view.apply_snapshot(snapshot),
+		"queen brood-care pose accepts a copied snapshot"
+	)
+	_expect_int(
+		queen_view.get_behavior_pose(),
+		QueenView.BehaviorPose.CARING_FOR_BROOD,
+		"queen care authority maps to the tending posture"
+	)
+	snapshot.colony.queen_carrier_ant_id = worker.entity_id
+	_expect_true(
+		view.apply_snapshot(snapshot),
+		"queen carry pose accepts a copied snapshot"
+	)
+	_expect_int(
+		queen_view.get_behavior_pose(),
+		QueenView.BehaviorPose.CARRIED,
+		"queen ownership authority overrides the local care posture"
+	)
+
 	var tick_before: int = controller.get_simulation_tick()
 	var signature_before: String = (
 		SimulationSnapshotSignature.canonical_game_snapshot(snapshot)
