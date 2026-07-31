@@ -822,6 +822,23 @@ func _layout_projection() -> void:
 			),
 			_get_worker_animation_phase()
 		)
+	var ant_by_id: Dictionary[int, AntSnapshot] = {}
+	for ant: AntSnapshot in _latest_snapshot.colony.ants:
+		ant_by_id[ant.entity_id] = ant
+	for ant: AntSnapshot in _latest_snapshot.colony.ants:
+		if ant.life_stage == AntModel.LifeStage.WORKER:
+			continue
+		var brood_view: AntView = _ant_views.get(ant.entity_id)
+		if brood_view == null:
+			continue
+		var brood_pose: AntView.BroodPose = _get_brood_pose(
+			ant,
+			ant_by_id
+		)
+		brood_view.set_brood_pose(
+			brood_pose,
+			_get_brood_task_progress(ant, ant_by_id)
+		)
 	for ant: AntSnapshot in _latest_snapshot.colony.ants:
 		if (
 			ant.life_stage == AntModel.LifeStage.WORKER
@@ -998,6 +1015,86 @@ func _get_worker_animation_phase() -> float:
 			+ _interpolation_alpha
 		) / AntView.WALK_CYCLE_TICKS,
 		1.0
+	)
+
+
+func _get_brood_pose(
+	brood: AntSnapshot,
+	ant_by_id: Dictionary[int, AntSnapshot]
+) -> AntView.BroodPose:
+	if brood.carrier_ant_id >= 0:
+		var carrier: AntSnapshot = ant_by_id.get(brood.carrier_ant_id)
+		if _worker_is_dropping_brood(carrier, brood.entity_id):
+			return AntView.BroodPose.DROPPING
+		return AntView.BroodPose.CARRIED
+	if brood.reserved_by_ant_id >= 0:
+		var handler: AntSnapshot = ant_by_id.get(
+			brood.reserved_by_ant_id
+		)
+		if _worker_is_picking_up_brood(handler, brood.entity_id):
+			return AntView.BroodPose.PICKING_UP
+	return AntView.BroodPose.RESTING
+
+
+func _get_brood_task_progress(
+	brood: AntSnapshot,
+	ant_by_id: Dictionary[int, AntSnapshot]
+) -> float:
+	var worker_id: int = (
+		brood.carrier_ant_id
+		if brood.carrier_ant_id >= 0
+		else brood.reserved_by_ant_id
+	)
+	var worker: AntSnapshot = ant_by_id.get(worker_id)
+	if worker == null:
+		return 0.0
+	if (
+		worker.migration_task != null
+		and worker.migration_task.target_entity_id == brood.entity_id
+	):
+		return worker.migration_task.get_progress()
+	if worker.target_brood_id == brood.entity_id:
+		return worker.get_task_progress()
+	return 0.0
+
+
+func _worker_is_picking_up_brood(
+	worker: AntSnapshot,
+	brood_id: int
+) -> bool:
+	if worker == null:
+		return false
+	if (
+		worker.migration_task != null
+		and worker.migration_task.target_entity_id == brood_id
+	):
+		return (
+			worker.migration_task.state
+			== MigrationTaskModel.State.PICKING_UP
+		)
+	return (
+		worker.target_brood_id == brood_id
+		and worker.worker_task_state == WorkerTaskModel.State.PICKING_UP
+	)
+
+
+func _worker_is_dropping_brood(
+	worker: AntSnapshot,
+	brood_id: int
+) -> bool:
+	if worker == null:
+		return false
+	if (
+		worker.migration_task != null
+		and worker.migration_task.target_entity_id == brood_id
+	):
+		return (
+			worker.migration_task.state
+			== MigrationTaskModel.State.DROPPING
+		)
+	return (
+		worker.carried_brood_id == brood_id
+		and worker.worker_task_state == WorkerTaskModel.State.DROPPING
 	)
 
 

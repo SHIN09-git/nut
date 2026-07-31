@@ -37,6 +37,13 @@ enum BehaviorPose {
 	OBSERVING,
 }
 
+enum BroodPose {
+	RESTING,
+	PICKING_UP,
+	CARRIED,
+	DROPPING,
+}
+
 var entity_id: int = -1
 var life_stage: AntModel.LifeStage = AntModel.LifeStage.EGG
 var _transition_count: int = 0
@@ -51,6 +58,8 @@ var _facing_sign: float = 1.0
 var _animation_phase: float = 0.0
 var _simulation_tick: int = 0
 var _draw_transform: Transform2D = Transform2D.IDENTITY
+var _brood_pose: BroodPose = BroodPose.RESTING
+var _brood_task_progress: float = 0.0
 
 
 func configure(snapshot: AntSnapshot, slot_position: Vector2) -> bool:
@@ -162,6 +171,22 @@ func set_behavior_pose(
 	queue_redraw()
 
 
+func set_brood_pose(pose: BroodPose, task_progress: float) -> void:
+	var next_progress: float = (
+		clampf(task_progress, 0.0, 1.0)
+		if is_finite(task_progress)
+		else 0.0
+	)
+	if (
+		_brood_pose == pose
+		and is_equal_approx(_brood_task_progress, next_progress)
+	):
+		return
+	_brood_pose = pose
+	_brood_task_progress = next_progress
+	queue_redraw()
+
+
 func get_behavior_pose() -> BehaviorPose:
 	return _behavior_pose
 
@@ -184,6 +209,18 @@ func get_brood_animation_phase() -> float:
 		) / BROOD_CYCLE_TICKS,
 		1.0
 	)
+
+
+func get_brood_pose() -> BroodPose:
+	return _brood_pose
+
+
+func get_brood_task_progress() -> float:
+	return _brood_task_progress
+
+
+func get_antenna_probe_amount() -> float:
+	return _get_antenna_probe()
 
 
 func get_entity_id() -> int:
@@ -245,31 +282,58 @@ func _draw() -> void:
 			_draw_worker()
 		draw_set_transform_matrix(Transform2D.IDENTITY)
 		return
-	if _low_detail:
-		_draw_low_detail()
-		return
 	var brood_phase: float = get_brood_animation_phase() * TAU
 	var brood_scale: Vector2 = Vector2.ONE
 	var brood_rotation: float = 0.0
 	var brood_offset: Vector2 = Vector2.ZERO
-	match life_stage:
-		AntModel.LifeStage.EGG:
-			brood_offset.y = sin(brood_phase) * 0.45
-			brood_scale = Vector2(
-				1.0 + sin(brood_phase) * 0.012,
-				1.0 - sin(brood_phase) * 0.008
-			)
-		AntModel.LifeStage.LARVA:
-			brood_rotation = sin(brood_phase) * 0.045
-			brood_scale = Vector2(
-				1.0 + sin(brood_phase) * 0.025,
-				1.0 - sin(brood_phase) * 0.018
-			)
-		AntModel.LifeStage.PUPA:
-			brood_scale = Vector2(
-				1.0 + sin(brood_phase) * 0.016,
-				1.0 - sin(brood_phase) * 0.010
-			)
+	if _brood_pose == BroodPose.RESTING:
+		match life_stage:
+			AntModel.LifeStage.EGG:
+				brood_offset.y = sin(brood_phase) * 0.45
+				brood_scale = Vector2(
+					1.0 + sin(brood_phase) * 0.012,
+					1.0 - sin(brood_phase) * 0.008
+				)
+			AntModel.LifeStage.LARVA:
+				brood_rotation = sin(brood_phase) * 0.045
+				brood_scale = Vector2(
+					1.0 + sin(brood_phase) * 0.025,
+					1.0 - sin(brood_phase) * 0.018
+				)
+			AntModel.LifeStage.PUPA:
+				brood_scale = Vector2(
+					1.0 + sin(brood_phase) * 0.016,
+					1.0 - sin(brood_phase) * 0.010
+				)
+	else:
+		match _brood_pose:
+			BroodPose.PICKING_UP:
+				brood_offset.y = lerpf(
+					0.0,
+					-3.0,
+					_brood_task_progress
+				)
+				brood_rotation = lerpf(
+					0.0,
+					-0.18,
+					_brood_task_progress
+				)
+				brood_scale = Vector2.ONE.lerp(
+					Vector2(0.92, 0.88),
+					_brood_task_progress
+				)
+			BroodPose.CARRIED:
+				brood_offset.y = -3.0
+				brood_rotation = -0.18
+				brood_scale = Vector2(0.92, 0.88)
+			BroodPose.DROPPING:
+				var carried_ratio: float = 1.0 - _brood_task_progress
+				brood_offset.y = -3.0 * carried_ratio
+				brood_rotation = -0.18 * carried_ratio
+				brood_scale = Vector2(0.92, 0.88).lerp(
+					Vector2.ONE,
+					_brood_task_progress
+				)
 	_draw_transform = Transform2D(
 		brood_rotation,
 		brood_scale,
@@ -277,13 +341,16 @@ func _draw() -> void:
 		brood_offset
 	)
 	draw_set_transform_matrix(_draw_transform)
-	match life_stage:
-		AntModel.LifeStage.EGG:
-			_draw_egg()
-		AntModel.LifeStage.LARVA:
-			_draw_larva()
-		AntModel.LifeStage.PUPA:
-			_draw_pupa()
+	if _low_detail:
+		_draw_low_detail()
+	else:
+		match life_stage:
+			AntModel.LifeStage.EGG:
+				_draw_egg()
+			AntModel.LifeStage.LARVA:
+				_draw_larva()
+			AntModel.LifeStage.PUPA:
+				_draw_pupa()
 	draw_set_transform_matrix(Transform2D.IDENTITY)
 
 
@@ -352,14 +419,20 @@ func _draw_low_detail() -> void:
 			)
 			draw_line(
 				Vector2(12.0, -3.0),
-				Vector2(20.0, -8.0),
+				Vector2(
+					20.0,
+					-8.0 + _get_antenna_probe() * 0.6
+				),
 				LIMB_COLOR,
 				1.4,
 				true
 			)
 			draw_line(
 				Vector2(13.0, -1.0),
-				Vector2(21.0, -2.0),
+				Vector2(
+					21.0,
+					-2.0 - _get_antenna_probe() * 0.6
+				),
 				LIMB_COLOR,
 				1.4,
 				true
@@ -498,13 +571,13 @@ func _draw_worker() -> void:
 	var antennae: Array[PackedVector2Array] = [
 		PackedVector2Array([
 			Vector2(13.0, -4.0),
-			Vector2(18.0, -8.0),
-			Vector2(22.0, -10.0),
+			Vector2(18.0, -8.0 + _get_antenna_probe() * 0.45),
+			Vector2(22.0, -10.0 + _get_antenna_probe()),
 		]),
 		PackedVector2Array([
 			Vector2(14.0, -1.0),
-			Vector2(20.0, -3.0),
-			Vector2(23.0, -1.0),
+			Vector2(20.0, -3.0 - _get_antenna_probe() * 0.45),
+			Vector2(23.0, -1.0 - _get_antenna_probe()),
 		]),
 	]
 	for antenna: PackedVector2Array in antennae:
@@ -624,6 +697,18 @@ func _get_stride() -> float:
 	if _reduced_motion or not _is_locomotion_pose():
 		return 0.0
 	return sin(_animation_phase * TAU) * 4.0
+
+
+func _get_antenna_probe() -> float:
+	if (
+		_reduced_motion
+		or _behavior_pose not in [
+			BehaviorPose.IDLE,
+			BehaviorPose.OBSERVING,
+		]
+	):
+		return 0.0
+	return sin(_animation_phase * TAU) * 2.4
 
 
 func _is_locomotion_pose() -> bool:

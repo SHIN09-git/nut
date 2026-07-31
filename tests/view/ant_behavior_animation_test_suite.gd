@@ -11,6 +11,8 @@ func run(scene_root: Node) -> void:
 	_test_pose_facing_and_phase_are_view_only()
 	_test_reduced_motion_keeps_static_pose_semantics()
 	_test_brood_motion_is_tick_and_identity_driven()
+	_test_brood_handling_pose_is_view_only()
+	_test_idle_antennae_follow_view_phase()
 
 
 func get_assertion_count() -> int:
@@ -122,6 +124,67 @@ func _test_brood_motion_is_tick_and_identity_driven() -> void:
 	)
 	_destroy_ant(first)
 	_destroy_ant(second)
+
+
+func _test_brood_handling_pose_is_view_only() -> void:
+	var brood: AntView = _create_brood_view(13)
+	brood.set_brood_pose(AntView.BroodPose.PICKING_UP, 0.35)
+	_expect_int(
+		brood.get_brood_pose(),
+		AntView.BroodPose.PICKING_UP,
+		"brood handling pose is stored only on the view"
+	)
+	_expect_float(
+		brood.get_brood_task_progress(),
+		0.35,
+		"brood handling pose retains snapshot task progress"
+	)
+	brood.set_brood_pose(AntView.BroodPose.DROPPING, 2.0)
+	_expect_float(
+		brood.get_brood_task_progress(),
+		1.0,
+		"brood handling progress is bounded for drawing"
+	)
+	_expect_int(
+		brood.get_entity_id(),
+		13,
+		"brood handling poses preserve the stable entity ID"
+	)
+	_expect_int(
+		brood.get_life_stage(),
+		AntModel.LifeStage.LARVA,
+		"brood handling poses do not alter lifecycle state"
+	)
+	brood.set_reduced_motion(true)
+	_expect_int(
+		brood.get_brood_pose(),
+		AntView.BroodPose.DROPPING,
+		"reduced motion retains the snapshot-derived brood pose"
+	)
+	_destroy_ant(brood)
+
+
+func _test_idle_antennae_follow_view_phase() -> void:
+	var ant: AntView = _create_worker_view(43)
+	ant.set_behavior_pose(AntView.BehaviorPose.IDLE, 1.0, 0.25)
+	_expect_true(
+		ant.get_antenna_probe_amount() > 2.0,
+		"idle antennae use the deterministic view phase"
+	)
+	ant.set_behavior_pose(AntView.BehaviorPose.WALKING, 1.0, 0.25)
+	_expect_float(
+		ant.get_antenna_probe_amount(),
+		0.0,
+		"locomotion poses do not add idle antenna motion"
+	)
+	ant.set_reduced_motion(true)
+	ant.set_behavior_pose(AntView.BehaviorPose.OBSERVING, 1.0, 0.25)
+	_expect_float(
+		ant.get_antenna_probe_amount(),
+		0.0,
+		"reduced motion freezes idle antenna motion"
+	)
+	_destroy_ant(ant)
 
 
 func _create_worker_view(entity_id: int) -> AntView:

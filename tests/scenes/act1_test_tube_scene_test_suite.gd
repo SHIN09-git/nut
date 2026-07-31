@@ -802,8 +802,49 @@ func _test_colony_work_projection() -> void:
 	var brood: AntSnapshot = snapshot.colony.ants[1]
 	worker.life_stage = AntModel.LifeStage.WORKER
 	worker.zone_id = &"test_tube_nest"
-	var task := MigrationTaskModel.new()
-	task.begin(
+	var pickup_task := MigrationTaskModel.new()
+	pickup_task.begin(
+		MigrationTaskModel.State.PICKING_UP,
+		&"test_tube_nest",
+		&"test_tube_nest",
+		brood.entity_id,
+		&"tube_passage",
+		[&"test_tube_nest", &"tube_passage"],
+		10
+	)
+	pickup_task.elapsed_ticks = 4
+	worker.migration_task = MigrationTaskSnapshot.new(pickup_task)
+	brood.reserved_by_ant_id = worker.entity_id
+	var view: Act1TestTubeView = controller.get_node(
+		"%Act1TestTubeView"
+	) as Act1TestTubeView
+	_expect_true(
+		view.apply_snapshot(snapshot),
+		"Act 1 view accepts a pickup task snapshot"
+	)
+	view.set_interpolation_alpha(1.0)
+	var worker_view: AntView = view.get_ant_view(worker.entity_id)
+	var brood_view: AntView = view.get_ant_view(brood.entity_id)
+	_expect_true(
+		worker_view != null and brood_view != null,
+		"pickup keeps stable worker and brood view nodes"
+	)
+	if brood_view == null:
+		_destroy_controller(controller)
+		return
+	_expect_int(
+		brood_view.get_brood_pose(),
+		AntView.BroodPose.PICKING_UP,
+		"reserved brood uses the pickup pose"
+	)
+	_expect_float(
+		brood_view.get_brood_task_progress(),
+		0.4,
+		"pickup pose uses authoritative migration progress"
+	)
+	var stable_brood_view: AntView = brood_view
+	var carry_task := MigrationTaskModel.new()
+	carry_task.begin(
 		MigrationTaskModel.State.CARRYING_TO_ZONE,
 		&"test_tube_nest",
 		&"test_tube_nest",
@@ -812,32 +853,67 @@ func _test_colony_work_projection() -> void:
 		[&"test_tube_nest", &"tube_passage"],
 		10
 	)
-	task.carried_entity_id = brood.entity_id
-	task.elapsed_ticks = 5
-	worker.migration_task = MigrationTaskSnapshot.new(task)
+	carry_task.carried_entity_id = brood.entity_id
+	carry_task.elapsed_ticks = 5
+	worker.migration_task = MigrationTaskSnapshot.new(carry_task)
+	brood.reserved_by_ant_id = -1
 	brood.zone_id = &""
 	brood.carrier_ant_id = worker.entity_id
-	var view: Act1TestTubeView = controller.get_node(
-		"%Act1TestTubeView"
-	) as Act1TestTubeView
 	_expect_true(
 		view.apply_snapshot(snapshot),
-		"Act 1 view accepts a migration task snapshot"
+		"Act 1 view accepts a carrying task snapshot"
 	)
 	view.set_interpolation_alpha(1.0)
-	var worker_view: AntView = view.get_ant_view(worker.entity_id)
-	var brood_view: AntView = view.get_ant_view(brood.entity_id)
+	worker_view = view.get_ant_view(worker.entity_id)
+	brood_view = view.get_ant_view(brood.entity_id)
 	_expect_true(
-		worker_view != null and brood_view != null,
-		"migration keeps stable worker and brood view nodes"
+		brood_view == stable_brood_view,
+		"pickup and carry reuse the same brood view node"
 	)
 	if worker_view != null and brood_view != null:
+		_expect_int(
+			brood_view.get_brood_pose(),
+			AntView.BroodPose.CARRIED,
+			"carried ownership projects a carried brood pose"
+		)
 		_expect_vector_near(
 			brood_view.position,
 			worker_view.position + Vector2(13.0, -12.0),
 			0.01,
 			"carried brood follows the snapshot-derived worker position"
 		)
+	var drop_task := MigrationTaskModel.new()
+	drop_task.begin(
+		MigrationTaskModel.State.DROPPING,
+		&"test_tube_nest",
+		&"test_tube_nest",
+		brood.entity_id,
+		&"tube_passage",
+		[&"test_tube_nest", &"tube_passage"],
+		10
+	)
+	drop_task.carried_entity_id = brood.entity_id
+	drop_task.elapsed_ticks = 6
+	worker.migration_task = MigrationTaskSnapshot.new(drop_task)
+	_expect_true(
+		view.apply_snapshot(snapshot),
+		"Act 1 view accepts a dropping task snapshot"
+	)
+	brood_view = view.get_ant_view(brood.entity_id)
+	_expect_true(
+		brood_view == stable_brood_view,
+		"carry and drop reuse the same brood view node"
+	)
+	_expect_int(
+		brood_view.get_brood_pose(),
+		AntView.BroodPose.DROPPING,
+		"drop task projects a distinct brood pose"
+	)
+	_expect_float(
+		brood_view.get_brood_task_progress(),
+		0.6,
+		"drop pose uses authoritative migration progress"
+	)
 	_destroy_controller(controller)
 
 
@@ -1909,6 +1985,17 @@ func _expect_true(actual: bool, message: String) -> void:
 func _expect_int(actual: int, expected: int, message: String) -> void:
 	_assertion_count += 1
 	if actual == expected:
+		return
+	_record_failure(message, str(expected), str(actual))
+
+
+func _expect_float(
+	actual: float,
+	expected: float,
+	message: String
+) -> void:
+	_assertion_count += 1
+	if is_equal_approx(actual, expected):
 		return
 	_record_failure(message, str(expected), str(actual))
 
