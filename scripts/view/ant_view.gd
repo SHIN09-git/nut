@@ -23,6 +23,7 @@ const OBSERVE_COLOR: Color = Color(0.42, 0.76, 0.67, 0.78)
 const TRANSITION_DURATION_SECONDS: float = 0.38
 const WALK_CYCLE_TICKS: float = 8.0
 const BROOD_CYCLE_TICKS: float = 40.0
+const EMERGENCE_UNFOLD_RATIO: float = 0.72
 
 enum BehaviorPose {
 	IDLE,
@@ -60,6 +61,7 @@ var _simulation_tick: int = 0
 var _draw_transform: Transform2D = Transform2D.IDENTITY
 var _brood_pose: BroodPose = BroodPose.RESTING
 var _brood_task_progress: float = 0.0
+var _emerged_from_pupa: bool = false
 
 
 func configure(snapshot: AntSnapshot, slot_position: Vector2) -> bool:
@@ -80,7 +82,12 @@ func apply_snapshot(snapshot: AntSnapshot) -> bool:
 	if snapshot.life_stage == life_stage:
 		return true
 
+	var previous_stage: AntModel.LifeStage = life_stage
 	life_stage = snapshot.life_stage
+	_emerged_from_pupa = (
+		previous_stage == AntModel.LifeStage.PUPA
+		and life_stage == AntModel.LifeStage.WORKER
+	)
 	if life_stage != AntModel.LifeStage.WORKER:
 		_selected = false
 	_transition_count += 1
@@ -223,6 +230,32 @@ func get_antenna_probe_amount() -> float:
 	return _get_antenna_probe()
 
 
+func is_worker_emergence_active() -> bool:
+	return _emerged_from_pupa and is_transition_active()
+
+
+func get_worker_emergence_progress() -> float:
+	if not _emerged_from_pupa:
+		return 1.0
+	return clampf(
+		_transition_elapsed_seconds / TRANSITION_DURATION_SECONDS,
+		0.0,
+		1.0
+	)
+
+
+func get_worker_emergence_limb_ratio() -> float:
+	if not _emerged_from_pupa:
+		return 1.0
+	return _ease_out_cubic(
+		clampf(
+			get_worker_emergence_progress() / EMERGENCE_UNFOLD_RATIO,
+			0.0,
+			1.0
+		)
+	)
+
+
 func get_entity_id() -> int:
 	return entity_id
 
@@ -257,6 +290,8 @@ func _process(delta: float) -> void:
 	if not is_transition_active():
 		scale = Vector2.ONE
 		modulate.a = 1.0
+	if _emerged_from_pupa:
+		queue_redraw()
 
 
 func _draw() -> void:
@@ -264,14 +299,57 @@ func _draw() -> void:
 	if life_stage == AntModel.LifeStage.WORKER:
 		if _selected:
 			_draw_selection_outline()
+		var emergence_scale: Vector2 = Vector2.ONE
+		var emergence_rotation: float = 0.0
+		if is_worker_emergence_active():
+			var emergence_progress: float = (
+				get_worker_emergence_progress()
+			)
+			if emergence_progress < EMERGENCE_UNFOLD_RATIO:
+				var unfold_progress: float = (
+					get_worker_emergence_limb_ratio()
+				)
+				emergence_scale = Vector2(
+					lerpf(0.78, 1.04, unfold_progress),
+					lerpf(0.42, 1.08, unfold_progress)
+				)
+				emergence_rotation = lerpf(
+					-0.12,
+					0.025,
+					unfold_progress
+				)
+			else:
+				var recovery_progress: float = _ease_out_cubic(
+					inverse_lerp(
+						EMERGENCE_UNFOLD_RATIO,
+						1.0,
+						emergence_progress
+					)
+				)
+				emergence_scale = Vector2(1.04, 1.08).lerp(
+					Vector2.ONE,
+					recovery_progress
+				)
+				emergence_rotation = lerpf(
+					0.025,
+					0.0,
+					recovery_progress
+				)
 		var bob: float = (
 			sin(_animation_phase * TAU) * 1.35
-			if _is_locomotion_pose() and not _reduced_motion
+			if (
+				_is_locomotion_pose()
+				and not _reduced_motion
+				and not is_worker_emergence_active()
+			)
 			else 0.0
 		)
 		_draw_transform = Transform2D(
-			0.0,
-			Vector2(_facing_sign, 1.0),
+			emergence_rotation,
+			Vector2(
+				_facing_sign * emergence_scale.x,
+				emergence_scale.y
+			),
 			0.0,
 			Vector2(0.0, bob)
 		)
@@ -551,6 +629,10 @@ func _draw_worker() -> void:
 	]
 	for index: int in leg_pairs.size():
 		var leg: PackedVector2Array = leg_pairs[index].duplicate()
+		var leg_root: Vector2 = leg[0]
+		var limb_ratio: float = get_worker_emergence_limb_ratio()
+		leg[1] = leg_root.lerp(leg[1], limb_ratio)
+		leg[2] = leg_root.lerp(leg[2], limb_ratio)
 		var direction: float = 1.0 if index % 2 == 0 else -1.0
 		leg[1].x += stride * direction * 0.55
 		leg[2].x += stride * direction
@@ -581,14 +663,27 @@ func _draw_worker() -> void:
 		]),
 	]
 	for antenna: PackedVector2Array in antennae:
-		draw_polyline(antenna, WORKER_OUTLINE, 2.4, true)
-		draw_polyline(antenna, LIMB_COLOR, 1.2, true)
+		var unfolded_antenna: PackedVector2Array = antenna.duplicate()
+		var antenna_root: Vector2 = unfolded_antenna[0]
+		var antenna_ratio: float = get_worker_emergence_limb_ratio()
+		unfolded_antenna[1] = antenna_root.lerp(
+			unfolded_antenna[1],
+			antenna_ratio
+		)
+		unfolded_antenna[2] = antenna_root.lerp(
+			unfolded_antenna[2],
+			antenna_ratio
+		)
+		draw_polyline(unfolded_antenna, WORKER_OUTLINE, 2.4, true)
+		draw_polyline(unfolded_antenna, LIMB_COLOR, 1.2, true)
 	draw_circle(Vector2(12.0, -2.4), 1.4, WORKER_OUTLINE)
 	draw_circle(Vector2(12.2, -2.6), 0.75, EYE_COLOR)
 	_draw_behavior_cue()
 
 
 func _draw_behavior_cue() -> void:
+	if is_worker_emergence_active():
+		return
 	match _behavior_pose:
 		BehaviorPose.COLLECTING_FOOD:
 			_draw_mandibles(Vector2(18.0, 1.0), true)
@@ -694,7 +789,11 @@ func _draw_mandibles(anchor: Vector2, open: bool) -> void:
 
 
 func _get_stride() -> float:
-	if _reduced_motion or not _is_locomotion_pose():
+	if (
+		_reduced_motion
+		or is_worker_emergence_active()
+		or not _is_locomotion_pose()
+	):
 		return 0.0
 	return sin(_animation_phase * TAU) * 4.0
 
@@ -702,6 +801,7 @@ func _get_stride() -> float:
 func _get_antenna_probe() -> float:
 	if (
 		_reduced_motion
+		or is_worker_emergence_active()
 		or _behavior_pose not in [
 			BehaviorPose.IDLE,
 			BehaviorPose.OBSERVING,
@@ -709,6 +809,11 @@ func _get_antenna_probe() -> float:
 	):
 		return 0.0
 	return sin(_animation_phase * TAU) * 2.4
+
+
+func _ease_out_cubic(progress: float) -> float:
+	var bounded_progress: float = clampf(progress, 0.0, 1.0)
+	return 1.0 - pow(1.0 - bounded_progress, 3.0)
 
 
 func _is_locomotion_pose() -> bool:

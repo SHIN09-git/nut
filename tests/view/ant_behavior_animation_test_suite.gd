@@ -13,6 +13,8 @@ func run(scene_root: Node) -> void:
 	_test_brood_motion_is_tick_and_identity_driven()
 	_test_brood_handling_pose_is_view_only()
 	_test_idle_antennae_follow_view_phase()
+	_test_worker_emergence_unfolds_on_the_stable_view()
+	_test_worker_emergence_respects_reduced_motion()
 
 
 func get_assertion_count() -> int:
@@ -187,6 +189,131 @@ func _test_idle_antennae_follow_view_phase() -> void:
 	_destroy_ant(ant)
 
 
+func _test_worker_emergence_unfolds_on_the_stable_view() -> void:
+	var ant: AntView = _create_brood_view(
+		44,
+		AntModel.LifeStage.PUPA
+	)
+	var worker_snapshot: AntSnapshot = AntSnapshot.new(
+		44,
+		AntModel.LifeStage.WORKER,
+		0,
+		0,
+		0,
+		&"test_tube_nest"
+	)
+	_expect_true(
+		ant.apply_snapshot(worker_snapshot),
+		"pupa-to-worker snapshot applies to the existing view"
+	)
+	_expect_true(
+		ant.is_worker_emergence_active(),
+		"pupa-to-worker transition starts the emergence pose"
+	)
+	_expect_float(
+		ant.get_worker_emergence_progress(),
+		0.0,
+		"emergence begins folded"
+	)
+	_expect_float(
+		ant.get_worker_emergence_limb_ratio(),
+		0.0,
+		"legs and antennae begin folded"
+	)
+	_expect_true(
+		ant.apply_snapshot(worker_snapshot),
+		"same-Tick worker replay remains idempotent"
+	)
+	_expect_true(
+		ant.is_worker_emergence_active(),
+		"same-stage replay does not skip the emergence pose"
+	)
+	ant.set_visuals_paused(true)
+	ant._process(AntView.TRANSITION_DURATION_SECONDS)
+	_expect_float(
+		ant.get_worker_emergence_progress(),
+		0.0,
+		"pause freezes emergence progress"
+	)
+	ant.set_visuals_paused(false)
+	ant._process(AntView.TRANSITION_DURATION_SECONDS * 0.5)
+	var half_progress: float = ant.get_worker_emergence_progress()
+	_expect_true(
+		half_progress > 0.49 and half_progress < 0.51,
+		"resuming advances the emergence display time"
+	)
+	_expect_true(
+		ant.get_worker_emergence_limb_ratio() > half_progress,
+		"limbs unfold before the recovery portion"
+	)
+	ant._process(AntView.TRANSITION_DURATION_SECONDS)
+	_expect_true(
+		not ant.is_worker_emergence_active(),
+		"emergence settles into the normal worker pose"
+	)
+	_expect_float(
+		ant.get_worker_emergence_progress(),
+		1.0,
+		"settled emergence reports complete progress"
+	)
+	_expect_float(
+		ant.get_worker_emergence_limb_ratio(),
+		1.0,
+		"settled worker has fully extended limbs"
+	)
+	_expect_int(
+		ant.get_entity_id(),
+		44,
+		"emergence preserves the stable entity ID"
+	)
+	_expect_int(
+		ant.get_transition_count(),
+		1,
+		"same-stage replay does not restart emergence"
+	)
+	_destroy_ant(ant)
+
+
+func _test_worker_emergence_respects_reduced_motion() -> void:
+	var ant: AntView = _create_brood_view(
+		45,
+		AntModel.LifeStage.PUPA
+	)
+	ant.set_reduced_motion(true)
+	var worker_snapshot: AntSnapshot = AntSnapshot.new(
+		45,
+		AntModel.LifeStage.WORKER,
+		0,
+		0,
+		0,
+		&"test_tube_nest"
+	)
+	_expect_true(
+		ant.apply_snapshot(worker_snapshot),
+		"reduced-motion worker snapshot applies"
+	)
+	_expect_true(
+		not ant.is_worker_emergence_active(),
+		"reduced motion skips the display-time unfold"
+	)
+	_expect_float(
+		ant.get_worker_emergence_progress(),
+		1.0,
+		"reduced motion uses the settled worker pose"
+	)
+	_expect_float(
+		ant.get_worker_emergence_limb_ratio(),
+		1.0,
+		"reduced motion keeps limbs fully legible"
+	)
+	_expect_int(
+		ant.get_life_stage(),
+		AntModel.LifeStage.WORKER,
+		"reduced motion does not suppress lifecycle authority"
+	)
+	_destroy_ant(ant)
+
+
 func _create_worker_view(entity_id: int) -> AntView:
 	var ant: AntView = AntView.new()
 	_scene_root.add_child(ant)
@@ -203,12 +330,15 @@ func _create_worker_view(entity_id: int) -> AntView:
 	return ant
 
 
-func _create_brood_view(entity_id: int) -> AntView:
+func _create_brood_view(
+	entity_id: int,
+	stage: AntModel.LifeStage = AntModel.LifeStage.LARVA
+) -> AntView:
 	var ant: AntView = AntView.new()
 	_scene_root.add_child(ant)
 	var snapshot: AntSnapshot = AntSnapshot.new(
 		entity_id,
-		AntModel.LifeStage.LARVA,
+		stage,
 		0,
 		0,
 		0,

@@ -602,6 +602,12 @@ func _test_real_controls_complete_both_chapters() -> void:
 	var close_journal: Button = controller.get_node(
 		"%JournalCloseButton"
 	) as Button
+	var speed_1x: Button = controller.get_node(
+		"%Speed1xButton"
+	) as Button
+	var speed_16x: Button = controller.get_node(
+		"%Speed16xButton"
+	) as Button
 	start.pressed.emit()
 	_expect_true(not cover.disabled, "real UI exposes the cover facility")
 
@@ -673,6 +679,7 @@ func _test_real_controls_complete_both_chapters() -> void:
 		"correct inference enters Chapter 2 through real controls"
 	)
 
+	speed_16x.pressed.emit()
 	_expect_true(
 		_process_until(
 			controller,
@@ -689,6 +696,16 @@ func _test_real_controls_complete_both_chapters() -> void:
 		view.get_ant_view(1) == first_pupa_view,
 		"the first pupa becomes a worker on the same AntView instance"
 	)
+	_expect_true(
+		first_pupa_view.is_worker_emergence_active(),
+		"16x emergence starts the unfold on the stable view"
+	)
+	_expect_float(
+		first_pupa_view.get_worker_emergence_progress(),
+		0.0,
+		"same-frame 16x snapshots do not skip display-time emergence"
+	)
+	speed_1x.pressed.emit()
 	_expect_true(
 		sugar.visible and not sugar.disabled,
 		"micro feeding-port sugar action is visible and enabled"

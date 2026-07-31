@@ -554,6 +554,7 @@ SaveEnvelope 外层格式 v2 保存 `profile_playtime` 并让 checksum 覆盖它
 - R20-A 把同一批复制任务状态映射为 `AntView.BehaviorPose`。朝向来自相邻 Tick 的显示端点，步态相位来自 `simulation_tick + interpolation_alpha`；采集、携带糖液、分享、喂食、处理／搬运幼体、搬运废物和观察提示都属于原节点的程序化绘制，不创建第二套任务或携带所有权。
 - R20-D 把 `Act1Snapshot.queen_care`、`ColonySnapshot.queen_carrier_ant_id` 和相邻显示端点映射为 `QueenView.BehaviorPose`；幼体相位只由固定 Tick、生命周期阶段和稳定实体 ID 计算。姿态、朝向和相位都是可重建的 View 状态，不进入快照、存档或命令边界。
 - R20-E 从 `AntSnapshot.reserved_by_ant_id`、`carrier_ant_id` 和对应的复制迁移任务映射 `AntView.BroodPose` 与归一化进度。只有实际进入携带所有权的幼体使用携带姿态；拾取阶段仍属于原区域，放下阶段仍跟随实际携带者。同一实体跨三段姿态继续复用原节点。
+- R20-F 在同一 `AntView` 观察到复制阶段从 `PUPA` 变为 `WORKER` 时复用原显示过渡计时，折叠／展开腿与触角并在结束前恢复常态。重复工蚁快照不重启过渡；暂停和减少动效沿用既有显示边界。
 - 相邻 Tick 间使用同一个 `SimulationClock` 的插值系数，暂停时冻结；同 Tick 快照只更新状态，不轮换插值端点。
 - 减少动效启用时，蚁后待机摆动、AntView 阶段脉冲和工蚁步态相位停止，位置直接投影当前快照端点；静态朝向、携带物和护理语义仍保留，模拟 Tick 和任务结果不变。
 - 重复快照不创建重复节点；重开时 `reset_projection()` 清除旧端点、实体映射和临时选择。
@@ -638,6 +639,13 @@ R20-E 同样不建立显示层任务权威。`Act1TestTubeView` 先按稳定实�
 没有预订或携带关系时不会显示搬运。`AntView` 只对原节点应用有限绘制变换，
 减少动效保留姿态和所有权线索。待机／观察触角只读既有显示相位，移动姿态
 不叠加探查摆动。上述输入均可从快照重建，不进入模拟、命令、存档或所有权。
+
+R20-F 不增加羽化模拟事件或独立动画时间轴。`AntView.apply_snapshot()` 只在
+同一实体的复制阶段出现真实 `PUPA → WORKER` 边界时标记展开；既有
+`TRANSITION_DURATION_SECONDS` 驱动腿、触角和身体的有限展开／恢复。
+后续相同工蚁快照直接返回，不重置显示计时，因此一个 16×帧中跨过多个
+模拟 Tick 仍保留一次完整显示过渡。暂停阻止显示计时推进，减少动效立即采用
+最终轮廓。该状态可从相邻快照重建，不进入模拟、事件、存档或生命周期权威。
 
 `ChapterArtView` 只把 `CampaignSnapshot.chapter` 映射为六个代码内原创标记；`ObservationReportSealView` 是不读取模拟的静态结局印记。两者不能完成章节或生成报告。标题背景由 `TextureRect` 读取 `assets/production/` 中已登记文件；主题缩放从场景生产主题复制后修改，不再用空主题覆盖按钮和焦点材质。
 
