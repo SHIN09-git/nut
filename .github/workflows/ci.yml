@@ -1,0 +1,38 @@
+name: Godot checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download the fixed Godot version
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'godot.zip'
+          $directory = Join-Path $env:RUNNER_TEMP 'godot-4.7.1'
+          Invoke-WebRequest 'https://github.com/godotengine/godot/releases/download/4.7.1-stable/Godot_v4.7.1-stable_win64.exe.zip' -OutFile $archive
+          $expected = 'c7a289051eaefb460b0106b60e9cd5bee0ef55fd102dcb2bed1eb356cf3d90a1'
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash -ne $expected) {
+            throw 'Godot archive checksum mismatch'
+          }
+          Expand-Archive $archive -DestinationPath $directory
+          "GODOT=$directory\Godot_v4.7.1-stable_win64_console.exe" >> $env:GITHUB_ENV
+      - name: Import project
+        shell: pwsh
+        run: '& $env:GODOT --headless --editor --path . --quit'
+      - name: Run project assertions
+        shell: pwsh
+        run: '& $env:GODOT --headless --path . --script res://tests/test_runner.gd'
+      - name: Start the main scene for 30 frames
+        shell: pwsh
+        run: '& $env:GODOT --headless --path . --quit-after 30'

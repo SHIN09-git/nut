@@ -37,6 +37,8 @@
 
 ## 运行
 
+先从 [Godot 4.7.1 官方发布页](https://github.com/godotengine/godot/releases/tag/4.7.1-stable) 下载 Windows 标准版 `Godot_v4.7.1-stable_win64.exe.zip`，将其中的可执行文件解压到仓库根目录。仓库不包含引擎程序；请使用固定的 4.7.1-stable 版本。
+
 在仓库根目录执行：
 
 ```powershell
@@ -53,9 +55,14 @@
 
 `tests/test_runner.gd` 是唯一顶层入口，聚合固定时钟、主场景控制和 `tests/simulation/lifecycle_test_suite.gd`：
 
+首次克隆后，先导入项目以生成 Godot 的脚本类缓存，再运行测试：
+
 ```powershell
+& '.\Godot_v4.7.1-stable_win64_console.exe' --headless --editor --path . --quit
 & '.\Godot_v4.7.1-stable_win64_console.exe' --headless --path . --script 'res://tests/test_runner.gd'
 ```
+
+GitHub Actions 在推送到 `main` 和提交 PR 时自动使用同一版本引擎，校验下载文件的 SHA-256，依次执行项目导入、134 项断言和主场景 30 帧无头启动。这些检查不替代窗口布局与玩法的人工验收。
 
 ## 导出状态
 
